@@ -6,6 +6,18 @@ requires-python = ">=3.10"
 [tool.mypy]
 python_version = "3.10"
 strict = true
+# No Any, anywhere: not written, not inferred, not hidden behind a decorator or import.
+disallow_any_explicit = true
+disallow_any_expr = true
+disallow_any_decorated = true
+disallow_any_unimported = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+# The ctypes boundary. ctypes is untyped, so values here are Any until converted;
+# every function's signature is concrete, so nothing untyped leaves this module.
+module = "miryoku.win32"
+disallow_any_expr = false
 
 [tool.pyright]
 pythonVersion = "3.10"

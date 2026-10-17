@@ -1,9 +1,7 @@
-"""Engine tests: scripted key presses in, Windows key events out. Run anywhere with
-`python -m unittest`."""
+"""Engine tests: scripted key presses in, Windows key events out. Run anywhere
+with `pytest`."""
 
 from __future__ import annotations
-
-import unittest
 
 from miryoku.engine import MAX_BUFFERED, Engine, Signal, Verdict
 from miryoku.layout import ESCAPE, QUICK_TAP_MS, QUIT_HOLD_MS, STREAK_MS, Scancode
@@ -96,334 +94,360 @@ def both_shifts(t: Harness) -> None:
     t.take()
 
 
-class Basics(unittest.TestCase):
-    def test_plain_letters(self) -> None:
-        t = Harness()
-        for name in ("t", "2", "4"):
-            t.tap(name)
-        self.assertEqual(t.take(), "+g -g +q -q +f -f")
-
-    def test_home_row_tap(self) -> None:
-        t = Harness()
-        t.tap("r")
-        self.assertEqual(t.take(), "+t -t")
-
-    def test_roll_is_two_taps(self) -> None:
-        t = Harness()
-        t.d("r")
-        t.d("i")
-        t.u("r")
-        t.u("i")
-        self.assertEqual(t.take(), "+t -t +m -m")
-
-    def test_hold_shift(self) -> None:
-        t = Harness()
-        t.d("r")
-        t.tap("8")
-        t.u("r")  # t + j (other hand)
-        self.assertEqual(t.take(), "+SFT +j -j -SFT")
-
-    def test_timeout_hold(self) -> None:
-        t = Harness()
-        t.d("e")
-        t.timeout_last()
-        t.tap("caps")
-        t.u("e")
-        self.assertEqual(t.take(), "+CTL +z -z -CTL")
-
-    def test_nav_layer(self) -> None:
-        t = Harness()
-        t.d("c")
-        t.tap("o")
-        t.tap("0")
-        t.u("c")
-        self.assertEqual(t.take(), "+left -left +CTL +c -c -CTL")
-
-    def test_space_tap(self) -> None:
-        t = Harness()
-        t.tap("c")
-        self.assertEqual(t.take(), "+spc -spc")
-
-    def test_num_layer(self) -> None:
-        t = Harness()
-        t.d(".")
-        t.tap("w")
-        t.tap("x")
-        t.u(".")
-        self.assertEqual(t.take(), "+4 -4 +. -.")
-
-    def test_sym_layer(self) -> None:
-        t = Harness()
-        t.d(",")
-        t.tap("2")
-        t.tap("caps")
-        t.u(",")
-        self.assertEqual(t.take(), "+SFT +[ -SFT -[ +SFT +` -SFT -`")
-
-    def test_mod_plus_layer(self) -> None:
-        t = Harness()
-        t.d("r")
-        t.d(".")
-        t.tap("w")
-        t.u(".")
-        t.u("r")
-        self.assertEqual(t.take(), "+SFT +4 -4 -SFT")
-
-    def test_release_all_lets_go(self) -> None:
-        t = Harness()
-        t.d("r")
-        t.tap("8")
-        t.take()
-        t.e.release_all(t.h)
-        self.assertEqual(t.take(), "-SFT")
-
-    def test_unrelated_keys_pass(self) -> None:
-        t = Harness()
-        self.assertEqual(t.key(SPACEBAR, True, 0), Verdict.PASS)
-        self.assertEqual(t.take(), "")
-
-    def test_unused_keys_are_blocked(self) -> None:
-        t = Harness()
-        self.assertEqual(t.key(Scancode(0x23), True, 0), Verdict.SWALLOW)  # QWERTY H
-        self.assertEqual(t.take(), "")
+# ---- basics ----------------------------------------------------------------
+def test_plain_letters() -> None:
+    t = Harness()
+    for name in ("t", "2", "4"):
+        t.tap(name)
+    assert t.take() == "+g -g +q -q +f -f"
 
 
-class EscapeKey(unittest.TestCase):
-    def test_tap_toggles_off_and_on(self) -> None:
-        t = Harness()
-        self.assertEqual(t.key(ESC, True, 100), Verdict.SWALLOW)
-        self.assertEqual(t.key(ESC, False, 150), Verdict.SWALLOW)
-        self.assertEqual(t.key(sc("q"), True, 200), Verdict.PASS)  # off: plain keyboard
-        self.assertEqual(t.key(sc("q"), False, 210), Verdict.PASS)
-        t.key(ESC, True, 300)
-        t.key(ESC, False, 350)
-        t.tap("q")  # on again: Colemak-DH
-        self.assertEqual(t.take(), "!OFF !ON +a -a")
-
-    def test_hold_quits(self) -> None:
-        t = Harness()
-        t.key(ESC, True, 1000)
-        t.key(ESC, True, 1000 + QUIT_HOLD_MS // 2)  # auto-repeat doesn't restart the clock
-        self.assertEqual(t.key(ESC, False, 1000 + QUIT_HOLD_MS), Verdict.QUIT)
-
-    def test_survives_timer_wraparound(self) -> None:
-        t = Harness()
-        t.key(ESC, True, 0xFFFF_FFFF - 100)
-        self.assertEqual(t.key(ESC, False, 50), Verdict.SWALLOW)  # 151 ms: a tap
-
-    def test_switching_off_releases_held_mods(self) -> None:
-        t = Harness()
-        t.d("r")
-        t.tap("8")
-        t.take()  # Shift is now held
-        t.key(ESC, True, 0)
-        t.key(ESC, False, 10)
-        self.assertEqual(t.take(), "-SFT !OFF")
+def test_home_row_tap() -> None:
+    t = Harness()
+    t.tap("r")
+    assert t.take() == "+t -t"
 
 
-class TypingStreak(unittest.TestCase):
-    def test_sends_home_row_letter_on_press(self) -> None:
-        t = Harness()
-        t.at(0).tap("t")  # g
-        t.at(STREAK_MS // 2).d("w")  # r/ALT, mid-word
-        self.assertEqual(t.take(), "+g -g +r")  # r is out before release
-        t.u("w")
-        self.assertEqual(t.take(), "-r")
-
-    def test_expires(self) -> None:
-        t = Harness()
-        t.at(0).tap("t")
-        t.at(STREAK_MS * 3).d("w")  # pause: a normal tap-hold again
-        self.assertEqual(t.take(), "+g -g")
-        t.tap("8")
-        t.u("w")
-        self.assertEqual(t.take(), "+ALT +j -j -ALT")
-
-    def test_never_blocks_shift(self) -> None:
-        t = Harness()
-        t.at(0).tap("c")  # space
-        t.at(STREAK_MS // 3).d("r")
-        t.tap("8")
-        t.u("r")  # Shift+j right after a space
-        self.assertEqual(t.take(), "+spc -spc +SFT +j -j -SFT")
-
-    def test_never_blocks_layers(self) -> None:
-        t = Harness()
-        t.at(0).tap("t")
-        t.at(STREAK_MS // 3).d(".")
-        t.tap("w")
-        t.u(".")  # Num layer right after a letter
-        self.assertEqual(t.take(), "+g -g +4 -4")
-
-    def test_counts_rolled_taps(self) -> None:
-        t = Harness()
-        t.at(0).d("r")
-        t.at(STREAK_MS // 4).d("w")
-        t.at(STREAK_MS // 3).u("r")  # roll t -> r
-        self.assertEqual(t.take(), "+t -t +r")  # r came out on press via the streak
-
-    def test_holds_do_not_start_a_streak(self) -> None:
-        t = Harness()
-        t.at(0).d("e")
-        t.timeout_last()  # Ctrl held
-        t.at(50).d("w")
-        t.timeout_last()  # Alt held
-        t.at(70).tap("2")  # Ctrl + Alt + q
-        self.assertEqual(t.take(), "+CTL +ALT +q -q")
+def test_roll_is_two_taps() -> None:
+    t = Harness()
+    t.d("r")
+    t.d("i")
+    t.u("r")
+    t.u("i")
+    assert t.take() == "+t -t +m -m"
 
 
-class Capacity(unittest.TestCase):
-    def test_auto_repeat_is_not_buffered(self) -> None:
-        t = Harness()
-        t.d("e")  # s/CTL, undecided
-        for _ in range(100):
-            t.d("8")  # j held (other hand), auto-repeating
-        self.assertEqual(t.take(), "", "still undecided: repeats did not fill the buffer")
-        t.u("e")
-        self.assertEqual(t.take(), "+s -s +j", "tap s, then j replayed once")
-
-    def test_full_buffer_decides_hold(self) -> None:
-        # More distinct keys down than nine fingers can press: decide as a hold.
-        plain = ["2", "3", "4", "5", "6", "8", "9", "0", "-", "=", "t", "i", "caps", "s", "d", "f", "k", "l", ";"]
-        self.assertGreater(len(plain), MAX_BUFFERED)
-        t = Harness()
-        t.d("o")  # n/SFT (right hand); the first key, q, is on the other hand
-        for name in plain:
-            t.d(name)
-        self.assertTrue(t.take().startswith("+SFT +q"), "a full buffer resolves the key as a hold")
+def test_hold_shift() -> None:
+    t = Harness()
+    t.d("r")
+    t.tap("8")
+    t.u("r")  # t + j (other hand)
+    assert t.take() == "+SFT +j -j -SFT"
 
 
-class CapsWord(unittest.TestCase):
-    def test_capitalises_until_space(self) -> None:
-        t = Harness()
-        both_shifts(t)
-        t.tap("2")
-        t.tap("3")  # q w
-        self.assertEqual(t.take(), "+SFT +q -SFT -q +SFT +w -SFT -w")
-        t.tap("c")
-        t.tap("2")  # space ends it
-        self.assertEqual(t.take(), "+spc -spc +q -q")
-
-    def test_keeps_going_through_digits_and_underscore(self) -> None:
-        t = Harness()
-        both_shifts(t)
-        t.d(".")
-        t.tap("w")
-        t.u(".")  # Num layer: 4
-        t.d(",")
-        t.tap("v")
-        t.u(",")  # Sym layer: _
-        t.tap("2")
-        self.assertEqual(t.take(), "+4 -4 +SFT +0xbd -SFT -0xbd +SFT +q -SFT -q")
-
-    def test_toggles_off_and_clears_on_switch_off(self) -> None:
-        t = Harness()
-        both_shifts(t)
-        both_shifts(t)  # off again
-        t.tap("2")
-        self.assertEqual(t.take(), "+q -q")
-        both_shifts(t)
-        t.key(ESC, True, 0)
-        t.key(ESC, False, 10)  # off
-        t.key(ESC, True, 20)
-        t.key(ESC, False, 30)  # on: caps word is gone
-        t.tap("2")
-        self.assertEqual(t.take(), "!OFF !ON +q -q")
-
-    def test_signals_when_turned_on(self) -> None:
-        t = Harness()
-        t.d("r")
-        t.d("o")
-        t.timeout_last()
-        t.timeout_last()
-        self.assertIn("!CAPS_WORD", t.take())
+def test_timeout_hold() -> None:
+    t = Harness()
+    t.d("e")
+    t.timeout_last()
+    t.tap("caps")
+    t.u("e")
+    assert t.take() == "+CTL +z -z -CTL"
 
 
-class LayerLock(unittest.TestCase):
-    def test_keeps_nav_until_tapped_again(self) -> None:
-        t = Harness()
-        t.d("c")
-        t.tap("2")
-        t.u("c")  # hold Space thumb, tap lock, let go
-        t.tap("o")  # still Nav: left
-        self.assertEqual(t.take(), "+left -left")
-        t.tap("2")  # lock key again: unlocked
-        t.tap("o")  # base: n
-        self.assertEqual(t.take(), "+n -n")
-
-    def test_on_num_and_cleared_by_escape(self) -> None:
-        t = Harness()
-        t.d(".")
-        t.tap("=")
-        t.u(".")  # hold Backspace thumb, tap lock (right pinky)
-        t.tap("w")  # still Num: 4
-        self.assertEqual(t.take(), "+4 -4")
-        t.key(ESC, True, 0)
-        t.key(ESC, False, 10)  # off
-        t.key(ESC, True, 20)
-        t.key(ESC, False, 30)  # on: lock is gone
-        t.tap("w")
-        self.assertEqual(t.take(), "!OFF !ON +r -r")
+def test_nav_layer() -> None:
+    t = Harness()
+    t.d("c")
+    t.tap("o")
+    t.tap("0")
+    t.u("c")
+    assert t.take() == "+left -left +CTL +c -c -CTL"
 
 
-class ChordalHold(unittest.TestCase):
-    def test_same_hand_roll_is_two_taps_at_once(self) -> None:
-        t = Harness()
-        t.d("e")
-        t.d("4")  # s/CTL then f, same hand
-        self.assertEqual(t.take(), "+s -s +f", "decided on the second key's press")
-        t.u("4")
-        t.u("e")
-        self.assertEqual(t.take(), "-f")
-
-    def test_other_hand_key_still_gets_the_modifier(self) -> None:
-        t = Harness()
-        t.d("e")
-        t.tap("8")
-        t.u("e")  # Ctrl + j
-        self.assertEqual(t.take(), "+CTL +j -j -CTL")
-
-    def test_same_hand_shortcut_works_after_holding(self) -> None:
-        t = Harness()
-        t.d("e")
-        t.timeout_last()  # held past the tapping term
-        t.tap("caps")
-        t.u("e")  # Ctrl + z, one hand
-        self.assertEqual(t.take(), "+CTL +z -z -CTL")
-
-    def test_layer_thumbs_are_not_affected(self) -> None:
-        t = Harness()
-        t.d("c")
-        t.tap("e")
-        t.u("c")  # Nav thumb (left) + left-hand Ctrl key
-        self.assertFalse(t.take().startswith("+spc"), "the Nav thumb was not turned into a tap")
+def test_space_tap() -> None:
+    t = Harness()
+    t.tap("c")
+    assert t.take() == "+spc -spc"
 
 
-class QuickTap(unittest.TestCase):
-    def test_backspace_thumb_repeats_after_a_tap(self) -> None:
-        t = Harness()
-        t.at(0).tap(".")  # tap: backspace
-        t.at(QUICK_TAP_MS // 2).d(".")  # again quickly and hold
-        t.d(".")
-        t.d(".")  # auto-repeat
-        t.u(".")
-        self.assertEqual(t.take(), "+bksp -bksp +bksp +bksp +bksp -bksp")
-
-    def test_after_a_pause_the_thumb_is_a_layer_again(self) -> None:
-        t = Harness()
-        t.at(0).tap(".")
-        t.at(QUICK_TAP_MS * 2).d(".")
-        t.tap("w")
-        t.u(".")  # Num layer: 4
-        self.assertEqual(t.take(), "+bksp -bksp +4 -4")
-
-    def test_home_row_letter_repeats_after_a_tap(self) -> None:
-        t = Harness()
-        t.at(1000).tap("r")  # t (Shift key)
-        t.at(1000 + QUICK_TAP_MS // 2).d("r")
-        t.d("r")
-        self.assertEqual(t.take(), "+t -t +t +t", "held t repeats instead of becoming Shift")
+def test_num_layer() -> None:
+    t = Harness()
+    t.d(".")
+    t.tap("w")
+    t.tap("x")
+    t.u(".")
+    assert t.take() == "+4 -4 +. -."
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_sym_layer() -> None:
+    t = Harness()
+    t.d(",")
+    t.tap("2")
+    t.tap("caps")
+    t.u(",")
+    assert t.take() == "+SFT +[ -SFT -[ +SFT +` -SFT -`"
+
+
+def test_mod_plus_layer() -> None:
+    t = Harness()
+    t.d("r")
+    t.d(".")
+    t.tap("w")
+    t.u(".")
+    t.u("r")
+    assert t.take() == "+SFT +4 -4 -SFT"
+
+
+def test_release_all_lets_go() -> None:
+    t = Harness()
+    t.d("r")
+    t.tap("8")
+    t.take()
+    t.e.release_all(t.h)
+    assert t.take() == "-SFT"
+
+
+def test_unrelated_keys_pass() -> None:
+    t = Harness()
+    assert t.key(SPACEBAR, True, 0) == Verdict.PASS
+    assert t.take() == ""
+
+
+def test_unused_keys_are_blocked() -> None:
+    t = Harness()
+    assert t.key(Scancode(0x23), True, 0) == Verdict.SWALLOW  # QWERTY H
+    assert t.take() == ""
+
+
+# ---- escape key ------------------------------------------------------------
+def test_escape_tap_toggles_off_and_on() -> None:
+    t = Harness()
+    assert t.key(ESC, True, 100) == Verdict.SWALLOW
+    assert t.key(ESC, False, 150) == Verdict.SWALLOW
+    assert t.key(sc("q"), True, 200) == Verdict.PASS  # off: plain keyboard
+    assert t.key(sc("q"), False, 210) == Verdict.PASS
+    t.key(ESC, True, 300)
+    t.key(ESC, False, 350)
+    t.tap("q")  # on again: Colemak-DH
+    assert t.take() == "!OFF !ON +a -a"
+
+
+def test_escape_hold_quits() -> None:
+    t = Harness()
+    t.key(ESC, True, 1000)
+    t.key(ESC, True, 1000 + QUIT_HOLD_MS // 2)  # auto-repeat doesn't restart the clock
+    assert t.key(ESC, False, 1000 + QUIT_HOLD_MS) == Verdict.QUIT
+
+
+def test_escape_survives_timer_wraparound() -> None:
+    t = Harness()
+    t.key(ESC, True, 0xFFFF_FFFF - 100)
+    assert t.key(ESC, False, 50) == Verdict.SWALLOW  # 151 ms: a tap
+
+
+def test_escape_switching_off_releases_held_mods() -> None:
+    t = Harness()
+    t.d("r")
+    t.tap("8")
+    t.take()  # Shift is now held
+    t.key(ESC, True, 0)
+    t.key(ESC, False, 10)
+    assert t.take() == "-SFT !OFF"
+
+
+# ---- typing streak ---------------------------------------------------------
+def test_streak_sends_home_row_letter_on_press() -> None:
+    t = Harness()
+    t.at(0).tap("t")  # g
+    t.at(STREAK_MS // 2).d("w")  # r/ALT, mid-word
+    assert t.take() == "+g -g +r"  # r is out before release
+    t.u("w")
+    assert t.take() == "-r"
+
+
+def test_streak_expires() -> None:
+    t = Harness()
+    t.at(0).tap("t")
+    t.at(STREAK_MS * 3).d("w")  # pause: a normal tap-hold again
+    assert t.take() == "+g -g"
+    t.tap("8")
+    t.u("w")
+    assert t.take() == "+ALT +j -j -ALT"
+
+
+def test_streak_never_blocks_shift() -> None:
+    t = Harness()
+    t.at(0).tap("c")  # space
+    t.at(STREAK_MS // 3).d("r")
+    t.tap("8")
+    t.u("r")  # Shift+j right after a space
+    assert t.take() == "+spc -spc +SFT +j -j -SFT"
+
+
+def test_streak_never_blocks_layers() -> None:
+    t = Harness()
+    t.at(0).tap("t")
+    t.at(STREAK_MS // 3).d(".")
+    t.tap("w")
+    t.u(".")  # Num layer right after a letter
+    assert t.take() == "+g -g +4 -4"
+
+
+def test_streak_counts_rolled_taps() -> None:
+    t = Harness()
+    t.at(0).d("r")
+    t.at(STREAK_MS // 4).d("w")
+    t.at(STREAK_MS // 3).u("r")  # roll t -> r
+    assert t.take() == "+t -t +r"  # r came out on press via the streak
+
+
+def test_streak_holds_do_not_start_a_streak() -> None:
+    t = Harness()
+    t.at(0).d("e")
+    t.timeout_last()  # Ctrl held
+    t.at(50).d("w")
+    t.timeout_last()  # Alt held
+    t.at(70).tap("2")  # Ctrl + Alt + q
+    assert t.take() == "+CTL +ALT +q -q"
+
+
+# ---- capacity --------------------------------------------------------------
+def test_auto_repeat_is_not_buffered() -> None:
+    t = Harness()
+    t.d("e")  # s/CTL, undecided
+    for _ in range(100):
+        t.d("8")  # j held (other hand), auto-repeating
+    assert t.take() == "", "still undecided: repeats did not fill the buffer"
+    t.u("e")
+    assert t.take() == "+s -s +j", "tap s, then j replayed once"
+
+
+def test_full_buffer_decides_hold() -> None:
+    # More distinct keys down than nine fingers can press: decide as a hold.
+    plain = ["2", "3", "4", "5", "6", "8", "9", "0", "-", "=", "t", "i", "caps", "s", "d", "f", "k", "l", ";"]
+    assert len(plain) > MAX_BUFFERED
+    t = Harness()
+    t.d("o")  # n/SFT (right hand); the first key, q, is on the other hand
+    for name in plain:
+        t.d(name)
+    assert t.take().startswith("+SFT +q"), "a full buffer resolves the key as a hold"
+
+
+# ---- caps word -------------------------------------------------------------
+def test_caps_word_capitalises_until_space() -> None:
+    t = Harness()
+    both_shifts(t)
+    t.tap("2")
+    t.tap("3")  # q w
+    assert t.take() == "+SFT +q -SFT -q +SFT +w -SFT -w"
+    t.tap("c")
+    t.tap("2")  # space ends it
+    assert t.take() == "+spc -spc +q -q"
+
+
+def test_caps_word_keeps_going_through_digits_and_underscore() -> None:
+    t = Harness()
+    both_shifts(t)
+    t.d(".")
+    t.tap("w")
+    t.u(".")  # Num layer: 4
+    t.d(",")
+    t.tap("v")
+    t.u(",")  # Sym layer: _
+    t.tap("2")
+    assert t.take() == "+4 -4 +SFT +0xbd -SFT -0xbd +SFT +q -SFT -q"
+
+
+def test_caps_word_toggles_off_and_clears_on_switch_off() -> None:
+    t = Harness()
+    both_shifts(t)
+    both_shifts(t)  # off again
+    t.tap("2")
+    assert t.take() == "+q -q"
+    both_shifts(t)
+    t.key(ESC, True, 0)
+    t.key(ESC, False, 10)  # off
+    t.key(ESC, True, 20)
+    t.key(ESC, False, 30)  # on: caps word is gone
+    t.tap("2")
+    assert t.take() == "!OFF !ON +q -q"
+
+
+def test_caps_word_signals_when_turned_on() -> None:
+    t = Harness()
+    t.d("r")
+    t.d("o")
+    t.timeout_last()
+    t.timeout_last()
+    assert "!CAPS_WORD" in t.take()
+
+
+# ---- layer lock ------------------------------------------------------------
+def test_layer_lock_keeps_nav_until_tapped_again() -> None:
+    t = Harness()
+    t.d("c")
+    t.tap("2")
+    t.u("c")  # hold Space thumb, tap lock, let go
+    t.tap("o")  # still Nav: left
+    assert t.take() == "+left -left"
+    t.tap("2")  # lock key again: unlocked
+    t.tap("o")  # base: n
+    assert t.take() == "+n -n"
+
+
+def test_layer_lock_on_num_and_cleared_by_escape() -> None:
+    t = Harness()
+    t.d(".")
+    t.tap("=")
+    t.u(".")  # hold Backspace thumb, tap lock (right pinky)
+    t.tap("w")  # still Num: 4
+    assert t.take() == "+4 -4"
+    t.key(ESC, True, 0)
+    t.key(ESC, False, 10)  # off
+    t.key(ESC, True, 20)
+    t.key(ESC, False, 30)  # on: lock is gone
+    t.tap("w")
+    assert t.take() == "!OFF !ON +r -r"
+
+
+# ---- chordal hold ----------------------------------------------------------
+def test_same_hand_roll_is_two_taps_at_once() -> None:
+    t = Harness()
+    t.d("e")
+    t.d("4")  # s/CTL then f, same hand
+    assert t.take() == "+s -s +f", "decided on the second key's press"
+    t.u("4")
+    t.u("e")
+    assert t.take() == "-f"
+
+
+def test_other_hand_key_still_gets_the_modifier() -> None:
+    t = Harness()
+    t.d("e")
+    t.tap("8")
+    t.u("e")  # Ctrl + j
+    assert t.take() == "+CTL +j -j -CTL"
+
+
+def test_same_hand_shortcut_works_after_holding() -> None:
+    t = Harness()
+    t.d("e")
+    t.timeout_last()  # held past the tapping term
+    t.tap("caps")
+    t.u("e")  # Ctrl + z, one hand
+    assert t.take() == "+CTL +z -z -CTL"
+
+
+def test_layer_thumbs_are_not_affected() -> None:
+    t = Harness()
+    t.d("c")
+    t.tap("e")
+    t.u("c")  # Nav thumb (left) + left-hand Ctrl key
+    assert not t.take().startswith("+spc"), "the Nav thumb was not turned into a tap"
+
+
+# ---- quick tap -------------------------------------------------------------
+def test_backspace_thumb_repeats_after_a_tap() -> None:
+    t = Harness()
+    t.at(0).tap(".")  # tap: backspace
+    t.at(QUICK_TAP_MS // 2).d(".")  # again quickly and hold
+    t.d(".")
+    t.d(".")  # auto-repeat
+    t.u(".")
+    assert t.take() == "+bksp -bksp +bksp +bksp +bksp -bksp"
+
+
+def test_after_a_pause_the_thumb_is_a_layer_again() -> None:
+    t = Harness()
+    t.at(0).tap(".")
+    t.at(QUICK_TAP_MS * 2).d(".")
+    t.tap("w")
+    t.u(".")  # Num layer: 4
+    assert t.take() == "+bksp -bksp +4 -4"
+
+
+def test_home_row_letter_repeats_after_a_tap() -> None:
+    t = Harness()
+    t.at(1000).tap("r")  # t (Shift key)
+    t.at(1000 + QUICK_TAP_MS // 2).d("r")
+    t.d("r")
+    assert t.take() == "+t -t +t +t", "held t repeats instead of becoming Shift"

@@ -4,13 +4,14 @@ release turns into. No Windows code here, so it is unit-tested on any OS.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import NamedTuple, NoReturn, Protocol
 
 from .layout import (
     CELLS,
     ESCAPE,
+    MINUS,
     QUICK_TAP_MS,
     QUIT_HOLD_MS,
     STREAK_MS,
@@ -29,8 +30,10 @@ from .layout import (
     TapHold,
     Unmapped,
     action,
+    continues_word,
     held,
     is_left_hand,
+    is_letter,
     slot,
 )
 
@@ -103,6 +106,7 @@ def assert_never(value: NoReturn) -> NoReturn:
     raise AssertionError(f"unhandled: {value!r}")
 
 
+@dataclass(slots=True)
 class Engine:
     """Tap-hold rule (like KMonad's tap-hold-next-release): a tap-hold key becomes
     "hold" if another key is pressed AND released while it is down, or if it is
@@ -128,36 +132,22 @@ class Engine:
     released. Tap the lock key again, or the escape key, to unlock.
     """
 
-    __slots__ = (
-        "active_layers",
-        "buffer",
-        "caps_word",
-        "enabled",
-        "escape_down_at",
-        "last_tap",
-        "last_typed_at",
-        "locked",
-        "pending",
-        "pressed",
-    )
-
-    def __init__(self) -> None:
-        self.escape_down_at: int | None = None
-        """When the escape key went down, if it is down."""
-        self.enabled = True
-        """False while switched off with the escape key."""
-        self.pressed = no_keys()
-        """What each held layout key turned into, by cell."""
-        self.active_layers: list[LayerId] = []
-        self.pending: Pending | None = None
-        self.buffer: list[Event] = []
-        """Events that arrived while a tap-hold key was undecided."""
-        self.last_typed_at: int | None = None
-        """When the last character was typed (for the typing streak)."""
-        self.last_tap: tuple[int, int] | None = None
-        """The last tap-hold key tapped, and when (for quick tap)."""
-        self.caps_word = False
-        self.locked: LayerId | None = None
+    escape_down_at: int | None = None
+    """When the escape key went down, if it is down."""
+    enabled: bool = True
+    """False while switched off with the escape key."""
+    pressed: list[Action | None] = field(default_factory=no_keys)
+    """What each held layout key turned into, by cell."""
+    active_layers: list[LayerId] = field(default_factory=list[LayerId])
+    pending: Pending | None = None
+    buffer: list[Event] = field(default_factory=list[Event])
+    """Events that arrived while a tap-hold key was undecided."""
+    last_typed_at: int | None = None
+    """When the last character was typed (for the typing streak)."""
+    last_tap: tuple[int, int] | None = None
+    """The last tap-hold key tapped, and when (for quick tap)."""
+    caps_word: bool = False
+    locked: LayerId | None = None
 
     def on_key(self, host: Host, scancode: Scancode, down: bool, now: int) -> Verdict:
         """Entry point for every physical key event. `now` is the event's
@@ -303,11 +293,11 @@ class Engine:
         if not self.caps_word:
             return a
         match a:
-            case Tap(key) if key.is_letter():
+            case Tap(key) if is_letter(key):
                 return Shifted(key)
-            case Tap(key) if key.continues_word():
+            case Tap(key) if continues_word(key):
                 return a
-            case Shifted(Key.MINUS):  # _
+            case Shifted(key) if key == MINUS:  # _
                 return a
             case Tap() | Shifted() | Ctrl():
                 self.caps_word = False

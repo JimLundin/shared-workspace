@@ -36,79 +36,25 @@ ESCAPE: Final = Scancode(0x29)
 # ---- Vocabulary ----------------------------------------------------------------
 
 
-class Key(IntEnum):
-    """A Windows virtual key (US English layout). The value is the VK code."""
+Key = NewType("Key", int)
+"""A Windows virtual key code (US English layout)."""
 
-    A = 0x41
-    B = 0x42
-    C = 0x43
-    D = 0x44
-    E = 0x45
-    F = 0x46
-    G = 0x47
-    H = 0x48
-    I = 0x49  # noqa: E741
-    J = 0x4A
-    K = 0x4B
-    L = 0x4C
-    M = 0x4D
-    N = 0x4E
-    O = 0x4F  # noqa: E741
-    P = 0x50
-    Q = 0x51
-    R = 0x52
-    S = 0x53
-    T = 0x54
-    U = 0x55
-    V = 0x56
-    W = 0x57
-    X = 0x58
-    Y = 0x59
-    Z = 0x5A
-    N0 = 0x30
-    N1 = 0x31
-    N2 = 0x32
-    N3 = 0x33
-    N4 = 0x34
-    N5 = 0x35
-    N6 = 0x36
-    N7 = 0x37
-    N8 = 0x38
-    N9 = 0x39
-    GRAVE = 0xC0
-    MINUS = 0xBD
-    EQUAL = 0xBB
-    LBRACKET = 0xDB
-    RBRACKET = 0xDD
-    BACKSLASH = 0xDC
-    SEMICOLON = 0xBA
-    QUOTE = 0xDE
-    COMMA = 0xBC
-    PERIOD = 0xBE
-    SLASH = 0xBF
-    ESC = 0x1B
-    SPACE = 0x20
-    TAB = 0x09
-    ENTER = 0x0D
-    BACKSPACE = 0x08
-    CAPS_LOCK = 0x14
-    DELETE = 0x2E
-    INSERT = 0x2D
-    HOME = 0x24
-    END = 0x23
-    PAGE_UP = 0x21
-    PAGE_DOWN = 0x22
-    LEFT = 0x25
-    UP = 0x26
-    RIGHT = 0x27
-    DOWN = 0x28
+A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z = (Key(vk) for vk in range(0x41, 0x5B))  # noqa: E741
+N0, N1, N2, N3, N4, N5, N6, N7, N8, N9 = (Key(vk) for vk in range(0x30, 0x3A))
+GRAVE, MINUS, EQUAL, LBRACKET, RBRACKET, BACKSLASH = Key(0xC0), Key(0xBD), Key(0xBB), Key(0xDB), Key(0xDD), Key(0xDC)
+SEMICOLON, QUOTE, COMMA, PERIOD, SLASH = Key(0xBA), Key(0xDE), Key(0xBC), Key(0xBE), Key(0xBF)
+ESC, SPACE, TAB, ENTER, BACKSPACE, CAPS_LOCK = Key(0x1B), Key(0x20), Key(0x09), Key(0x0D), Key(0x08), Key(0x14)
+DELETE, INSERT, HOME, END, PAGE_UP, PAGE_DOWN = Key(0x2E), Key(0x2D), Key(0x24), Key(0x23), Key(0x21), Key(0x22)
+LEFT, UP, RIGHT, DOWN = Key(0x25), Key(0x26), Key(0x27), Key(0x28)
 
-    def is_letter(self) -> bool:
-        return Key.A <= self <= Key.Z
 
-    def continues_word(self) -> bool:
-        """Keys that keep caps word going without being capitalised."""
-        return Key.N0 <= self <= Key.N9 or self in (Key.BACKSPACE, Key.DELETE)
+def is_letter(key: Key) -> bool:
+    return A <= key <= Z
+
+
+def continues_word(key: Key) -> bool:
+    """Keys that keep caps word going without being capitalised."""
+    return N0 <= key <= N9 or key in (BACKSPACE, DELETE)
 
 
 class Mod(IntEnum):
@@ -145,7 +91,7 @@ class Tap:
 
 @dataclass(frozen=True, slots=True)
 class Shifted:
-    """The key with Shift, e.g. `Shifted(Key.N1)` is `!`."""
+    """The key with Shift, e.g. `Shifted(N1)` is `!`."""
 
     key: Key
 
@@ -257,31 +203,8 @@ XX: Final = NoAction()
 LOCK: Final = LockLayer()
 GUI, ALT, CTL, SFT = Mod.GUI, Mod.ALT, Mod.CTRL, Mod.SHIFT
 NAV, NUM, SYM = LayerId.NAV, LayerId.NUM, LayerId.SYM
-UNDO, REDO = Ctrl(Key.Z), Ctrl(Key.Y)
-COPY, PASTE, CUT = Ctrl(Key.C), Ctrl(Key.V), Ctrl(Key.X)
-
-
-def k(key: Key) -> Action:
-    return Tap(key)
-
-
-def sh(key: Key) -> Action:
-    return Shifted(key)
-
-
-def ht(tap: Key, hold: Hold) -> Action:
-    return TapHold(tap, hold)
-
-
-def hold(h: Hold) -> Action:
-    return held(h)
-
-
-sc = Scancode
-A, B, C, D, E, F, G = Key.A, Key.B, Key.C, Key.D, Key.E, Key.F, Key.G
-H, I, J, K, L, M, N = Key.H, Key.I, Key.J, Key.K, Key.L, Key.M, Key.N  # noqa: E741
-O, P, Q, R, S, T, U = Key.O, Key.P, Key.Q, Key.R, Key.S, Key.T, Key.U  # noqa: E741
-V, W, X, Y, Z = Key.V, Key.W, Key.X, Key.Y, Key.Z
+UNDO, REDO, COPY, PASTE, CUT = Ctrl(Z), Ctrl(Y), Ctrl(C), Ctrl(V), Ctrl(X)
+k, sh, ht, hold, sc = Tap, Shifted, TapHold, held, Scancode
 
 
 # ---- The layout ----------------------------------------------------------------
@@ -305,34 +228,34 @@ UNUSED: Final = frozenset(
 
 BASE: Final[Board[Action]] = Board(
     # Colemak-DH with home row mods (Win Alt Ctrl Shift).
-    top=      Row((k(Q),       k(W),       k(F),       k(P),               k(B)      ), (k(J),               k(L),                   k(U),          k(Y),          k(Key.QUOTE))),
-    home=     Row((ht(A, GUI), ht(R, ALT), ht(S, CTL), ht(T, SFT),         k(G)      ), (k(M),               ht(N, SFT),             ht(E, CTL),    ht(I, ALT),    ht(O, GUI)  )),
-    bottom=   Row((k(Z),       k(X),       k(C),       k(D),               k(V)      ), (k(K),               k(H),                   k(Key.COMMA),  k(Key.PERIOD), k(Key.SLASH))),
-    thumbs=Thumbs((                        k(Key.ESC), ht(Key.SPACE, NAV), k(Key.TAB)), (ht(Key.ENTER, SYM), ht(Key.BACKSPACE, NUM), k(Key.DELETE))),
+    top=      Row((k(Q),       k(W),       k(F),       k(P),           k(B)  ), (k(J),           k(L),               k(U),       k(Y),       k(QUOTE)  )),
+    home=     Row((ht(A, GUI), ht(R, ALT), ht(S, CTL), ht(T, SFT),     k(G)  ), (k(M),           ht(N, SFT),         ht(E, CTL), ht(I, ALT), ht(O, GUI))),
+    bottom=   Row((k(Z),       k(X),       k(C),       k(D),           k(V)  ), (k(K),           k(H),               k(COMMA),   k(PERIOD),  k(SLASH)  )),
+    thumbs=Thumbs((                        k(ESC),     ht(SPACE, NAV), k(TAB)), (ht(ENTER, SYM), ht(BACKSPACE, NUM), k(DELETE) )),
 )
 
 NAV_LAYER: Final[Board[Action]] = Board(
     # Hold the Space thumb.
-    top=      Row((LOCK,      XX,        XX,        XX,        XX), (REDO,             PASTE,            COPY,             CUT,            UNDO        )),
-    home=     Row((hold(GUI), hold(ALT), hold(CTL), hold(SFT), XX), (k(Key.CAPS_LOCK), k(Key.LEFT),      k(Key.DOWN),      k(Key.UP),      k(Key.RIGHT))),
-    bottom=   Row((XX,        XX,        XX,        XX,        XX), (k(Key.INSERT),    k(Key.HOME),      k(Key.PAGE_DOWN), k(Key.PAGE_UP), k(Key.END)  )),
-    thumbs=Thumbs((                      XX,        XX,        XX), (k(Key.ENTER),     k(Key.BACKSPACE), k(Key.DELETE)   )),
+    top=      Row((LOCK,      XX,        XX,        XX,        XX), (REDO,         PASTE,        COPY,         CUT,        UNDO    )),
+    home=     Row((hold(GUI), hold(ALT), hold(CTL), hold(SFT), XX), (k(CAPS_LOCK), k(LEFT),      k(DOWN),      k(UP),      k(RIGHT))),
+    bottom=   Row((XX,        XX,        XX,        XX,        XX), (k(INSERT),    k(HOME),      k(PAGE_DOWN), k(PAGE_UP), k(END)  )),
+    thumbs=Thumbs((                      XX,        XX,        XX), (k(ENTER),     k(BACKSPACE), k(DELETE)   )),
 )
 
 NUM_LAYER: Final[Board[Action]] = Board(
     # Hold the Backspace thumb.
-    top=      Row((k(Key.LBRACKET),  k(Key.N7), k(Key.N8),     k(Key.N9), k(Key.RBRACKET) ), (XX, XX,        XX,        XX,        LOCK     )),  # [ 7 8 9 ]
-    home=     Row((k(Key.SEMICOLON), k(Key.N4), k(Key.N5),     k(Key.N6), k(Key.EQUAL)    ), (XX, hold(SFT), hold(CTL), hold(ALT), hold(GUI))),  # ; 4 5 6 =
-    bottom=   Row((k(Key.GRAVE),     k(Key.N1), k(Key.N2),     k(Key.N3), k(Key.BACKSLASH)), (XX, XX,        XX,        XX,        XX       )),  # ` 1 2 3 \
-    thumbs=Thumbs((                             k(Key.PERIOD), k(Key.N0), k(Key.MINUS)    ), (XX, XX,        XX       )),                        # . 0 -
+    top=      Row((k(LBRACKET),  k(N7), k(N8),     k(N9), k(RBRACKET) ), (XX, XX,        XX,        XX,        LOCK     )),  # [ 7 8 9 ]
+    home=     Row((k(SEMICOLON), k(N4), k(N5),     k(N6), k(EQUAL)    ), (XX, hold(SFT), hold(CTL), hold(ALT), hold(GUI))),  # ; 4 5 6 =
+    bottom=   Row((k(GRAVE),     k(N1), k(N2),     k(N3), k(BACKSLASH)), (XX, XX,        XX,        XX,        XX       )),  # ` 1 2 3 \
+    thumbs=Thumbs((                     k(PERIOD), k(N0), k(MINUS)    ), (XX, XX,        XX       )),                        # . 0 -
 )
 
 SYM_LAYER: Final[Board[Action]] = Board(
     # Hold the Enter thumb.
-    top=      Row((sh(Key.LBRACKET),  sh(Key.N7), sh(Key.N8), sh(Key.N9), sh(Key.RBRACKET) ), (XX, XX,        XX,        XX,        LOCK     )),  # { & * ( }
-    home=     Row((sh(Key.SEMICOLON), sh(Key.N4), sh(Key.N5), sh(Key.N6), sh(Key.EQUAL)    ), (XX, hold(SFT), hold(CTL), hold(ALT), hold(GUI))),  # : $ % ^ +
-    bottom=   Row((sh(Key.GRAVE),     sh(Key.N1), sh(Key.N2), sh(Key.N3), sh(Key.BACKSLASH)), (XX, XX,        XX,        XX,        XX       )),  # ~ ! @ # |
-    thumbs=Thumbs((                               sh(Key.N9), sh(Key.N0), sh(Key.MINUS)    ), (XX, XX,        XX       )),                        # ( ) _
+    top=      Row((sh(LBRACKET),  sh(N7), sh(N8), sh(N9), sh(RBRACKET) ), (XX, XX,        XX,        XX,        LOCK     )),  # { & * ( }
+    home=     Row((sh(SEMICOLON), sh(N4), sh(N5), sh(N6), sh(EQUAL)    ), (XX, hold(SFT), hold(CTL), hold(ALT), hold(GUI))),  # : $ % ^ +
+    bottom=   Row((sh(GRAVE),     sh(N1), sh(N2), sh(N3), sh(BACKSLASH)), (XX, XX,        XX,        XX,        XX       )),  # ~ ! @ # |
+    thumbs=Thumbs((                       sh(N9), sh(N0), sh(MINUS)    ), (XX, XX,        XX       )),                        # ( ) _
 )
 # fmt: on
 
