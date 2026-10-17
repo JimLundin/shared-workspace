@@ -24,6 +24,8 @@ LOCK_NAME: Final = "Local\\miryoku"
 class WinHost:
     """What the engine needs, done with Windows calls."""
 
+    __slots__ = ()
+
     def send(self, vk: int, down: bool) -> None:
         flags = (0 if down else win32.KEYEVENTF_KEYUP) | (win32.KEYEVENTF_EXTENDEDKEY if is_extended(vk) else 0)
         # The scancode, which some programs read, from Windows' own layout table.

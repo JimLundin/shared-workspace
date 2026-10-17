@@ -27,6 +27,8 @@ def sc(name: str) -> Scancode:
 
 
 class FakeHost:
+    __slots__ = ("log", "timer")
+
     def __init__(self) -> None:
         self.log: list[str] = []
         self.timer = 0
@@ -52,6 +54,8 @@ class FakeHost:
 
 
 class Harness:
+    __slots__ = ("e", "h", "now")
+
     def __init__(self) -> None:
         self.e = Engine()
         self.h = FakeHost()

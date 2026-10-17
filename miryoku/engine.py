@@ -11,29 +11,23 @@ from typing import NamedTuple, NoReturn, Protocol
 from .layout import (
     CELLS,
     ESCAPE,
-    MINUS,
     QUICK_TAP_MS,
     QUIT_HOLD_MS,
     STREAK_MS,
     Action,
     Ctrl,
+    Hold,
     Key,
-    Layer,
     LayerId,
     LockLayer,
     Mod,
-    Modifier,
     NoAction,
     Scancode,
     Shifted,
-    Tap,
     TapHold,
     Unmapped,
     action,
-    continues_word,
-    held,
     is_left_hand,
-    is_letter,
     slot,
 )
 
@@ -82,7 +76,7 @@ class Pending:
 
     cell: int
     tap: Key
-    hold: Modifier | Layer
+    hold: Hold
     timer: int
     pressed_at: int
 
@@ -202,16 +196,16 @@ class Engine:
             return
         if current is not None:
             # Auto-repeat: repeat plain keys (arrows, symbols...).
-            if isinstance(current, (Tap, Shifted)):
+            if isinstance(current, (Key, Shifted)):
                 self.press(host, current, now)
             return
         match action(self.layer(), cell):
             case TapHold(tap) if self.quick_tap(cell, now):
-                a: Action = Tap(tap)
+                a: Action = tap
             case TapHold(tap, Mod() as mod) if mod != Mod.SHIFT and self.in_streak(now):
-                a = Tap(tap)
+                a = tap
             case TapHold(tap, hold):
-                self.pending = Pending(cell, tap, held(hold), host.start_timer(), now)
+                self.pending = Pending(cell, tap, hold, host.start_timer(), now)
                 self.buffer = []
                 return
             case other:
@@ -229,7 +223,7 @@ class Engine:
         if down and not released_meanwhile:
             # Auto-repeat of a key held since before: repeat it now, it's already decided.
             if (current := self.pressed[cell]) is not None:
-                if isinstance(current, (Tap, Shifted)):
+                if isinstance(current, (Key, Shifted)):
                     self.press(host, current, now)
                 return
             # Auto-repeat of a key already waiting in the buffer adds nothing.
@@ -238,7 +232,7 @@ class Engine:
                 return
         # Chordal hold: the first key pressed is on the modifier's own hand, so it's a roll.
         first_press = down and not any(d for _, d, _ in self.buffer)
-        if first_press and isinstance(p.hold, Modifier) and is_left_hand(cell) == is_left_hand(p.cell):
+        if first_press and isinstance(p.hold, Mod) and is_left_hand(cell) == is_left_hand(p.cell):
             self.resolve(host, hold=False, now=now)
             self.event(host, e)
             return
@@ -265,8 +259,8 @@ class Engine:
             self.pressed[p.cell] = p.hold
             self.press(host, p.hold, p.pressed_at)
         else:
-            self.press(host, Tap(p.tap), p.pressed_at)
-            self.release(host, Tap(p.tap))
+            self.press(host, p.tap, p.pressed_at)
+            self.release(host, p.tap)
             self.last_tap = (p.cell, now)
         waiting, self.buffer = self.buffer, []
         for e in waiting:
@@ -293,44 +287,41 @@ class Engine:
         if not self.caps_word:
             return a
         match a:
-            case Tap(key) if is_letter(key):
-                return Shifted(key)
-            case Tap(key) if continues_word(key):
+            case Key() if a.is_letter():
+                return Shifted(a)
+            case Key() if a.continues_word():
                 return a
-            case Shifted(key) if key == MINUS:  # _
+            case Shifted(Key.MINUS):  # _
                 return a
-            case Tap() | Shifted() | Ctrl():
+            case Key() | Shifted() | Ctrl():
                 self.caps_word = False
                 return a
-            case Modifier() | Layer() | TapHold() | LockLayer() | NoAction():
+            case Mod() | LayerId() | TapHold() | LockLayer() | NoAction():
                 return a
 
     def press(self, host: Host, a: Action, now: int) -> None:
         # Both Shift keys held (this one is already recorded as pressed): toggle caps word.
-        shift = Modifier(Mod.SHIFT)
-        if a == shift and self.pressed.count(shift) >= 2:
+        if a == Mod.SHIFT and self.pressed.count(Mod.SHIFT) >= 2:
             self.caps_word = not self.caps_word
             if self.caps_word:
                 host.signal(Signal.CAPS_WORD)
         a = self.apply_caps_word(a)
         match a:
-            case Tap(key):
-                host.send(key, True)
-            case Modifier(mod):
-                host.send(mod, True)
+            case Key() | Mod():
+                host.send(a.vk, True)
             case Shifted(key):
-                host.send(Mod.SHIFT, True)
-                host.send(key, True)
-                host.send(Mod.SHIFT, False)
+                host.send(Mod.SHIFT.vk, True)
+                host.send(key.vk, True)
+                host.send(Mod.SHIFT.vk, False)
             case Ctrl(key):
-                host.send(Mod.CTRL, True)
-                host.send(key, True)
-                host.send(key, False)
-                host.send(Mod.CTRL, False)
-            case Layer(layer):
+                host.send(Mod.CTRL.vk, True)
+                host.send(key.vk, True)
+                host.send(key.vk, False)
+                host.send(Mod.CTRL.vk, False)
+            case LayerId():
                 # A layer beyond MAX_LAYERS is ignored rather than stored.
                 if len(self.active_layers) < MAX_LAYERS:
-                    self.active_layers.append(layer)
+                    self.active_layers.append(a)
             case LockLayer():
                 if self.locked is not None:
                     self.locked = None
@@ -340,19 +331,19 @@ class Engine:
                 pass
             case _:
                 assert_never(a)
-        if isinstance(a, (Tap, Shifted)):
+        if isinstance(a, (Key, Shifted)):
             self.last_typed_at = now
 
     def release(self, host: Host, a: Action) -> None:
         match a:
-            case Tap(key) | Shifted(key):
-                host.send(key, False)
-            case Modifier(mod):
-                host.send(mod, False)
-            case Layer(layer):
-                if layer in self.active_layers:
+            case Key() | Mod():
+                host.send(a.vk, False)
+            case Shifted(key):
+                host.send(key.vk, False)
+            case LayerId():
+                if a in self.active_layers:
                     # Remove the most recently added copy.
-                    index = len(self.active_layers) - 1 - self.active_layers[::-1].index(layer)
+                    index = len(self.active_layers) - 1 - self.active_layers[::-1].index(a)
                     del self.active_layers[index]
             case NoAction() | Ctrl() | TapHold() | LockLayer():
                 pass
