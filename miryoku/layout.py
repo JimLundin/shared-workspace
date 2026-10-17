@@ -263,10 +263,10 @@ sh, ht, sc = Shifted, TapHold, Scancode
 PHYSICAL: Final[Board[Scancode]] = Board(
     # Physical keys of the ISO laptop keyboard (Miryoku KMonad mapping: rows moved
     # up one, reverse angle on the left, wide spacing). Nordic keycaps on the right.
-    top=Row((sc(0x03), sc(0x04), sc(0x05), sc(0x06), sc(0x07)), (sc(0x09), sc(0x0A), sc(0x0B), sc(0x0C), sc(0x0D))),  # 2 3 4 5 6    | 8 9 0 + acute
-    home=Row((sc(0x10), sc(0x11), sc(0x12), sc(0x13), sc(0x14)), (sc(0x17), sc(0x18), sc(0x19), sc(0x1A), sc(0x1B))),  # Q W E R T    | I O P Å ¨
-    bottom=Row((sc(0x3A), sc(0x1E), sc(0x1F), sc(0x20), sc(0x21)), (sc(0x25), sc(0x26), sc(0x27), sc(0x28), sc(0x2B))),  # Caps A S D F | K L Ö Ä '
-    thumbs=Thumbs((sc(0x2D), sc(0x2E), sc(0x2F)), (sc(0x33), sc(0x34), sc(0x35))),  # X C V        | , . -
+    top=      Row((sc(0x03), sc(0x04), sc(0x05), sc(0x06), sc(0x07)), (sc(0x09), sc(0x0A), sc(0x0B), sc(0x0C), sc(0x0D))),  # 2 3 4 5 6    | 8 9 0 + acute
+    home=     Row((sc(0x10), sc(0x11), sc(0x12), sc(0x13), sc(0x14)), (sc(0x17), sc(0x18), sc(0x19), sc(0x1A), sc(0x1B))),  # Q W E R T    | I O P Å ¨
+    bottom=   Row((sc(0x3A), sc(0x1E), sc(0x1F), sc(0x20), sc(0x21)), (sc(0x25), sc(0x26), sc(0x27), sc(0x28), sc(0x2B))),  # Caps A S D F | K L Ö Ä '
+    thumbs=Thumbs((                    sc(0x2D), sc(0x2E), sc(0x2F)), (sc(0x33), sc(0x34), sc(0x35))),                      # X C V        | , . -
 )
 
 UNUSED: Final = frozenset(
@@ -276,34 +276,34 @@ UNUSED: Final = frozenset(
 
 BASE: Final[Board[Action]] = Board(
     # Colemak-DH with home row mods (Win Alt Ctrl Shift).
-    top=Row((Q, W, F, P, B), (J, L, U, Y, QUOTE)),
-    home=Row((ht(A, GUI), ht(R, ALT), ht(S, CTL), ht(T, SFT), G), (M, ht(N, SFT), ht(E, CTL), ht(I, ALT), ht(O, GUI))),
-    bottom=Row((Z, X, C, D, V), (K, H, COMMA, PERIOD, SLASH)),
-    thumbs=Thumbs((ESC, ht(SPACE, NAV), TAB), (ht(ENTER, SYM), ht(BACKSPACE, NUM), DELETE)),
+    top=      Row((Q,          W,          F,          P,              B  ), (J,              L,                  U,          Y,          QUOTE     )),
+    home=     Row((ht(A, GUI), ht(R, ALT), ht(S, CTL), ht(T, SFT),     G  ), (M,              ht(N, SFT),         ht(E, CTL), ht(I, ALT), ht(O, GUI))),
+    bottom=   Row((Z,          X,          C,          D,              V  ), (K,              H,                  COMMA,      PERIOD,     SLASH     )),
+    thumbs=Thumbs((                        ESC,        ht(SPACE, NAV), TAB), (ht(ENTER, SYM), ht(BACKSPACE, NUM), DELETE    )),
 )
 
 NAV_LAYER: Final[Board[Action]] = Board(
     # Hold the Space thumb.
-    top=Row((LOCK, XX, XX, XX, XX), (REDO, PASTE, COPY, CUT, UNDO)),
-    home=Row((GUI, ALT, CTL, SFT, XX), (CAPS_LOCK, LEFT, DOWN, UP, RIGHT)),
-    bottom=Row((XX, XX, XX, XX, XX), (INSERT, HOME, PAGE_DOWN, PAGE_UP, END)),
-    thumbs=Thumbs((XX, XX, XX), (ENTER, BACKSPACE, DELETE)),
+    top=      Row((LOCK, XX,  XX,  XX,  XX), (REDO,      PASTE,     COPY,      CUT,     UNDO )),
+    home=     Row((GUI,  ALT, CTL, SFT, XX), (CAPS_LOCK, LEFT,      DOWN,      UP,      RIGHT)),
+    bottom=   Row((XX,   XX,  XX,  XX,  XX), (INSERT,    HOME,      PAGE_DOWN, PAGE_UP, END  )),
+    thumbs=Thumbs((           XX,  XX,  XX), (ENTER,     BACKSPACE, DELETE   )),
 )
 
 NUM_LAYER: Final[Board[Action]] = Board(
     # Hold the Backspace thumb.
-    top=Row((LBRACKET, N7, N8, N9, RBRACKET), (XX, XX, XX, XX, LOCK)),  # [ 7 8 9 ]
-    home=Row((SEMICOLON, N4, N5, N6, EQUAL), (XX, SFT, CTL, ALT, GUI)),  # ; 4 5 6 =
-    bottom=Row((GRAVE, N1, N2, N3, BACKSLASH), (XX, XX, XX, XX, XX)),  # ` 1 2 3 \
-    thumbs=Thumbs((PERIOD, N0, MINUS), (XX, XX, XX)),  # . 0 -
+    top=      Row((LBRACKET,  N7, N8,     N9, RBRACKET ), (XX, XX,  XX,  XX,  LOCK)),  # [ 7 8 9 ]
+    home=     Row((SEMICOLON, N4, N5,     N6, EQUAL    ), (XX, SFT, CTL, ALT, GUI )),  # ; 4 5 6 =
+    bottom=   Row((GRAVE,     N1, N2,     N3, BACKSLASH), (XX, XX,  XX,  XX,  XX  )),  # ` 1 2 3 \
+    thumbs=Thumbs((               PERIOD, N0, MINUS    ), (XX, XX,  XX )),             # . 0 -
 )
 
 SYM_LAYER: Final[Board[Action]] = Board(
     # Hold the Enter thumb.
-    top=Row((sh(LBRACKET), sh(N7), sh(N8), sh(N9), sh(RBRACKET)), (XX, XX, XX, XX, LOCK)),  # { & * ( }
-    home=Row((sh(SEMICOLON), sh(N4), sh(N5), sh(N6), sh(EQUAL)), (XX, SFT, CTL, ALT, GUI)),  # : $ % ^ +
-    bottom=Row((sh(GRAVE), sh(N1), sh(N2), sh(N3), sh(BACKSLASH)), (XX, XX, XX, XX, XX)),  # ~ ! @ # |
-    thumbs=Thumbs((sh(N9), sh(N0), sh(MINUS)), (XX, XX, XX)),  # ( ) _
+    top=      Row((sh(LBRACKET),  sh(N7), sh(N8), sh(N9), sh(RBRACKET) ), (XX, XX,  XX,  XX,  LOCK)),  # { & * ( }
+    home=     Row((sh(SEMICOLON), sh(N4), sh(N5), sh(N6), sh(EQUAL)    ), (XX, SFT, CTL, ALT, GUI )),  # : $ % ^ +
+    bottom=   Row((sh(GRAVE),     sh(N1), sh(N2), sh(N3), sh(BACKSLASH)), (XX, XX,  XX,  XX,  XX  )),  # ~ ! @ # |
+    thumbs=Thumbs((                       sh(N9), sh(N0), sh(MINUS)    ), (XX, XX,  XX )),             # ( ) _
 )
 # fmt: on
 
