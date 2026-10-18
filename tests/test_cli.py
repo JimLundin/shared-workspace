@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import io
 import json
+from collections.abc import Mapping
 
 from assistant.cli import main
 from assistant.llm import Json
+from usage import Detail
 
 from .fake_endpoint import FakeEndpoint, Reply, fake_endpoint, sse
 
@@ -46,7 +48,11 @@ class Terminal:
 
     def call(self, endpoint: FakeEndpoint | None, *argv: str, piped: bool = False) -> int:
         env = {"OPENAI_BASE_URL": endpoint.url, "OPENAI_API_KEY": "k"} if endpoint else {}
-        return main(list(argv), env, self.input, self.out, self.err, piped=piped, confirm=self.confirm, run=self.run, record=lambda *_: None)
+        return main(list(argv), env, self.input, self.out, self.err, piped=piped, confirm=self.confirm, run=self.run, record=ignore)
+
+
+def ignore(feature: str, details: Mapping[str, Detail]) -> None:
+    pass
 
 
 def sent(endpoint: FakeEndpoint) -> str:
