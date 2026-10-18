@@ -9,6 +9,9 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import NamedTuple, NoReturn, Protocol
 
+from config import SNIPPETS
+from protocol import App, Request, Tool
+
 from .layout import (
     CELLS,
     ESCAPE,
@@ -29,6 +32,8 @@ from .layout import (
     TapHold,
     Unmapped,
     action,
+    character,
+    describe,
     is_left_hand,
     slot,
 )
@@ -42,6 +47,15 @@ class Host(Protocol):
     def stop_timer(self, timer: int) -> None: ...
     def signal(self, signal: Signal) -> None:
         """Let the user know about a change they can't otherwise see."""
+
+    def request(self, request: Request, down: bool) -> None:
+        """A tool or app key went down or up: pass it on to the assistant."""
+
+    def type_text(self, text: str) -> None:
+        """Type text as characters, whatever the keyboard layout."""
+
+    def used(self, feature: str) -> None:
+        """Count a use of a feature, for the usage log."""
 
 
 class Verdict(Enum):
@@ -61,14 +75,12 @@ class Signal(Enum):
     ON = auto()
     OFF = auto()
     CAPS_WORD = auto()
-    TALK_START = auto()
-    """The push-to-talk key went down: start listening."""
-    TALK_STOP = auto()
-    """The push-to-talk key came up (or the layout let go of it): stop and transcribe."""
 
 
-MAX_LAYERS = 3
-"""Layers held at once: the layout has three layer keys."""
+MAX_LAYERS = 5
+"""Layers held at once: the layout has five layer keys."""
+MAX_TRIGGER = max((len(trigger) for trigger in SNIPPETS), default=0)
+"""Characters remembered for snippets: the longest trigger."""
 MAX_BUFFERED = 18
 """Key events that can wait on one undecided tap-hold key. One finger holds that
 key; each of the other nine can add at most one press, plus the release of a key
@@ -170,8 +182,12 @@ class Engine:
     capitalised until something that isn't part of a word: a space, punctuation,
     Enter, an arrow... Digits, `_`, Backspace and Delete keep it going.
 
-    Push-to-talk: holding the talk key tells the dictation tool to listen;
-    releasing it (or switching the layout off) tells it to stop.
+    Push-to-talk: holding the talk key asks the assistant to listen; releasing
+    it (or switching the layout off) asks it to stop. Tool and app keys on the
+    Tools and Apps layers are passed on the same way.
+
+    Snippets: the last characters typed are remembered; once they end in a
+    snippet's trigger, the trigger is erased and the snippet typed instead.
 
     Layer lock: the lock key on a layer keeps that layer on after its thumb is
     released. Tap the lock key again, or the escape key, to unlock.
@@ -196,6 +212,9 @@ class Engine:
     mods: Modifiers = field(default_factory=Modifiers)
     talking: bool = False
     """The push-to-talk key is held."""
+    typed: str = ""
+    """The last characters typed, for snippets. Anything that moves the cursor, or a
+    shortcut, clears it."""
 
     def on_key(self, host: Host, scancode: Scancode, down: bool, now: int) -> Verdict:
         """Entry point for every physical key event. `now` is the event's
@@ -211,6 +230,8 @@ class Engine:
                 if elapsed(now, pressed_at) >= QUIT_HOLD_MS:
                     return Verdict.QUIT
                 self.enabled = not self.enabled
+                if not self.enabled:
+                    host.used("switch_off")
                 host.signal(Signal.ON if self.enabled else Signal.OFF)
             return Verdict.SWALLOW
         if not self.enabled:
@@ -219,7 +240,7 @@ class Engine:
         if scancode == TALK:
             if down != self.talking:
                 self.talking = down
-                host.signal(Signal.TALK_START if down else Signal.TALK_STOP)
+                host.request(Tool.DICTATE, down)
             return Verdict.SWALLOW
         match slot(scancode):
             case Unmapped.FREE:
@@ -258,7 +279,8 @@ class Engine:
             if isinstance(current, (Key, Chord)):
                 self.press(host, current, now)
             return
-        match action(self.layer(), cell):
+        layer = self.layer()
+        match action(layer, cell):
             case TapHold(tap) if self.quick_tap(cell, now):
                 a: Action = tap
             case TapHold(tap, Mod() as mod) if mod != Mod.SHIFT and self.in_streak(now):
@@ -269,6 +291,8 @@ class Engine:
                 return
             case other:
                 a = other
+        if layer is not None and a is not Command.NOTHING:
+            host.used(f"{layer.name.lower()}:{describe(a)}")
         self.pressed[cell] = a
         self.press(host, a, now)
 
@@ -315,6 +339,7 @@ class Engine:
             return
         host.stop_timer(p.timer)
         if hold:
+            host.used(f"hold:{p.hold.name.lower()}" if isinstance(p.hold, Mod) else f"layer:{p.hold.name.lower()}")
             self.pressed[p.cell] = p.hold
             self.press(host, p.hold, p.pressed_at)
         else:
@@ -341,9 +366,10 @@ class Engine:
         self.caps_word = False
         self.locked = None
         self.mods.release_all(host)  # nothing should be left, but never leave one stuck
+        self.typed = ""
         if self.talking:
             self.talking = False
-            host.signal(Signal.TALK_STOP)
+            host.request(Tool.DICTATE, False)
 
     def apply_caps_word(self, a: Action) -> Action:
         """Caps word: capitalise letters, let word characters through, end on anything else."""
@@ -359,21 +385,46 @@ class Engine:
             case Key() | Chord():
                 self.caps_word = False
                 return a
-            case Mod() | Layer() | TapHold() | Command():
+            case Mod() | Layer() | TapHold() | Command() | Tool() | App():
                 return a
+
+    def remember(self, host: Host, a: Output) -> None:
+        """Snippets: keep the last characters typed, and expand a complete trigger."""
+        key, mods = (a, frozenset[Mod]()) if isinstance(a, Key) else (a.key, a.mods)
+        held = frozenset(self.mods.counts) | mods
+        if key is Key.BACKSPACE and not held:
+            self.typed = self.typed[:-1]
+            return
+        typed = character(key, Mod.SHIFT in held) if held <= SHIFT_ONLY else None
+        if typed is None:
+            self.typed = ""
+            return
+        self.typed = (self.typed + typed)[-MAX_TRIGGER:]
+        for trigger, text in SNIPPETS.items():
+            if self.typed.endswith(trigger):
+                self.typed = ""
+                for _ in trigger:
+                    host.send(Key.BACKSPACE, True)
+                    host.send(Key.BACKSPACE, False)
+                host.type_text(text() if callable(text) else text)
+                host.used(f"snippet:{trigger}")
+                return
 
     def press(self, host: Host, a: Action, now: int) -> None:
         # Both Shift keys held (this one is already recorded as pressed): toggle caps word.
         if a == Mod.SHIFT and self.pressed.count(Mod.SHIFT) >= 2:
             self.caps_word = not self.caps_word
             if self.caps_word:
+                host.used("caps_word")
                 host.signal(Signal.CAPS_WORD)
         a = self.apply_caps_word(a)
         match a:
             case Key():
                 host.send(a, True)
+                self.remember(host, a)
             case Chord():
                 self.mods.chord(host, a)
+                self.remember(host, a)
             case Mod():
                 self.mods.hold(host, a)
             case Layer():
@@ -385,6 +436,10 @@ class Engine:
                     self.locked = None
                 elif self.active_layers:
                     self.locked = self.active_layers[-1]
+                    host.used("layer_lock")
+            case Tool() | App():
+                self.typed = ""
+                host.request(a, True)
             case Command.NOTHING | TapHold():
                 pass
             case _:
@@ -405,6 +460,8 @@ class Engine:
                     # Remove the most recently added copy.
                     index = len(self.active_layers) - 1 - self.active_layers[::-1].index(a)
                     del self.active_layers[index]
+            case Tool() | App():
+                host.request(a, False)
             case TapHold() | Command():
                 pass
             case _:

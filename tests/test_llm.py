@@ -1,4 +1,4 @@
-"""Dictation tests: settings, the text that gets typed, audio, and the request to a
+"""Assistant tests: settings, the text that gets typed, audio, and the request to a
 transcription endpoint (a local fake server). Run anywhere with `pytest`."""
 
 from __future__ import annotations
@@ -11,7 +11,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from dictate.core import RATE, Failure, Missing, Settings, long_enough, settings_from, transcribe, typed_text, utf16_units, wav
+from assistant.llm import RATE, Failure, Missing, Settings, long_enough, settings_from, transcribe, typed_text, wav
+from winapi.shapes import utf16_units
 
 # ---- settings --------------------------------------------------------------------------
 

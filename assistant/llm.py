@@ -147,9 +147,3 @@ def typed_text(transcript: str) -> str:
     press Enter, and in a terminal run the command); control characters go."""
     line = " ".join("".join(c for c in transcript if c.isprintable() or c.isspace()).split())
     return f"{line} " if line else ""
-
-
-def utf16_units(text: str) -> list[int]:
-    """Windows types text as UTF-16 code units; outside the BMP that's two per character."""
-    data = text.encode("utf-16-le")
-    return [int.from_bytes(data[i : i + 2], "little") for i in range(0, len(data), 2)]

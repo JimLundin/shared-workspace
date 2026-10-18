@@ -3,7 +3,7 @@
 Set the Windows keyboard to English (US). The key left of 1 (§) is the escape
 key: tap it to switch between this layout and your plain keyboard, hold it for
 2 seconds to quit. B, between the thumb keys, is push-to-talk for the
-dictation tool (`dictate`), if it's running.
+assistant, if it's running (it usually starts the layout itself).
 """
 
 from __future__ import annotations
@@ -19,11 +19,13 @@ def main() -> None:
 
     match run():
         case Exit.QUIT:
-            pass
+            sys.exit(0)  # a normal quit: the assistant doesn't restart the layout
         case Exit.ALREADY_RUNNING:
             show_error("Miryoku is already running.")
+            sys.exit(0)
         case Exit.HOOK_REFUSED:
             show_error("Windows refused the keyboard hook.")
+            sys.exit(2)
 
 
 if __name__ == "__main__":

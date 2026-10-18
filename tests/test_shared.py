@@ -6,14 +6,15 @@ from datetime import datetime
 from pathlib import Path
 
 from config import APPS
-from protocol import App, Tool, decode, encode
+from protocol import App, Request, Tool, decode, encode
 from usage import record, record_counts, report, summarize
 
 # ---- protocol --------------------------------------------------------------------------
 
 
 def test_tools_and_apps_round_trip() -> None:
-    for request in (*Tool, *APPS):
+    requests: list[Request] = [*list(Tool), *APPS]
+    for request in requests:
         assert decode(encode(request, APPS), APPS) == request
 
 

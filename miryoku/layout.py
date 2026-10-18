@@ -13,6 +13,9 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Final, Generic, NewType, TypeAlias, TypeVar
 
+from config import APPS
+from protocol import App, Tool
+
 # ---- Settings ------------------------------------------------------------------
 
 TAPPING_TERM_MS: Final = 200
@@ -154,6 +157,8 @@ class Layer(Enum):
     NAV = auto()
     NUM = auto()
     SYM = auto()
+    TOOLS = auto()
+    APPS = auto()
 
 
 Hold: TypeAlias = Mod | Layer
@@ -191,9 +196,43 @@ class TapHold:
     hold: Hold
 
 
-Action: TypeAlias = Output | Mod | Layer | TapHold | Command
+Action: TypeAlias = Output | Mod | Layer | TapHold | Command | Tool | App
 """What one key on one layer does. A Key or Chord is sent; a Mod or Layer is held
-while the key is held."""
+while the key is held; a Tool or App is a request to the assistant (see `protocol`)."""
+
+
+CHARACTERS: Final[dict[Key, tuple[str, str]]] = {
+    **{key: (key.name.lower(), key.name) for key in Key if key.is_letter()},
+    **{Key[f"N{d}"]: (str(d), ")!@#$%^&*("[d]) for d in range(10)},
+    Key.GRAVE: ("`", "~"), Key.MINUS: ("-", "_"), Key.EQUAL: ("=", "+"),
+    Key.LBRACKET: ("[", "{"), Key.RBRACKET: ("]", "}"), Key.BACKSLASH: ("\\", "|"),
+    Key.SEMICOLON: (";", ":"), Key.QUOTE: ("'", '"'), Key.COMMA: (",", "<"),
+    Key.PERIOD: (".", ">"), Key.SLASH: ("/", "?"), Key.SPACE: (" ", " "),
+}  # fmt: skip
+"""The character each key types on the US English layout: (plain, shifted)."""
+
+
+def character(key: Key, shifted: bool) -> str | None:
+    """What a key types, or None for keys that don't type (arrows, Enter...)."""
+    pair = CHARACTERS.get(key)
+    return None if pair is None else pair[shifted]
+
+
+def describe(a: Action) -> str:
+    """A short name for an action, as the usage log records it."""
+    match a:
+        case Key():
+            return character(a, shifted=False) or a.name.lower()
+        case Chord(key, mods) if mods == SHIFT_ONLY and (c := character(key, shifted=True)):
+            return c
+        case Chord(key, mods):
+            return "+".join([*(m.name.lower() for m in Mod if m in mods), describe(key)])
+        case TapHold(tap):
+            return describe(tap)
+        case App():
+            return f"app:{a.name}"
+        case Mod() | Layer() | Command() | Tool():
+            return a.name.lower()
 
 
 # ---- Board shape ---------------------------------------------------------------
@@ -274,6 +313,9 @@ def ctl(key: Key) -> Chord:
 
 UNDO, REDO, COPY, PASTE, CUT = ctl(Z), ctl(Y), ctl(C), ctl(V), ctl(X)
 
+# The apps from config, ten slots in key order; slots past the end do nothing.
+_APP: Final[tuple[Action, ...]] = (*APPS[:10], *[XX] * (10 - len(APPS[:10])))
+
 
 # ---- The layout ----------------------------------------------------------------
 # Rows read across the keyboard: left hand, then right hand. Kept in columns by
@@ -299,7 +341,7 @@ BASE: Final[Board[Action]] = Board(
     top=      Row((Q,          W,          F,          P,              B  ), (J,              L,                  U,          Y,          QUOTE     )),
     home=     Row((ht(A, GUI), ht(R, ALT), ht(S, CTL), ht(T, SFT),     G  ), (M,              ht(N, SFT),         ht(E, CTL), ht(I, ALT), ht(O, GUI))),
     bottom=   Row((Z,          X,          C,          D,              V  ), (K,              H,                  COMMA,      PERIOD,     SLASH     )),
-    thumbs=Thumbs((                        ESC,        ht(SPACE, NAV), TAB), (ht(ENTER, SYM), ht(BACKSPACE, NUM), DELETE    )),
+    thumbs=Thumbs((                        ESC,        ht(SPACE, NAV), ht(TAB, Layer.TOOLS)), (ht(ENTER, SYM), ht(BACKSPACE, NUM), ht(DELETE, Layer.APPS))),
 )
 
 NAV_LAYER: Final[Board[Action]] = Board(
@@ -325,6 +367,22 @@ SYM_LAYER: Final[Board[Action]] = Board(
     bottom=   Row((sh(GRAVE),     sh(N1), sh(N2), sh(N3), sh(BACKSLASH)), (XX, XX,  XX,  XX,  XX  )),  # ~ ! @ # |
     thumbs=Thumbs((                       sh(N9), sh(N0), sh(MINUS)    ), (XX, XX,  XX )),             # ( ) _
 )
+
+TOOLS_LAYER: Final[Board[Action]] = Board(
+    # Hold the Tab thumb. Right hand: the assistant's tools (see protocol.Tool).
+    top=      Row((LOCK, XX,  XX,  XX,  XX), (Tool.REWRITE_VOICE, Tool.FIX,             Tool.TRANSLATE, Tool.SHORTER,     Tool.FORMAL    )),
+    home=     Row((GUI,  ALT, CTL, SFT, XX), (Tool.DICTATE_CLEAN, Tool.DICTATE_COMMAND, Tool.ASK,       Tool.SCREEN_TEXT, Tool.SCREEN_ASK)),
+    bottom=   Row((XX,   XX,  XX,  XX,  XX), (Tool.AGENT_VOICE,   Tool.AGENT_TYPED,     Tool.STOP,      XX,               XX             )),
+    thumbs=Thumbs((           XX,  XX,  XX), (Tool.DICTATE,       XX,                   XX             )),
+)
+
+APPS_LAYER: Final[Board[Action]] = Board(
+    # Hold the Delete thumb. Left hand: apps (from config.APPS), then window placement.
+    top=      Row((_APP[0],        _APP[1],       _APP[2],         _APP[3],           _APP[4]      ), (XX, XX,  XX,  XX,  LOCK)),
+    home=     Row((_APP[5],        _APP[6],       _APP[7],         _APP[8],           _APP[9]      ), (XX, SFT, CTL, ALT, GUI )),
+    bottom=   Row((Tool.SNAP_LEFT, Tool.MAXIMIZE, Tool.SNAP_RIGHT, Tool.NEXT_MONITOR, Tool.MINIMIZE), (XX, XX,  XX,  XX,  XX  )),
+    thumbs=Thumbs((                               XX,              XX,                XX           ), (XX, XX,  XX )),
+)
 # fmt: on
 
 
@@ -347,6 +405,8 @@ TABLE: Final[dict[Layer | None, tuple[Action, ...]]] = {
     Layer.NAV: _flatten(NAV_LAYER),
     Layer.NUM: _flatten(NUM_LAYER),
     Layer.SYM: _flatten(SYM_LAYER),
+    Layer.TOOLS: _flatten(TOOLS_LAYER),
+    Layer.APPS: _flatten(APPS_LAYER),
 }
 """Every layer flattened, by layer (None: the base layer) then cell."""
 

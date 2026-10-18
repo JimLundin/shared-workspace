@@ -16,9 +16,10 @@ warn_unreachable = true
 
 [[tool.mypy.overrides]]
 # The ctypes boundary. ctypes is untyped, so values here are Any until converted;
-# every function's signature is concrete, so nothing untyped leaves this module.
-module = "winapi"
+# every public function's signature is concrete, so nothing untyped leaves it.
+module = ["winapi", "winapi.*"]
 disallow_any_expr = false
+disallow_any_explicit = false
 
 [tool.pyright]
 pythonVersion = "3.10"
@@ -37,4 +38,4 @@ ignore = ["PLR2004", "PLR0911", "PLR0912"]
 # The layout tables are kept as a wide grid that reads across the keyboard.
 "miryoku/layout.py" = ["E501"]
 # Win32 functions keep their Windows names, one prototype per line.
-"winapi.py" = ["E501", "N816"]
+"winapi/*.py" = ["E501", "N816", "PLR0913", "PLR0917"]

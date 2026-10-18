@@ -4,24 +4,31 @@ exempt: they manage their own storage."""
 
 from __future__ import annotations
 
+import importlib
 import inspect
+import pkgutil
 import sys
 from enum import Enum
+from pathlib import Path
 from types import ModuleType
 
-from dictate import core
-from miryoku import engine, layout
+ROOT = Path(__file__).resolve().parent.parent
+PACKAGES = ("miryoku", "assistant", "winapi")
+TOP_LEVEL = ("protocol", "config", "usage")
 
 
 def modules() -> list[ModuleType]:
-    found = [layout, engine, core]
-    if sys.platform == "win32":
-        import channel  # noqa: PLC0415
-        import winapi  # noqa: PLC0415 (Windows-only modules)
-        from dictate import win as dictate_win  # noqa: PLC0415
-        from miryoku import win  # noqa: PLC0415
-
-        found += [win, winapi, channel, dictate_win]
+    """Every module of the toolkit. Off Windows, the ones that need Windows are skipped."""
+    names = [*TOP_LEVEL]
+    for package in PACKAGES:
+        names += [f"{package}.{m.name}" for m in pkgutil.iter_modules([str(ROOT / package)])]
+    found: list[ModuleType] = []
+    for name in names:
+        try:
+            found.append(importlib.import_module(name))
+        except (ImportError, AttributeError, OSError):
+            if sys.platform == "win32":
+                raise
     return found
 
 

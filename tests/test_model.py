@@ -7,7 +7,7 @@ from miryoku.layout import Chord, Command, Key, Layer, Mod, TapHold
 
 def test_layers_have_no_base() -> None:
     # Holding "the base layer" means nothing, so it can't be written: no layer held is None.
-    assert [layer.name for layer in Layer] == ["NAV", "NUM", "SYM"]
+    assert [layer.name for layer in Layer] == ["NAV", "NUM", "SYM", "TOOLS", "APPS"]
 
 
 def test_keys_carry_their_windows_details() -> None:

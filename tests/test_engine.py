@@ -4,8 +4,8 @@ with `pytest`."""
 from __future__ import annotations
 
 from miryoku.engine import MAX_BUFFERED, Engine, Signal, Verdict
-from protocol import App, Request, Tool
 from miryoku.layout import ESCAPE, QUICK_TAP_MS, QUIT_HOLD_MS, STREAK_MS, TALK, Key, Mod, Scancode
+from protocol import Request, Tool
 
 NAMES = {0xA0: "SFT", 0xA2: "CTL", 0xA4: "ALT", 0x20: "spc", 0x25: "left", 0x08: "bksp", 0xDB: "[", 0xC0: "`", 0xBE: "."}
 
