@@ -9,16 +9,19 @@ import sys
 from enum import Enum
 from types import ModuleType
 
+from dictate import core
 from miryoku import engine, layout
 
 
 def modules() -> list[ModuleType]:
-    found = [layout, engine]
+    found = [layout, engine, core]
     if sys.platform == "win32":
+        import channel  # noqa: PLC0415
         import winapi  # noqa: PLC0415 (Windows-only modules)
+        from dictate import win as dictate_win  # noqa: PLC0415
         from miryoku import win  # noqa: PLC0415
 
-        found += [win, winapi]
+        found += [win, winapi, channel, dictate_win]
     return found
 
 

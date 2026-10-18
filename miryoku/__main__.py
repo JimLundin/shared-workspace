@@ -2,7 +2,8 @@
 
 Set the Windows keyboard to English (US). The key left of 1 (§) is the escape
 key: tap it to switch between this layout and your plain keyboard, hold it for
-2 seconds to quit.
+2 seconds to quit. B, between the thumb keys, is push-to-talk for the
+dictation tool (`dictate`), if it's running.
 """
 
 from __future__ import annotations

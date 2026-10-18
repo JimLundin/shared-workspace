@@ -86,9 +86,11 @@ class WAVEHDR(ctypes.Structure):
     )
 
 
-# Struct sizes must match Windows exactly, or SendInput silently does nothing.
-if ctypes.sizeof(INPUT) != (40 if ctypes.sizeof(ctypes.c_void_p) == 8 else 28):
-    raise ImportError(f"INPUT is {ctypes.sizeof(INPUT)} bytes; Windows expects a different size")
+# Struct sizes must match Windows exactly, or the calls silently do nothing.
+_64_BIT = ctypes.sizeof(ctypes.c_void_p) == 8
+for _struct, _size in ((INPUT, 40 if _64_BIT else 28), (WAVEHDR, 48 if _64_BIT else 32), (WAVEFORMATEX, 18)):
+    if ctypes.sizeof(_struct) != _size:
+        raise ImportError(f"{_struct.__name__} is {ctypes.sizeof(_struct)} bytes; Windows expects {_size}")
 
 # ---- Functions -----------------------------------------------------------------------
 
@@ -259,8 +261,9 @@ def send_unicode(units: Sequence[int], extra: int) -> None:
     _SendInput(len(events), events, ctypes.sizeof(INPUT))
 
 
-def create_event(name: str, *, manual_reset: bool, initially_set: bool) -> EventHandle | None:
-    """A named event for this Windows session, created or (if it exists) opened."""
+def create_event(name: str | None, *, manual_reset: bool, initially_set: bool) -> EventHandle | None:
+    """An event: named ones are shared by every program in this Windows session,
+    created by the first and opened by the rest. None: private to this program."""
     handle: int | None = _CreateEventW(None, manual_reset, initially_set, name)
     return EventHandle(handle) if handle else None
 
