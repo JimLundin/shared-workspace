@@ -4,6 +4,7 @@ that other processes can find and post messages to."""
 from __future__ import annotations
 
 import ctypes
+import threading
 from ctypes import wintypes
 from pathlib import PureWindowsPath
 from typing import Final
@@ -125,8 +126,20 @@ def foreground() -> int:
     return int(_GetForegroundWindow() or 0)
 
 
-def focus(hwnd: int) -> bool:
-    """Brings a window to the front and gives it the keyboard; True if it worked."""
+def focus(hwnd: int, timeout_s: float = 1.0) -> bool:
+    """Brings a window to the front and gives it the keyboard; True if it worked.
+
+    Done on a helper thread with a time limit: briefly joining the front program's
+    input queue (see `_focus`) waits on that program, and a hung one must never
+    freeze the caller."""
+    result: list[bool] = []
+    helper = threading.Thread(target=lambda: result.append(_focus(hwnd)), name="focus", daemon=True)
+    helper.start()
+    helper.join(timeout_s)
+    return bool(result and result[0])
+
+
+def _focus(hwnd: int) -> bool:
     if _IsIconic(hwnd):
         _ShowWindow(hwnd, SW_RESTORE)
     if _SetForegroundWindow(hwnd) and foreground() == hwnd:

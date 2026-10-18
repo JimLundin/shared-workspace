@@ -28,6 +28,7 @@ from .llm import (
     Failure,
     Image,
     Message,
+    Missing,
     Part,
     Settings,
     Text,
@@ -151,7 +152,7 @@ class Conversation:
 class Assistant:
     """Turns requests from the layout's tool and app keys into actions."""
 
-    __slots__ = ("desktop", "layout_on", "listening", "record", "run_agent", "settings", "stop_agent", "submit")
+    __slots__ = ("desktop", "layout_on", "listening", "missing", "record", "run_agent", "settings", "stop_agent", "submit")
 
     def __init__(
         self,
@@ -162,6 +163,7 @@ class Assistant:
         submit: Callable[[Callable[[], None]], None],
         run_agent: Callable[[str], None],
         stop_agent: Callable[[], None],
+        missing: Missing | None = None,
     ) -> None:
         self.desktop = desktop
         self.settings = settings
@@ -173,11 +175,17 @@ class Assistant:
         self.listening: Tool | None = None
         """The talk key being held, if any."""
         self.layout_on = True
+        self.missing = missing
+        """Settings the AI tools need but don't have; the other keys work without them."""
 
     # ---- requests ----------------------------------------------------------------------
 
     def handle(self, request: Request, down: bool) -> None:
         """A tool or app key went down or up. Returns quickly; slow work is submitted."""
+        if self.missing is not None and isinstance(request, Tool) and request not in WINDOW_TOOLS and request is not Tool.STOP:
+            if down:
+                self.desktop.problem(f"Set {', '.join(self.missing.names)} to use the AI tools (see the README).")
+            return
         match request:
             case App():
                 if down:

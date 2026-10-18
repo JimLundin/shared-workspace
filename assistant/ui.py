@@ -39,7 +39,8 @@ def _bring_forward(window: tk.Toplevel, focus: tk.Widget) -> None:
     window.deiconify()
     window.lift()
     window.attributes("-topmost", True)
-    windows.focus(int(window.wm_frame(), 16))
+    frame = int(window.wm_frame(), 16)
+    threading.Thread(target=lambda: windows.focus(frame), name="bring forward", daemon=True).start()  # never wait here
     window.after(200, lambda: window.attributes("-topmost", False))
     focus.focus_set()
 

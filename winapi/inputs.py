@@ -194,6 +194,12 @@ def click(x: int, y: int, button: str, count: int, screen: Rect, extra: int) -> 
     _send([move, *(_mouse(0, 0, 0, flag, extra) for _ in range(count) for flag in (down, up))])
 
 
+def mouse_button(button: str, down: bool, extra: int) -> None:
+    """Presses or releases a button where the mouse is (for dragging)."""
+    pressed, released = _BUTTON_FLAGS[button]
+    _send([_mouse(0, 0, 0, pressed if down else released, extra)])
+
+
 def scroll(clicks: int, extra: int) -> None:
     """Scrolls the wheel where the mouse is; positive is up."""
     _send([_mouse(0, 0, (clicks * 120) & 0xFFFF_FFFF, _MOUSEEVENTF_WHEEL, extra)])

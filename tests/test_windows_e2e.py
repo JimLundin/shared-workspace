@@ -24,7 +24,8 @@ if sys.platform != "win32" or os.environ.get("TOOLKIT_E2E") != "1":
 import ctypes  # noqa: E402
 import tkinter as tk  # noqa: E402
 
-from winapi import inputs  # noqa: E402 (Windows only)
+from protocol import LAYOUT_WINDOW, WM_QUIT_LAYOUT  # noqa: E402
+from winapi import inputs, system, windows  # noqa: E402 (Windows only)
 
 UNDER_WINE = hasattr(ctypes.WinDLL("ntdll"), "wine_get_version")
 """Wine garbles typed Unicode text (KEYEVENTF_UNICODE) into Tk; real Windows doesn't."""
@@ -47,15 +48,26 @@ def wait_for(condition: Callable[[], bool], pump: Callable[[], None], seconds: f
     return False
 
 
+def layout_running() -> bool:
+    lock = system.create_lock("Local\\miryoku")
+    if lock is None:
+        return True
+    system.release_lock(lock)
+    return False
+
+
 @contextmanager
 def layout() -> Generator[None, None, None]:
+    assert wait_for(lambda: not layout_running(), lambda: None), "a layout from before is still running"
     process = subprocess.Popen([sys.executable, "-m", "miryoku"], cwd=ROOT)
-    time.sleep(1.5)  # time to install its hook
+    assert wait_for(lambda: windows.find(LAYOUT_WINDOW) is not None, lambda: None), "the layout didn't start"
+    time.sleep(0.3)
     try:
         yield
     finally:
-        process.terminate()
-        process.wait()
+        if (hwnd := windows.find(LAYOUT_WINDOW)) is not None:
+            system.post_message(hwnd, WM_QUIT_LAYOUT, 0, 0)
+        process.wait(timeout=5)
 
 
 @contextmanager
