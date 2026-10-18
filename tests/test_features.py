@@ -9,7 +9,7 @@ from typing import cast
 from assistant.features import Assistant, pick_window
 from assistant.geometry import Shot
 from assistant.icons import State
-from assistant.llm import RATE, Settings
+from assistant.llm import RATE, Json, Settings
 from protocol import App, Tool
 from usage import Detail
 from winapi.shapes import Rect, Window
@@ -19,32 +19,36 @@ from .fake_endpoint import FakeEndpoint, Reply, fake_endpoint, sse
 SPEECH = bytes(2 * RATE)  # a second of silence: long enough to send
 
 
+def dumps(value: Json) -> str:
+    return json.dumps(value)
+
+
 def said(text: str) -> Reply:
-    return Reply(json.dumps({"text": text}).encode())
+    return Reply(dumps({"text": text}).encode())
 
 
 def answered(text: str) -> Reply:
-    return Reply(json.dumps({"choices": [{"message": {"role": "assistant", "content": text}}]}).encode())
+    return Reply(dumps({"choices": [{"message": {"role": "assistant", "content": text}}]}).encode())
 
 
 def streamed(*pieces: str) -> Reply:
-    return sse(*(json.dumps({"choices": [{"delta": {"content": p}}]}) for p in pieces))
+    return sse(*(dumps({"choices": [{"delta": {"content": p}}]}) for p in pieces))
 
 
 class FakeAnswer:
-    __slots__ = ("log",)
+    __slots__ = ("desktop",)
 
-    def __init__(self, log: list[str]) -> None:
-        self.log = log
+    def __init__(self, desktop: FakeDesktop) -> None:
+        self.desktop = desktop
 
     def write(self, text: str) -> None:
-        self.log.append(f"write {text}")
+        self.desktop.log.append(f"write {text}")
 
     def finish(self) -> None:
-        self.log.append("finish")
+        self.desktop.log.append("finish")
 
     def fail(self, message: str) -> None:
-        self.log.append(f"fail {message}")
+        self.desktop.log.append(f"fail {message}")
 
 
 class FakeDesktop:
@@ -92,7 +96,7 @@ class FakeDesktop:
     def answer(self, title: str, follow_up: Callable[[str], None]) -> FakeAnswer:
         self.log.append(f"answer window {title}")
         self.follow_up = follow_up
-        return FakeAnswer(self.log)
+        return FakeAnswer(self)
 
     def show_state(self, state: State) -> None:
         self.log.append(f"state {state.name}")

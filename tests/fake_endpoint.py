@@ -64,7 +64,7 @@ def fake_endpoint() -> Generator[FakeEndpoint, None, None]:
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     endpoint.url = f"http://127.0.0.1:{server.server_port}/v1"
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread = threading.Thread(target=lambda: server.serve_forever(poll_interval=0.02), daemon=True)
     thread.start()
     try:
         yield endpoint

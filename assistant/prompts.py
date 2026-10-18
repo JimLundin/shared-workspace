@@ -31,8 +31,7 @@ ASK: Final = (
 )
 
 SCREEN_TEXT: Final = (
-    "Transcribe all the text in the image exactly, keeping line breaks and the reading order. "
-    "Reply with only the text; no description."
+    "Transcribe all the text in the image exactly, keeping line breaks and the reading order. Reply with only the text; no description."
 )
 
 SCREEN_QUESTION: Final = "What does this show? If it's an error or a problem, say what likely caused it and how to fix it."
