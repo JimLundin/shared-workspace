@@ -207,9 +207,6 @@ class Assistant:
 
     def timed(self, feature: str, job: Callable[[], Failure | Outcome]) -> None:
         """Runs a job, reports a failure, and logs the use (never the content)."""
-        ...
-        ...
-        ...
         started = time.monotonic()
         outcome: Failure | Outcome = Failure("crashed")
         try:
