@@ -1,4 +1,4 @@
-"""selfcheck: is this copy of the toolkit sound? Needs nothing but Python.
+"""selfcheck: is this copy of the toolkit sound? Uses installed or bundled SDK dependencies.
 
     python selfcheck.py [FOLDER]
 
@@ -121,6 +121,9 @@ def check(root: Path) -> tuple[bool, str]:
     os.environ.pop("TOOLKIT_E2E", None)  # never the end-to-end tests: they'd start a second toolkit
     sys.path.insert(0, str(root))
     os.chdir(root)
+    from runtime import activate  # noqa: PLC0415
+
+    activate()
     problems: list[str] = []
     compile_all(root, problems)
     if not problems:

@@ -46,7 +46,7 @@ VERSIONS: Final = DIRECTORY / "versions"
 """A copy of each version replaced by an install, newest last."""
 KEPT_VERSIONS: Final = 20
 
-PROTECTED: Final = frozenset({"keeper.py", "selfcheck.py", "toolkit.pyw"})
+PROTECTED: Final = frozenset({"keeper.py", "selfcheck.py", "toolkit.pyw", "runtime.py"})
 """Files a change can't touch."""
 PROGRAMS: Final = {"layout": "miryoku", "assistant": "assistant"}
 """What the keeper runs: name -> module."""

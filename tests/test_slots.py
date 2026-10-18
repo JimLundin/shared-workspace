@@ -1,6 +1,6 @@
 """Every class we define uses slots, so instances can't grow attributes that
-nobody declared. Enums, exceptions, protocols, tuples and ctypes structures are
-exempt: they manage their own storage."""
+nobody declared. Enums, exceptions, protocols, tuples, ctypes structures
+and SDK lifecycle hooks are exempt: their bases manage their own storage."""
 
 from __future__ import annotations
 
@@ -38,6 +38,7 @@ def exempt(cls: type) -> bool:
         issubclass(cls, (Enum, BaseException, tuple))
         or ("typing", "Protocol") in bases
         or any(module in ("ctypes", "_ctypes") for module, _ in bases)
+        or ("agents.lifecycle", "RunHooksBase") in bases
     )
 
 

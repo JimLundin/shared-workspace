@@ -14,8 +14,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      - run: python -m pip install -e .
       - run: python selfcheck.py
-      - run: python -m pip install pytest
+      - run: python -m pip install -e . pytest
       - run: python -m pytest -q
   standards:
     runs-on: ubuntu-latest
@@ -24,7 +25,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install mypy pyright ruff
+      - run: python -m pip install -e . mypy pyright ruff
       - run: mypy .
       - run: pyright
       - run: ruff check .
+  bundle:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/bundle.py dist/toolkit-sdk-python312-win64.zip
+      - run: python -m zipfile -e dist/toolkit-sdk-python312-win64.zip dist/check
+      - run: python dist/check/toolkit/selfcheck.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: toolkit-sdk-python312-win64
+          path: dist/toolkit-sdk-python312-win64.zip

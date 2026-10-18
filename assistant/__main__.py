@@ -8,7 +8,11 @@ from __future__ import annotations
 import os
 import sys
 
+from runtime import activate
+
 from .llm import settings_from
+
+activate()
 
 
 def main() -> None:

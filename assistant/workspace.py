@@ -42,7 +42,9 @@ class Workspace:
 
     def _writable(self, name: str) -> Path:
         path = self._path(name)
-        if PurePosixPath(name.replace("\\", "/")).as_posix().lower() in PROTECTED:
+        if PurePosixPath(name.replace("\\", "/")).as_posix().lower() in PROTECTED or any(
+            part.lower() == ".runtime" for part in PurePosixPath(name.replace("\\", "/")).parts
+        ):
             raise SourceError(f"{name} is protected: the keeper and its checks can only be changed by a person")
         return path
 

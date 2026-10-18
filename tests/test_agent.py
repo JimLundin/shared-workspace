@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import threading
+import uuid
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Final, cast
@@ -26,7 +27,8 @@ def dumps(value: Json) -> str:
 def calls(*tools: tuple[str, Mapping[str, Json]]) -> Reply:
     """The model asking for tools."""
     tool_calls: list[Json] = [
-        {"id": f"call_{i}", "type": "function", "function": {"name": name, "arguments": dumps(dict(args))}} for i, (name, args) in enumerate(tools)
+        {"id": f"call_{uuid.uuid4().hex}_{i}", "type": "function", "function": {"name": name, "arguments": dumps(dict(args))}}
+        for i, (name, args) in enumerate(tools)
     ]
     return Reply(dumps({"choices": [{"message": {"role": "assistant", "content": "On it.", "tool_calls": tool_calls}}]}).encode())
 
@@ -167,14 +169,15 @@ def test_the_agent_uses_tools_then_answers(tmp_path: Path) -> None:
         assert "notes.txt" in rig.results()[0]
         assert rig.window.log[-1] == "done There is one file: notes.txt."
         assert rig.sent(0)[1] == {"role": "user", "content": "what's in my folder?"}
-        assert b'"model": "agent"' in endpoint.received[0].body
+        assert cast(dict[str, Json], json.loads(endpoint.received[0].body))["model"] == "agent"
 
 
 def test_every_call_gets_a_result_even_bad_ones() -> None:
     with fake_endpoint() as endpoint:
         rig = Rig(endpoint, calls(("no_such_tool", {}), ("read_file", {})), says("Sorry."))
         rig.run()
-        assert rig.results() == ["Error: there's no tool called no_such_tool.", "Error: read_file needs path (text)."]
+        assert "Error: read_file needs path (text)." in rig.results()
+        assert any("no_such_tool" in result for result in rig.results())
 
 
 def test_stop_ends_the_task_before_the_next_step() -> None:
@@ -187,7 +190,7 @@ def test_stop_ends_the_task_before_the_next_step() -> None:
 
 def test_the_agent_stops_after_its_step_limit() -> None:
     with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("get_clipboard", {})))
+        rig = Rig(endpoint, *(calls(("get_clipboard", {})) for _ in range(4)))
         rig.run(max_steps=3)
         assert len(endpoint.received) == 3
         assert rig.window.log[-1] == "done Stopped after 3 steps, not finished."
@@ -197,7 +200,7 @@ def test_model_failures_end_the_task() -> None:
     with fake_endpoint() as endpoint:
         rig = Rig(endpoint, Reply(b'{"error": {"message": "model overloaded"}}', status=503))
         rig.run()
-        assert rig.window.log[-1] == "problem HTTP 503: model overloaded"
+        assert "503" in rig.window.log[-1] and "model overloaded" in rig.window.log[-1]
 
 
 def test_the_journal_records_each_action() -> None:
@@ -284,8 +287,11 @@ def test_screenshots_go_to_the_model_as_images_and_only_recent_ones_are_kept() -
         rig = Rig(endpoint, *shots, says("ok"))
         rig.run()
         last = rig.sent()
-        images = [m for m in last if m["role"] == "user" and "image_url" in json.dumps(m["content"])]
+        images = [m for m in last if "image_url" in json.dumps(m.get("content"))]
         assert len(images) == 2
+        tool_calls = [call["id"] for message in last for call in cast(list[dict[str, object]], message.get("tool_calls", []))]
+        results = [message["tool_call_id"] for message in last if message.get("role") == "tool"]
+        assert results == tool_calls
         assert "[an earlier screenshot, removed to save space]" in json.dumps(last)
         assert "1280x720" in rig.results()[0]
 

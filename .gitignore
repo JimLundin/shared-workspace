@@ -9,3 +9,7 @@ uv.lock
 .env.*
 *.log
 *.jsonl
+
+.runtime/
+dist/
+*.egg-info/

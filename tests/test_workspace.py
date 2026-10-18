@@ -21,6 +21,7 @@ def live_tree(root: Path) -> Path:
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         (root / name).write_text(text, encoding="utf-8")
     shutil.copy(REPO / "selfcheck.py", root / "selfcheck.py")
+    shutil.copy(REPO / "runtime.py", root / "runtime.py")
     return root
 
 
@@ -70,6 +71,8 @@ def test_protected_files_and_paths_outside_are_refused(tmp_path: Path) -> None:
     w = workspace(tmp_path)
     assert "protected" in refused(lambda: w.write("keeper.py", "hacked"))
     assert "protected" in refused(lambda: w.write("selfcheck.py", "hacked"))
+    assert "protected" in refused(lambda: w.write("runtime.py", "hacked"))
+    assert "protected" in refused(lambda: w.write(".runtime/agents/__init__.py", "hacked"))
     assert "outside" in refused(lambda: w.write("../escape.py", "x"))
     assert "outside" in refused(lambda: w.read("C:/Windows/win.ini"))
 

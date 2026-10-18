@@ -11,6 +11,7 @@ Every action goes to the agent's journal (a log you can read back).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import shlex
@@ -27,19 +28,10 @@ from winapi.shapes import Window
 
 from .geometry import Shot
 from .llm import (
-    Failure,
-    Image,
     Json,
-    Message,
     Settings,
-    Text,
     ToolCall,
     ToolSpec,
-    assistant_message,
-    chat,
-    system_message,
-    tool_result,
-    user_message,
 )
 from .publishing import DEFAULT_REMOTE, PublishError, publish_source
 from .workspace import SourceError, Workspace
@@ -290,7 +282,6 @@ class Agent:
         "log",
         "machine",
         "max_steps",
-        "messages",
         "settings",
         "shot",
         "stop",
@@ -320,7 +311,6 @@ class Agent:
         """The latest screenshot: clicks are in its coordinates."""
         self.control: bool | None = None
         """Whether the user lets the agent use the mouse and keyboard; None: not asked yet."""
-        self.messages: list[Message] = []
         self.workspace = workspace
         """The toolkit's source, to change; None: no source tools."""
         self.checked: str | None = None
@@ -335,43 +325,9 @@ class Agent:
             self.workspace.reset()  # every task starts from the running version
         specs = (*SPECS, *SOURCE_SPECS) if self.workspace is not None else SPECS
         prompt = f"{instructions()}\n\n{SELF_CHANGE}" if self.workspace is not None else instructions()
-        self.messages = [system_message(prompt), user_message(task)]
-        for _ in range(self.max_steps):
-            if self.stop.is_set():
-                self.log.done("Stopped.")
-                return False
-            reply = chat(self.settings, self.messages, model=self.settings.agent_model, tools=specs)
-            if isinstance(reply, Failure):
-                self.log.problem(reply.message)
-                return False
-            if not reply.tool_calls:
-                self.log.done(reply.text or "Done.")
-                return True
-            if reply.text:
-                self.log.say(reply.text)
-            self.messages.append(assistant_message(reply.text, reply.tool_calls))
-            image: bytes | None = None
-            for call in reply.tool_calls:  # every call needs a result, even once stopped
-                output = Output("Stopped by the user.", ok=False) if self.stop.is_set() else self.call(call)
-                self.messages.append(tool_result(call.id, output.text))
-                if self.installing is not None:
-                    break
-                image = output.image or image
-            if image is not None:
-                self.messages.append(user_message([Text("The screenshot you took:"), Image(image)]))
-                self.forget_old_screenshots()
-            if self.installing is not None:
-                self.log.done(f"Installing: {self.installing}. The toolkit restarts in a moment.")
-                return True
-            if self.after_step is not None:
-                self.after_step()
-        self.log.done(f"Stopped after {self.max_steps} steps, not finished.")
-        return False
+        from .sdk import run  # noqa: PLC0415 (the layout and quick tools do not need the SDK)
 
-    def forget_old_screenshots(self) -> None:
-        with_images = [i for i, m in enumerate(self.messages) if isinstance(m.content, tuple) and any(isinstance(p, Image) for p in m.content)]
-        for i in with_images[:-KEPT_SCREENSHOTS]:
-            self.messages[i] = user_message("[an earlier screenshot, removed to save space]")
+        return asyncio.run(run(self, task, prompt, tuple(specs)))
 
     def call(self, call: ToolCall) -> Output:
         try:

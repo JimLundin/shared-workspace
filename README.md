@@ -13,11 +13,17 @@ if it fails. Three programs:
 - **the keeper** (`keeper.py`): runs the other two, restarts them if they crash,
   and installs the agent's changes to them (see *Changing the toolkit*).
 
-Everything is the standard library plus our own typed Win32 bindings (`winapi/`).
+The agent uses **OpenAI Agents SDK 0.24.0**. The layout, keeper and quick AI
+features use the standard library and our typed Win32 bindings (`winapi/`).
 
 ## Start
 
-1. Set the Windows keyboard layout to **English (US)**.
+1. Extract the Windows bundle into a folder you can write to. It requires your
+   existing **Windows x64 Python 3.12** (including Tk). SDK dependencies are
+   included in `.runtime`: Python modules, `.pyd` native extensions and DLLs.
+   There are no new EXEs, installer, or target-side dependency downloads. Keep
+   `.runtime` beside `toolkit.pyw`; use your permitted Python/Pythonw to launch it.
+   Set the Windows keyboard layout to **English (US)**.
 2. Set these environment variables (Start → "Edit environment variables for your
    account"; no admin needed):
 
@@ -130,7 +136,7 @@ of the source (`%LOCALAPPDATA%\toolkit\workspace`), never the running files, the
    Repeated crashes restore the previous version too.
 
 The last 20 versions are kept in `%LOCALAPPDATA%\toolkit\versions`. The agent
-can't change `keeper.py`, `selfcheck.py` or `toolkit.pyw`, and the keeper uses
+can't change `keeper.py`, `selfcheck.py`, `runtime.py` or `toolkit.pyw`, and the keeper uses
 nothing but Python's standard library, so the normal source-edit tools cannot replace the updater. Approved code still
 runs with your account permissions.
 
@@ -144,8 +150,7 @@ not install the change; ask it to publish before applying, since installation
 restarts the agent. Merge the branch on GitHub after review.
 
 Publishing requires **Git for Windows on PATH** and credentials already set up
-for the repository (for example through Git Credential Manager). Python remains
-the only dependency for all the other features. A missing Git installation,
+for the repository (for example through Git Credential Manager). The Windows bundle includes the SDK dependencies for the other features. A missing Git installation,
 failed authentication, failed test or changed remote base produces an error and
 stops the push. Credentials are not written into the source or journal.
 
@@ -164,11 +169,18 @@ change, either select its published branch as the base or merge it first.
 
 ## Agent implementation
 
-Toolkit uses its own small agent loop in `assistant/agent.py`, with no external
-agent framework. It calls the OpenAI-compatible Chat Completions endpoint through
-`assistant/llm.py`, advertises tool schemas, executes returned tool calls and feeds
-the results back to the model until completion, Stop, or the step limit. Permission
-checks, journaling, screenshots and source-edit tools are handled locally.
+Toolkit uses the [OpenAI Agents SDK](https://developers.openai.com/api/docs/guides/agents/quickstart)
+through `assistant/sdk.py`. Its `Runner` owns model turns and tool execution;
+`assistant/agent.py` retains Toolkit's tools, permissions and journal. The SDK
+uses your configured OpenAI-compatible **Chat Completions** endpoint. Tools run
+one at a time, screenshots keep the latest two images, and tracing is disabled
+so no traces are sent to OpenAI. Quick chat and transcription still use
+`assistant/llm.py`.
+
+The bundled dependency versions and wheel hashes are pinned in
+`requirements/windows-py312.lock`; `.runtime/manifest.json` lists the included
+wheels. Updating dependencies requires rebuilding the bundle. The agent edits
+source code, while the protected bootstrap keeps dependencies outside updates.
 
 ## Logs
 
@@ -203,14 +215,16 @@ The logic never calls Windows directly: the layout's engine goes through a
 `Host`, the assistant's features through a `Desktop`, the agent through a
 `Machine`, so all of it is tested with fakes. The code is strictly typed, with no
 `Any` outside the boundaries to untyped code (`winapi` for ctypes,
-`assistant/ui.py` for Tk, `selfcheck.py` for looking inside modules), and every
-class has `__slots__`. Behaviour changes come with tests.
+`assistant/ui.py` for Tk, `assistant/sdk.py` for SDK integration, and
+`selfcheck.py` for looking inside modules). Our classes use `__slots__`; SDK
+lifecycle subclasses inherit the SDK’s storage. Behaviour changes come with tests.
 
 ## Development
 
 The canonical source is the private repository `JimLundin/toolkit`. Clone it and
-run checks with Python 3.10 or later. Runtime use still needs only Python; the
-extra development tools below are optional locally and required by CI.
+run checks with Python 3.10 or later. Install source dependencies first:
+`python -m pip install -e .`. The prebuilt Windows bundle needs no pip step.
+Development tools are optional locally and required by CI.
 
 GitHub Actions checks Python 3.10 and 3.12 on Windows and Linux, plus Mypy,
 Pyright and Ruff. Desktop end-to-end tests are available through the manual
@@ -224,10 +238,11 @@ to re-enable the layout when you return to a normal application.
 ## Tests
 
 ```
-python selfcheck.py                      # what every change must pass; needs only Python
+python selfcheck.py                      # with installed or bundled SDK dependencies
 pytest                                   # the same tests, if you have pytest
 mypy . && pyright && ruff check .        # if you have them
 TOOLKIT_E2E=1 pytest tests/test_windows_*e2e.py
+python scripts/bundle.py dist/toolkit-sdk-python312-win64.zip
 ```
 
 The last line runs on Windows only: it starts the real toolkit, presses real
