@@ -11,21 +11,20 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Final, TypeAlias
 
+# The keeper owns these (it stops the programs); re-exported here for the programs.
+from keeper import ASSISTANT_WINDOW as ASSISTANT_WINDOW  # noqa: PLC0414 (an explicit re-export)
+from keeper import LAYOUT_WINDOW as LAYOUT_WINDOW  # noqa: PLC0414 (an explicit re-export)
+from keeper import WM_QUIT_LAYOUT as WM_QUIT_LAYOUT  # noqa: PLC0414 (an explicit re-export)
+
 MAGIC: Final = 0x4D49_524F
 """Tags input the toolkit sends, so the layout's hook lets it through untouched."""
 
-LAYOUT_WINDOW: Final = "toolkit layout"
-"""Title of the layout's hidden window."""
-ASSISTANT_WINDOW: Final = "toolkit assistant"
-"""Title of the assistant's hidden window."""
 
 _WM_APP: Final = 0x8000
 WM_REQUEST: Final = _WM_APP + 1
 """Layout -> assistant: a key went down (lparam 1) or up (lparam 0); wparam is `encode(request)`."""
 WM_LAYOUT_STATE: Final = _WM_APP + 2
 """Layout -> assistant: wparam is a `LayoutState` value."""
-WM_QUIT_LAYOUT: Final = _WM_APP + 3
-"""Assistant -> layout: quit."""
 WM_INDICATOR: Final = _WM_APP + 4
 """Layout -> assistant: what the layer indicator shows; wparam is `encode_indicator(...)`."""
 

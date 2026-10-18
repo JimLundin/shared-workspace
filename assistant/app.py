@@ -19,16 +19,15 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Final
 
+import keeper
 import usage
 from config import APPS
 from miryoku.layout import Layer
 from protocol import (
     ASSISTANT_WINDOW,
-    LAYOUT_WINDOW,
     MAGIC,
     WM_INDICATOR,
     WM_LAYOUT_STATE,
-    WM_QUIT_LAYOUT,
     WM_REQUEST,
     LayoutState,
     Tool,
@@ -51,7 +50,6 @@ from .ui import AgentWindow, Ui
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 LOCK_NAME: Final = "Local\\toolkit-assistant"
-LAYOUT_LOCK: Final = "Local\\miryoku"
 LOG: Final = DIRECTORY / "assistant.log"
 JOURNAL: Final = DIRECTORY / "agent.jsonl"
 """Everything the agent did: one JSON object per action."""
@@ -100,86 +98,6 @@ class Tray:
             self._icon.remove()
             for icon in self._icons.values():
                 icon.destroy()
-
-
-# ---- the layout process ----------------------------------------------------------------
-
-
-class LayoutStatus(Enum):
-    RUNNING = auto()
-    EXTERNAL = auto()
-    """Running, but started by someone else (so not restarted)."""
-    STOPPED = auto()
-    """Quit on purpose (the escape key held)."""
-    CRASHED = auto()
-    """Crashed too often to keep restarting."""
-
-
-class Supervisor:
-    """Keeps the layout running: starts it, and restarts it after a crash, up to three
-    times in ten minutes. Its error output goes to `layout.log`."""
-
-    __slots__ = ("crashes", "on_change", "process", "quitting", "status")
-
-    def __init__(self, on_change: Callable[[LayoutStatus], None]) -> None:
-        self.on_change = on_change
-        self.process: subprocess.Popen[bytes] | None = None
-        self.status = LayoutStatus.STOPPED
-        self.crashes: list[float] = []
-        self.quitting = False
-
-    def start(self) -> None:
-        self.quitting = False
-        lock = system.create_lock(LAYOUT_LOCK)
-        if lock is None:
-            self.set(LayoutStatus.EXTERNAL)
-            return
-        system.release_lock(lock)
-        DIRECTORY.mkdir(parents=True, exist_ok=True)
-        with (DIRECTORY / "layout.log").open("ab") as errors:
-            process = subprocess.Popen([pythonw(), "-m", "miryoku"], cwd=ROOT, stderr=errors, creationflags=_CREATE_NO_WINDOW)
-        self.process = process
-        self.set(LayoutStatus.RUNNING)
-        threading.Thread(target=self.watch, args=(process,), name="layout watch", daemon=True).start()
-
-    def set(self, status: LayoutStatus) -> None:
-        self.status = status
-        self.on_change(status)
-
-    def watch(self, process: subprocess.Popen[bytes]) -> None:
-        code = process.wait()
-        if self.quitting or process is not self.process:
-            return
-        if code == 0:
-            self.set(LayoutStatus.STOPPED)
-            return
-        now = time.monotonic()
-        self.crashes = [t for t in self.crashes if now - t < 600] + [now]
-        log(f"the layout exited with code {code}; see layout.log")
-        if len(self.crashes) > 3:
-            self.set(LayoutStatus.CRASHED)
-            return
-        time.sleep(1)
-        self.start()
-
-    def stop(self) -> None:
-        """Asks the layout to quit (so it lets go of any held keys), and waits for it."""
-        self.quitting = True
-        hwnd = windows.find(LAYOUT_WINDOW)
-        if hwnd is not None:
-            system.post_message(hwnd, WM_QUIT_LAYOUT, 0, 0)
-        if self.process is not None:
-            try:
-                self.process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                self.process.terminate()
-            self.process = None
-        self.set(LayoutStatus.STOPPED)
-
-    def restart(self) -> None:
-        self.stop()
-        time.sleep(0.3)
-        self.start()
 
 
 # ---- the agent's machine ---------------------------------------------------------------
@@ -322,10 +240,11 @@ class _Menu(Enum):
     USAGE = 6
     LOGS = 7
     QUIT = 8
+    UNDO = 10
 
 
 class AssistantApp:
-    __slots__ = ("agent", "assistant", "desktop", "jobs", "layout", "mic_event", "supervisor", "tray", "ui", "window", "worker")
+    __slots__ = ("agent", "assistant", "desktop", "jobs", "layout", "mic_event", "tray", "ui", "window", "worker")
 
     def __init__(self, settings: Settings | Missing) -> None:
         self.ui = Ui()
@@ -347,8 +266,8 @@ class AssistantApp:
             stop_agent=self.agent.stop,
             missing=missing,
         )
-        self.layout = LayoutState.ON
-        self.supervisor = Supervisor(self.on_layout_status)
+        self.layout: LayoutState | None = None
+        """What the layout last said; None until it does."""
         self.worker = threading.Thread(target=self.work, name="worker", daemon=True)
         if missing is not None:
             self.tray.notify("Toolkit", f"The AI tools need {', '.join(missing.names)}; the layout works without them.", warning=True)
@@ -357,11 +276,10 @@ class AssistantApp:
 
     def run(self) -> None:
         self.worker.start()
-        self.supervisor.start()
+        keeper.ready()  # tells the keeper this version came up
         system.run_message_loop()
 
     def quit(self) -> None:
-        self.supervisor.stop()
         self.agent.stop()
         self.jobs.put(None)
         self.tray.remove()
@@ -398,13 +316,6 @@ class AssistantApp:
         system.beep(system.MB_ICONEXCLAMATION)
         self.tray.notify("Toolkit", message, warning=True)
 
-    def on_layout_status(self, status: LayoutStatus) -> None:
-        if status is LayoutStatus.CRASHED:
-            self.problem("The layout keeps crashing, so it isn't restarted. See layout.log; restart it from the tray.")
-        self.assistant.layout_on = status in (LayoutStatus.RUNNING, LayoutStatus.EXTERNAL) and self.layout is LayoutState.ON
-        if self.assistant.listening is None:
-            self.assistant.idle()
-
     # ---- messages ----------------------------------------------------------------------
 
     def on_message(self, hwnd: int, message: int, wparam: int, lparam: int) -> int | None:
@@ -427,6 +338,9 @@ class AssistantApp:
                 if self.assistant.listening is None:
                     self.assistant.idle()
                 return 0
+            if message == system.WM_CLOSE:  # the keeper asks: it's restarting or installing
+                self.quit()
+                return 0
             if message == WM_TRAY and lparam in (system.WM_LBUTTONUP, system.WM_RBUTTONUP):
                 self.menu()
                 return 0
@@ -436,21 +350,22 @@ class AssistantApp:
 
     def menu(self) -> None:
         status = {
-            LayoutStatus.RUNNING: "on" if self.layout is LayoutState.ON else "off (tap § to switch on)",
-            LayoutStatus.EXTERNAL: "on (started separately)",
-            LayoutStatus.STOPPED: "not running",
-            LayoutStatus.CRASHED: "crashed",
-        }[self.supervisor.status]
-        running = self.supervisor.status in (LayoutStatus.RUNNING, LayoutStatus.EXTERNAL)
+            None: "not running",
+            LayoutState.ON: "on",
+            LayoutState.OFF: "off (tap \u00a7 to switch on)",
+            LayoutState.QUIT: "not running",
+        }[self.layout]
+        running = self.layout in (LayoutState.ON, LayoutState.OFF)
         items = [
             shell.MenuItem(_Menu.STATUS.value, f"Layout: {status}", enabled=False),
             shell.MenuItem(_Menu.RESTART_LAYOUT.value, "Restart layout" if running else "Start layout"),
             shell.MenuItem(_Menu.KEYMAP.value, "Key map"),
             shell.MenuItem(0),
-            shell.MenuItem(_Menu.ASK.value, "Ask…"),
-            shell.MenuItem(_Menu.AGENT.value, "Agent task…"),
+            shell.MenuItem(_Menu.ASK.value, "Ask\u2026"),
+            shell.MenuItem(_Menu.AGENT.value, "Agent task\u2026"),
             shell.MenuItem(_Menu.STOP_AGENT.value, "Stop agent", enabled=self.agent.running()),
             shell.MenuItem(0),
+            shell.MenuItem(_Menu.UNDO.value, "Undo the last update"),
             shell.MenuItem(_Menu.USAGE.value, "Usage report"),
             shell.MenuItem(_Menu.LOGS.value, "Open logs folder"),
             shell.MenuItem(0),
@@ -458,7 +373,7 @@ class AssistantApp:
         ]
         match shell.show_menu(self.window.handle, items):
             case _Menu.RESTART_LAYOUT.value:
-                threading.Thread(target=self.supervisor.restart if running else self.supervisor.start, daemon=True).start()
+                keeper.ask("restart_layout")
             case _Menu.KEYMAP.value:
                 self.ui.show_keymap()
             case _Menu.ASK.value:
@@ -467,6 +382,8 @@ class AssistantApp:
                 self.assistant.handle(Tool.AGENT_TYPED, True)
             case _Menu.STOP_AGENT.value:
                 self.agent.stop()
+            case _Menu.UNDO.value:
+                keeper.ask("undo")
             case _Menu.USAGE.value:
                 os.startfile(write_report())
             case _Menu.LOGS.value:

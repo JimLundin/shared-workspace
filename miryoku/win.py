@@ -12,6 +12,7 @@ import traceback
 from enum import Enum, auto
 from typing import Final
 
+import keeper
 import usage
 from config import APPS
 from protocol import (
@@ -165,6 +166,7 @@ def run() -> Exit:
         if hook is None:
             return Exit.HOOK_REFUSED
         flush_timer = system.set_timer(USAGE_FLUSH_MS)
+        keeper.ready()  # tells the keeper this version came up
         keyboard.host.tell_assistant(WM_LAYOUT_STATE, LayoutState.ON.value, 0)
         # Nothing here creates reference cycles, so the cycle collector has nothing to
         # do; turning it off means it can never pause the hook mid-keypress.

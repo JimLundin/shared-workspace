@@ -1,5 +1,5 @@
-"""Double-click launcher: the toolkit (the assistant, which starts the layout)."""
+"""Double-click launcher: the keeper, which runs the layout and the assistant."""
 
-from assistant.__main__ import main
+from keeper import main
 
 main()

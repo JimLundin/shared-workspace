@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from keeper import PROTECTED, Keeper, Stage, install, requests, restore, snapshot, source_files, take_requests
+from keeper import PROTECTED, Keeper, Stage, ask, install, restore, snapshot, source_files, take_requests
 
 # ---- a fake world for the keeper's logic -----------------------------------------------
 
@@ -210,6 +210,17 @@ def test_a_crash_during_the_trial_undoes_the_change() -> None:
     assert world.take() == ["restore v1", "start layout", "start assistant", "notify Update undone: it crashed during its trial.", "trial over"]
 
 
+def test_quitting_the_layout_during_the_trial_isnt_a_crash() -> None:
+    world = World()
+    keeper = running(world)
+    installed(world, keeper)
+    world.take()
+    world.children["layout"].code = 0  # the escape key held
+    keeper.tick(now=100)
+    assert world.take() == []
+    assert keeper.stage is Stage.TRIAL
+
+
 def test_the_trial_ends_after_ten_minutes_and_the_change_stays() -> None:
     world = World()
     keeper = running(world)
@@ -290,8 +301,8 @@ def test_snapshots_keep_the_last_twenty(tmp_path: Path) -> None:
 
 
 def test_requests_arrive_in_order(tmp_path: Path) -> None:
-    requests("install", "first", folder=tmp_path)
-    requests("undo", "", folder=tmp_path)
+    ask("install", "first", folder=tmp_path)
+    ask("undo", "", folder=tmp_path)
     assert take_requests(folder=tmp_path) == [("install", "first"), ("undo", "")]
     assert take_requests(folder=tmp_path) == []
 
