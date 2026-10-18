@@ -1,0 +1,175 @@
+# Toolkit
+
+A personal toolkit for a locked-down Windows laptop: no admin rights, nothing to
+install but Python. It changes itself: ask its agent for a new feature or a fix,
+approve the diff, and it installs and reloads the change, and undoes it by itself
+if it fails. Three programs:
+
+- **the layout** (`miryoku/`): Colemak Mod-DH in the Miryoku style on the
+  laptop's own ISO keyboard: home row mods, layers, caps word, snippets;
+- **the assistant** (`assistant/`): dictation, rewriting, questions, screen
+  reading, app switching, window placement, and an agent, all through your
+  company's OpenAI-style endpoint. It lives in the notification area (the tray);
+- **the keeper** (`keeper.py`): runs the other two, restarts them if they crash,
+  and installs the agent's changes to them (see *Changing the toolkit*).
+
+Everything is the standard library plus our own typed Win32 bindings (`winapi/`).
+
+## Start
+
+1. Set the Windows keyboard layout to **English (US)**.
+2. Set these environment variables (Start → "Edit environment variables for your
+   account"; no admin needed):
+
+   | Variable | |
+   |---|---|
+   | `OPENAI_BASE_URL` | your endpoint, ending in `/v1` |
+   | `OPENAI_API_KEY` | its key |
+   | `TOOLKIT_CHAT_MODEL` | optional; default `gpt-5.4-mini` (quick jobs) |
+   | `TOOLKIT_AGENT_MODEL` | optional; default: the chat model |
+   | `TOOLKIT_TRANSCRIBE_MODEL` | optional; default `gpt-4o-transcribe` |
+   | `TOOLKIT_VOCABULARY` | optional; names and jargon to expect in dictation |
+   | `TOOLKIT_LANGUAGE` | optional; `sv` or `en`, default detected |
+
+   Without the first two the layout, snippets, apps and window keys still work;
+   the AI keys tell you what's missing.
+3. Turn on Settings → Privacy & security → Microphone → **Let desktop apps access
+   your microphone**.
+4. Double-click **`toolkit.pyw`**. A dot appears in the tray. To start it at login,
+   put a shortcut to it in `shell:startup` (Win+R).
+
+`miryoku.pyw` runs the layout alone, without the assistant or the keeper.
+
+## What you see
+
+- **The tray dot**: green: running, layout on · grey: layout off or not running ·
+  red: listening · amber: working · blue: the agent is on a task. Hover for words;
+  click for the menu. (Windows 11 may tuck it behind the ^ at first: drag it out.)
+- **The layer indicator**, at the bottom of the screen: the layer you're holding or
+  have locked (`NAV`, `NUM · locked`), and `CAPS WORD`. It flashes *Layout on/off*
+  when you tap §. It can't be clicked and never takes the keyboard.
+- **Key map** (tray menu): your keyboard drawn as each layer has it. Keys 1–6 or
+  the buttons switch layer; the thumb holding the layer is highlighted.
+- Sounds for layout on/off and caps word; a warning sound and a notification
+  when something fails (with the reason).
+
+## The keys
+
+Physical keys are named by their Nordic keycaps.
+
+| | |
+|---|---|
+| **§** | tap: layout on/off · hold 2 s: quit the layout |
+| **B** | hold and speak: dictation, typed where the cursor is |
+| thumbs **X C V** | Esc · Space/**Nav** · Tab/**Tools** |
+| thumbs **, . -** | Enter/**Sym** · Backspace/**Num** · Delete/**Apps** |
+
+**Tools** (hold the Tab thumb, then the right hand):
+
+| | | | | | |
+|---|---|---|---|---|---|
+| top **8 9 0 + ´** | rewrite by voice (hold, say how) | fix spelling | translate sv↔en | shorter | more formal |
+| home **I O P Å ¨** | dictate, tidied (hold) | dictate a command (hold) | ask… | copy text on screen | ask about the screen |
+| bottom **K L Ö** | agent, by voice (hold) | agent, typed | stop the agent | | |
+| thumb **,** | dictate (hold), as on B | | | | |
+
+Rewrites replace the selected text. In terminals they don't press Ctrl+C (it
+would stop the running program), so they don't work there.
+
+**Apps** (hold the Delete thumb, then the left hand):
+
+| | | | | | |
+|---|---|---|---|---|---|
+| top **2 3 4 5 6** | terminal | browser | Outlook | Teams | Explorer |
+| home **Q W E R T** | VS Code | Notepad | Excel | Word | PowerPoint |
+| bottom **Caps A S D F** | snap left | maximize/restore | snap right | next monitor | minimize |
+
+An app key brings the app forward, starts it if it isn't running, and pressed
+again goes through its windows. Change the apps in `config.py`.
+
+**Snippets**: type the trigger and it's replaced: `,,date` `,,time` `,,now`
+`,,week` `,,shrug` `,,thx` `,,mvh` `,,br`. Add your own in `config.py`.
+
+## The agent
+
+Give it a task by voice or typed. It works step by step in a window of its own,
+with a Stop button (and Stop on the Tools layer). What it may do is decided by
+the toolkit, not the model:
+
+- **Reading** files, folders, the clipboard, windows and the screen: free.
+- **Writing a file, opening something, running a command**: asks every time,
+  except commands on `ALLOWED_COMMANDS` in `config.py` that can't chain another.
+- **Mouse and keyboard**: asks once per task.
+
+It stops after 80 steps (`AGENT_MAX_STEPS`). Everything it does goes to its journal.
+
+## Changing the toolkit
+
+Ask the agent, by voice or typed: "add a snippet for my email address", "make
+the indicator smaller", "add a key that opens my timesheet". It works on a copy
+of the source (`%LOCALAPPDATA%\toolkit\workspace`), never the running files, then:
+
+1. **Checks**: every file compiles, every module imports, every test passes
+   (`selfcheck.py`; nothing to install). It fixes what fails.
+2. **You review** the diff, and choose Install or Cancel.
+3. **The keeper installs it**: checks again itself, keeps a copy of the running
+   version, installs, and restarts the layout and the assistant (a second or two).
+4. **A ten-minute trial**: a small window in the corner offers *Keep* and *Undo*,
+   usable with the mouse alone in case the change broke the keyboard. If the
+   change doesn't start, or crashes during the trial, it's undone by itself.
+5. Later, tray menu → **Undo the last update** goes back too; and a change that
+   keeps crashing is undone by itself.
+
+The last 20 versions are kept in `%LOCALAPPDATA%\toolkit\versions`. The agent
+can't change `keeper.py`, `selfcheck.py` or `toolkit.pyw`, and the keeper uses
+nothing but Python's standard library, so no change can break what undoes it.
+
+## Logs
+
+All in `%LOCALAPPDATA%\toolkit` (tray menu → Open logs folder):
+
+| File | |
+|---|---|
+| `usage.jsonl` | which features were used, how long they took, whether they failed. Never what you typed or said. Tray menu → **Usage report** lists every feature by use, and the ones never used, so they can go. |
+| `agent.jsonl` | every action the agent took, with its arguments |
+| `assistant.log`, `layout.log` | problems and crashes |
+| `keeper.log` | starts, installs, trials, undos |
+
+What leaves the laptop: recordings (for transcription), and the text, selection
+or screen area you used a tool on, sent to your endpoint and nowhere else.
+
+## How it's built
+
+```
+keeper.py       runs the programs; installs, tries and undoes changes (protected)
+selfcheck.py    compile, import, test: the gate every change passes (protected)
+protocol.py     what the layout and the assistant say to each other (window messages)
+config.py       your settings: apps, snippets, rewrite prompts, allowed commands
+usage.py        the usage log
+winapi/         typed Win32 bindings: the only ctypes code
+miryoku/        the layout: layout.py (the tables), engine.py (the logic), win.py
+assistant/      llm.py (the endpoint), features.py (what each key does), agent.py,
+                workspace.py (the agent's copy of the source), keymap.py;
+                desktop.py, ui.py (Tk) and app.py on Windows
+```
+
+The logic never calls Windows directly: the layout's engine goes through a
+`Host`, the assistant's features through a `Desktop`, the agent through a
+`Machine`, so all of it is tested with fakes. The code is strictly typed, with no
+`Any` outside the boundaries to untyped code (`winapi` for ctypes,
+`assistant/ui.py` for Tk, `selfcheck.py` for looking inside modules), and every
+class has `__slots__`. Behaviour changes come with tests.
+
+## Tests
+
+```
+python selfcheck.py                      # what every change must pass; needs only Python
+pytest                                   # the same tests, if you have pytest
+mypy . && pyright && ruff check .        # if you have them
+TOOLKIT_E2E=1 pytest tests/test_windows_*e2e.py
+```
+
+The last line runs on Windows only: it starts the real toolkit, presses real
+keys and drags the real mouse, and has the keeper install, undo and refuse
+changes on a copy of the toolkit (a few minutes, against a fake endpoint), so
+leave the keyboard alone while it runs.

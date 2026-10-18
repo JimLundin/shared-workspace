@@ -1,0 +1,41 @@
+[project]
+name = "toolkit"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[tool.mypy]
+python_version = "3.10"
+platform = "win32"  # the toolkit targets Windows; check it as Windows code
+strict = true
+# No Any, anywhere: not written, not inferred, not hidden behind a decorator or import.
+disallow_any_explicit = true
+disallow_any_expr = true
+disallow_any_decorated = true
+disallow_any_unimported = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+# The boundaries to ctypes (winapi) and Tk (assistant.ui): values inside may be Any
+# until converted; every public signature is concrete, so nothing untyped leaves.
+module = ["winapi", "winapi.*", "assistant.ui", "selfcheck"]
+disallow_any_expr = false
+disallow_any_explicit = false
+
+[tool.pyright]
+pythonVersion = "3.10"
+pythonPlatform = "Windows"
+typeCheckingMode = "strict"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 150
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "PL", "C4", "RET"]
+ignore = ["PLR2004", "PLR0911", "PLR0912", "PLR0913"]
+
+[tool.ruff.lint.per-file-ignores]
+# The layout tables are kept as a wide grid that reads across the keyboard.
+"miryoku/layout.py" = ["E501"]
+# Win32 functions keep their Windows names, one prototype per line.
+"winapi/*.py" = ["E501", "N816", "PLR0917"]
