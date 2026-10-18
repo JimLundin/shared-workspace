@@ -14,10 +14,22 @@ from typing import Final
 
 import usage
 from config import APPS
-from protocol import ASSISTANT_WINDOW, LAYOUT_WINDOW, MAGIC, WM_LAYOUT_STATE, WM_QUIT_LAYOUT, WM_REQUEST, LayoutState, Request, encode
+from protocol import (
+    ASSISTANT_WINDOW,
+    LAYOUT_WINDOW,
+    MAGIC,
+    WM_INDICATOR,
+    WM_LAYOUT_STATE,
+    WM_QUIT_LAYOUT,
+    WM_REQUEST,
+    LayoutState,
+    Request,
+    encode,
+    encode_indicator,
+)
 from winapi import inputs, system, windows
 
-from .engine import Engine, Signal, Verdict
+from .engine import Engine, Indicator, Signal, Verdict
 from .layout import TAPPING_TERM_MS, Key, Mod, Scancode
 
 LOCK_NAME: Final = "Local\\miryoku"
@@ -67,6 +79,10 @@ class WinHost:
 
     def used(self, feature: str) -> None:
         self.counts[feature] = self.counts.get(feature, 0) + 1
+
+    def indicate(self, indicator: Indicator) -> None:
+        layer: int = indicator.layer.value if indicator.layer else 0
+        self.tell_assistant(WM_INDICATOR, encode_indicator(layer, indicator.locked, indicator.caps_word), 0)
 
     def tell_assistant(self, message: int, wparam: int, lparam: int) -> None:
         """Posts to the assistant's window; nothing happens if it isn't running."""

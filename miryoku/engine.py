@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import NamedTuple, NoReturn, Protocol
+from typing import Final, NamedTuple, NoReturn, Protocol
 
 from config import SNIPPETS
 from protocol import App, Request, Tool
@@ -57,6 +57,9 @@ class Host(Protocol):
     def used(self, feature: str) -> None:
         """Count a use of a feature, for the usage log."""
 
+    def indicate(self, indicator: Indicator) -> None:
+        """What the layer indicator should show now (it changed)."""
+
 
 class Verdict(Enum):
     """What the OS should do with a physical key event."""
@@ -86,6 +89,18 @@ MAX_BUFFERED = 18
 key; each of the other nine can add at most one press, plus the release of a key
 it was already holding (auto-repeats are not buffered): 9 x 2 = 18. Anything
 beyond that decides the key as a hold rather than growing."""
+
+
+@dataclass(frozen=True, slots=True)
+class Indicator:
+    """State the user can't see on the keys: the layer keys come from, and caps word."""
+
+    layer: Layer | None
+    locked: bool
+    caps_word: bool
+
+
+QUIET: Final = Indicator(None, locked=False, caps_word=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,10 +230,24 @@ class Engine:
     typed: str = ""
     """The last characters typed, for snippets. Anything that moves the cursor, or a
     shortcut, clears it."""
+    shown: Indicator = QUIET
+    """What the indicator was last told."""
 
     def on_key(self, host: Host, scancode: Scancode, down: bool, now: int) -> Verdict:
         """Entry point for every physical key event. `now` is the event's
         timestamp in ms (it may wrap around)."""
+        verdict = self.key(host, scancode, down, now)
+        self.refresh(host)
+        return verdict
+
+    def refresh(self, host: Host) -> None:
+        """Tells the indicator if what it should show has changed."""
+        now = Indicator(self.layer(), self.locked is not None, self.caps_word)
+        if now != self.shown:
+            self.shown = now
+            host.indicate(now)
+
+    def key(self, host: Host, scancode: Scancode, down: bool, now: int) -> Verdict:
         # Escape key: tap = on/off, hold = quit. Checked first, works in both states.
         if scancode == ESCAPE:
             if down:
@@ -331,6 +360,7 @@ class Engine:
     def timeout(self, host: Host, timer: int) -> None:
         if self.pending is not None and self.pending.timer == timer:
             self.resolve(host, hold=True, now=self.pending.pressed_at)
+            self.refresh(host)
 
     def resolve(self, host: Host, *, hold: bool, now: int) -> None:
         """Decide the undecided key. `now` is when the decision happened."""

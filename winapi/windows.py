@@ -22,6 +22,7 @@ _GetWindowTextLengthW = fn(user32, "GetWindowTextLengthW", ctypes.c_int, wintype
 _GetWindowTextW = fn(user32, "GetWindowTextW", ctypes.c_int, wintypes.HWND, wintypes.LPWSTR, ctypes.c_int)
 _GetWindowThreadProcessId = fn(user32, "GetWindowThreadProcessId", wintypes.DWORD, wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
 _GetWindowLongW = fn(user32, "GetWindowLongW", wintypes.LONG, wintypes.HWND, ctypes.c_int)
+_SetWindowLongW = fn(user32, "SetWindowLongW", wintypes.LONG, wintypes.HWND, ctypes.c_int, wintypes.LONG)
 _GetWindow = fn(user32, "GetWindow", wintypes.HWND, wintypes.HWND, wintypes.UINT)
 _GetWindowRect = fn(user32, "GetWindowRect", wintypes.BOOL, wintypes.HWND, ctypes.POINTER(wintypes.RECT))
 _GetForegroundWindow = fn(user32, "GetForegroundWindow", wintypes.HWND)
@@ -64,10 +65,13 @@ SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE = 3, 6, 9
 _GWL_EXSTYLE: Final = -20
 _WS_EX_TOOLWINDOW: Final = 0x0000_0080
 _WS_POPUP: Final = 0x8000_0000
+_WS_EX_TRANSPARENT, _WS_EX_LAYERED, _WS_EX_NOACTIVATE = 0x0000_0020, 0x0008_0000, 0x0800_0000
 _GW_OWNER: Final = 4
 _PROCESS_QUERY_LIMITED_INFORMATION: Final = 0x1000
 _DWMWA_EXTENDED_FRAME_BOUNDS, _DWMWA_CLOAKED = 9, 14
-_SWP_NOZORDER, _SWP_NOACTIVATE = 0x0004, 0x0010
+_SWP_NOSIZE, _SWP_NOMOVE, _SWP_NOZORDER, _SWP_NOACTIVATE = 0x0001, 0x0002, 0x0004, 0x0010
+_SW_HIDE, _SW_SHOWNOACTIVATE = 0, 4
+_HWND_TOPMOST: Final = -1
 
 
 def _title(hwnd: int) -> str:
@@ -193,6 +197,22 @@ def visible_rect(hwnd: int) -> Rect:
 def move(hwnd: int, to: Rect) -> None:
     """Positions by the outer rectangle (see `outer_rect`)."""
     _SetWindowPos(hwnd, None, to.left, to.top, to.width, to.height, _SWP_NOZORDER | _SWP_NOACTIVATE)
+
+
+def make_overlay(hwnd: int) -> None:
+    """Makes a window something to look at only: clicks go through it to what's
+    underneath, it never takes the keyboard, and it isn't on the taskbar or Alt+Tab."""
+    style = int(_GetWindowLongW(hwnd, _GWL_EXSTYLE)) | _WS_EX_TRANSPARENT | _WS_EX_LAYERED | _WS_EX_NOACTIVATE | _WS_EX_TOOLWINDOW
+    _SetWindowLongW(hwnd, _GWL_EXSTYLE, ctypes.c_long(style & 0xFFFF_FFFF).value)
+
+
+def show_quietly(hwnd: int, visible: bool) -> None:
+    """Shows (on top of everything) or hides a window without ever activating it."""
+    if visible:
+        _ShowWindow(hwnd, _SW_SHOWNOACTIVATE)
+        _SetWindowPos(hwnd, _HWND_TOPMOST, 0, 0, 0, 0, _SWP_NOMOVE | _SWP_NOSIZE | _SWP_NOACTIVATE)
+    else:
+        _ShowWindow(hwnd, _SW_HIDE)
 
 
 def find(title: str) -> int | None:

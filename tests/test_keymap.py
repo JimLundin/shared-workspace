@@ -40,6 +40,7 @@ def test_layers_show_their_keys_and_the_thumb_holding_them() -> None:
 def test_tools_and_apps_layers() -> None:
     tools = caps(Layer.TOOLS)
     assert tools["9"] == ("Fix", "", Kind.TOOL)
+    assert tools["I"] == ("Talk tidy", "hold", Kind.TOOL)
     assert tools["V"][2] is Kind.HELD
     apps = caps(Layer.APPS)
     assert apps["2"] == ("Terminal", "", Kind.APP)
@@ -47,8 +48,9 @@ def test_tools_and_apps_layers() -> None:
 
 
 def test_every_tool_has_a_label() -> None:
-    labels = {label for layer in (None, *Layer) for row in keymap(layer) for cap in row if cap.kind is Kind.TOOL for label in (cap.label,)}
-    assert len(labels) >= len(Tool) - 1  # the talk key appears on two layers
+    layers: list[Layer | None] = [None, *list(Layer)]
+    labels = {cap.label for layer in layers for row in keymap(layer) for cap in row if cap.kind is Kind.TOOL}
+    assert len(labels) == len(Tool)  # every tool is somewhere on the keyboard
 
 
 def test_indicator_text() -> None:

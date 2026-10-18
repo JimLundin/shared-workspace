@@ -38,6 +38,19 @@ Everything is the standard library plus our own typed Win32 bindings (`winapi/`)
 
 `miryoku.pyw` runs the layout alone, without the assistant.
 
+## What you see
+
+- **The tray dot**: green: running, layout on · grey: layout off or not running ·
+  red: listening · amber: working · blue: the agent is on a task. Hover for words;
+  click for the menu. (Windows 11 may tuck it behind the ^ at first: drag it out.)
+- **The layer indicator**, at the bottom of the screen: the layer you're holding or
+  have locked (`NAV`, `NUM · locked`), and `CAPS WORD`. It flashes *Layout on/off*
+  when you tap §. It can't be clicked and never takes the keyboard.
+- **Key map** (tray menu): your keyboard drawn as each layer has it. Keys 1–6 or
+  the buttons switch layer; the thumb holding the layer is highlighted.
+- Sounds for layout on/off and caps word; a warning sound and a notification
+  when something fails (with the reason).
+
 ## The keys
 
 Physical keys are named by their Nordic keycaps.

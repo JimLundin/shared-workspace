@@ -21,16 +21,30 @@ from typing import Final
 
 import usage
 from config import APPS
-from protocol import ASSISTANT_WINDOW, LAYOUT_WINDOW, MAGIC, WM_LAYOUT_STATE, WM_QUIT_LAYOUT, WM_REQUEST, LayoutState, Tool, decode
+from miryoku.layout import Layer
+from protocol import (
+    ASSISTANT_WINDOW,
+    LAYOUT_WINDOW,
+    MAGIC,
+    WM_INDICATOR,
+    WM_LAYOUT_STATE,
+    WM_QUIT_LAYOUT,
+    WM_REQUEST,
+    LayoutState,
+    Tool,
+    decode,
+    decode_indicator,
+)
 from usage import DIRECTORY, Detail
 from winapi import audio, clipboard, inputs, screen, shell, system, windows
-from winapi.shapes import Window
+from winapi.shapes import Rect, Window
 
 from .agent import Agent
 from .desktop import WinDesktop
 from .features import Assistant
 from .geometry import Shot
 from .icons import State, dot
+from .keymap import indicator_text
 from .llm import MAX_SECONDS, RATE, Json, Missing, Settings
 from .report import write_report
 from .ui import AgentWindow, Ui
@@ -292,7 +306,14 @@ class Exit(Enum):
     ALREADY_RUNNING = auto()
 
 
+def indicator_area() -> Rect:
+    """Where the layer indicator goes: the bottom of the main monitor."""
+    monitors = screen.monitors()
+    return next((m.work for m in monitors if m.primary), monitors[0].work)
+
+
 class _Menu(Enum):
+    KEYMAP = 9
     STATUS = 1
     RESTART_LAYOUT = 2
     ASK = 3
@@ -392,9 +413,16 @@ class AssistantApp:
                 if (request := decode(wparam, APPS)) is not None:
                     self.assistant.handle(request, bool(lparam))
                 return 0
+            if message == WM_INDICATOR:
+                index, locked, caps_word = decode_indicator(wparam)
+                layer = next((layer for layer in Layer if layer.value == index), None)
+                self.ui.indicate(indicator_text(layer, locked=locked, caps_word=caps_word), indicator_area())
+                return 0
             if message == WM_LAYOUT_STATE:
                 with contextlib.suppress(ValueError):
                     self.layout = LayoutState(wparam)
+                if self.layout is not LayoutState.QUIT:
+                    self.ui.flash("Layout on" if self.layout is LayoutState.ON else "Layout off", indicator_area())
                 self.assistant.layout_on = self.layout is LayoutState.ON
                 if self.assistant.listening is None:
                     self.assistant.idle()
@@ -417,6 +445,7 @@ class AssistantApp:
         items = [
             shell.MenuItem(_Menu.STATUS.value, f"Layout: {status}", enabled=False),
             shell.MenuItem(_Menu.RESTART_LAYOUT.value, "Restart layout" if running else "Start layout"),
+            shell.MenuItem(_Menu.KEYMAP.value, "Key map"),
             shell.MenuItem(0),
             shell.MenuItem(_Menu.ASK.value, "Ask…"),
             shell.MenuItem(_Menu.AGENT.value, "Agent task…"),
@@ -430,6 +459,8 @@ class AssistantApp:
         match shell.show_menu(self.window.handle, items):
             case _Menu.RESTART_LAYOUT.value:
                 threading.Thread(target=self.supervisor.restart if running else self.supervisor.start, daemon=True).start()
+            case _Menu.KEYMAP.value:
+                self.ui.show_keymap()
             case _Menu.ASK.value:
                 self.assistant.handle(Tool.ASK, True)
             case _Menu.AGENT.value:

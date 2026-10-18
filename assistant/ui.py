@@ -19,10 +19,12 @@ from collections.abc import Callable
 from tkinter import ttk
 from typing import Final, TypeVar
 
+from miryoku.layout import Layer
 from winapi import windows
 from winapi.shapes import Rect
 
 from .geometry import region
+from .keymap import Cap, Kind, keymap
 
 T = TypeVar("T")
 Job = Callable[[tk.Tk], None]
@@ -54,9 +56,12 @@ def _near_pointer(window: tk.Toplevel, width: int, height: int) -> None:
 
 
 class Ui:
-    __slots__ = ("_jobs", "_ready", "_thread")
+    __slots__ = ("_indicator", "_jobs", "_keymap", "_ready", "_thread")
 
     def __init__(self) -> None:
+        self._indicator: Indicator | None = None
+        """Made on first use, on the Tk thread."""
+        self._keymap: KeymapWindow | None = None
         self._jobs: queue.Queue[Job] = queue.Queue()
         self._ready = threading.Event()
         self._thread = threading.Thread(target=self._run, name="ui", daemon=True)
@@ -171,6 +176,30 @@ class Ui:
             done(AnswerWindow(self, root, title, follow_up))
 
         return self._ask(build)
+
+    # ---- the key map and the layer indicator ------------------------------------------
+
+    def show_keymap(self) -> None:
+        def job(root: tk.Tk) -> None:
+            if self._keymap is None or not self._keymap.window.winfo_exists():
+                self._keymap = KeymapWindow(root)
+            else:
+                _bring_forward(self._keymap.window, self._keymap.canvas)
+
+        self.post(job)
+
+    def _overlay(self, root: tk.Tk) -> Indicator:
+        if self._indicator is None:
+            self._indicator = Indicator(root)
+        return self._indicator
+
+    def indicate(self, text: str | None, work: Rect) -> None:
+        """What the layer indicator shows from now on (None: nothing), at the bottom of `work`."""
+        self.post(lambda root: self._overlay(root).set(text, work))
+
+    def flash(self, text: str, work: Rect, seconds: float = 1.2) -> None:
+        """Shows a message in the indicator for a moment."""
+        self.post(lambda root: self._overlay(root).flash(text, work, seconds))
 
     def agent(self, task: str, stop: Callable[[], None]) -> AgentWindow:
         def build(root: tk.Tk, done: Callable[[AgentWindow], None]) -> None:
@@ -316,3 +345,132 @@ class AgentWindow(_TextWindow):
                 self.button.configure(text="Close", command=self.window.destroy)
 
         self.ui.post(job)
+
+
+class Indicator:
+    """A small label at the bottom of the screen: the layer, caps word, layout on/off.
+    It's shown and hidden with Windows calls that never activate it, and it can't be
+    clicked, so it never takes the keyboard from what you're typing in."""
+
+    __slots__ = ("_flash", "_frame", "_label", "_steady", "_window")
+
+    def __init__(self, root: tk.Tk) -> None:
+        self._window = tk.Toplevel(root, background=BACKGROUND)
+        self._window.overrideredirect(True)
+        self._window.attributes("-alpha", 0.9)
+        self._label = tk.Label(self._window, font=("Segoe UI Semibold", 13), background=BACKGROUND, foreground=FOREGROUND, padx=16, pady=6)
+        self._label.pack()
+        self._window.update_idletasks()
+        self._frame = int(self._window.wm_frame(), 16)
+        windows.make_overlay(self._frame)
+        windows.show_quietly(self._frame, visible=False)
+        self._steady: tuple[str | None, Rect] | None = None
+        """What to show when no message is flashing."""
+        self._flash: str | None = None
+        """The pending end of a flash (a Tk `after` id)."""
+
+    def _show(self, text: str | None, work: Rect, colour: str = FOREGROUND) -> None:
+        if text is None:
+            windows.show_quietly(self._frame, visible=False)
+            return
+        self._label.configure(text=text, foreground=colour)
+        self._window.update_idletasks()
+        width, height = self._label.winfo_reqwidth(), self._label.winfo_reqheight()
+        self._window.geometry(f"{width}x{height}+{work.left + (work.width - width) // 2}+{work.bottom - height - 28}")
+        self._window.update_idletasks()
+        windows.show_quietly(self._frame, visible=True)
+
+    def set(self, text: str | None, work: Rect) -> None:
+        self._steady = (text, work)
+        if self._flash is None:
+            self._show(text, work)
+
+    def flash(self, text: str, work: Rect, seconds: float) -> None:
+        if self._flash is not None:
+            self._window.after_cancel(self._flash)
+        self._show(text, work, ACCENT)
+        self._flash = self._window.after(round(seconds * 1000), self._end_flash)
+
+    def _end_flash(self) -> None:
+        self._flash = None
+        if self._steady is not None:
+            self._show(*self._steady)
+        else:
+            windows.show_quietly(self._frame, visible=False)
+
+
+_COLOURS: Final = {
+    Kind.KEY: ("#2b2e33", FOREGROUND),
+    Kind.MOD: ("#21403a", "#8fe3c6"),
+    Kind.LAYER: ("#22324d", "#9cc3ff"),
+    Kind.TOOL: ("#47381c", "#ffcf7a"),
+    Kind.APP: ("#2c3f23", "#b6e39a"),
+    Kind.SPECIAL: ("#3b2948", "#d7b4ff"),
+    Kind.HELD: (ACCENT, BACKGROUND),
+    Kind.BLANK: ("#191b1e", MUTED),
+}
+_LAYERS: Final[tuple[tuple[str, Layer | None], ...]] = (("Base", None), *((layer.name.title(), layer) for layer in Layer))
+_ROW_START: Final = (0.0, 1.5, 0.0, 1.25)
+"""Where each row starts, in key widths, as on an ISO keyboard."""
+_UNIT, _GAP, _HEIGHT = 64, 5, 56
+
+
+class KeymapWindow:
+    """The keyboard as each layer has it. Buttons (or keys 1-6) switch layer."""
+
+    __slots__ = ("buttons", "canvas", "layer", "window")
+
+    def __init__(self, root: tk.Tk) -> None:
+        self.window = tk.Toplevel(root, background=BACKGROUND, padx=14, pady=12)
+        self.window.title("Toolkit key map")
+        self.window.resizable(width=False, height=False)
+        bar = tk.Frame(self.window, background=BACKGROUND)
+        bar.pack(fill="x", pady=(0, 10))
+        self.buttons: list[tk.Button] = []
+        for i, (name, layer) in enumerate(_LAYERS):
+            button = tk.Button(bar, text=name, font=FONT, relief="flat", padx=12, pady=3, borderwidth=0, command=self._chooser(layer))
+            button.pack(side="left", padx=(0, 6))
+            self.buttons.append(button)
+            self.window.bind(str(i + 1), self._key_chooser(layer))
+        width = round(14 * _UNIT)
+        self.canvas = tk.Canvas(self.window, width=width, height=4 * (_HEIGHT + _GAP), background=BACKGROUND, highlightthickness=0)
+        self.canvas.pack()
+        legend = (
+            "Hold a thumb for its layer (it's shown highlighted).  \u00a7 tap: layout on/off, hold: quit.  "
+            "B: hold to talk.  Keys 1\u20136 switch layer."
+        )
+        tk.Label(self.window, text=legend, font=("Segoe UI", 9), background=BACKGROUND, foreground=MUTED).pack(anchor="w", pady=(10, 0))
+        self.window.bind("<Escape>", lambda _: self.window.destroy())
+        self.layer: Layer | None = None
+        self.draw(None)
+        _near_pointer(self.window, width + 28, 4 * (_HEIGHT + _GAP) + 110)
+        _bring_forward(self.window, self.canvas)
+
+    def _chooser(self, layer: Layer | None) -> Callable[[], None]:
+        return lambda: self.draw(layer)
+
+    def _key_chooser(self, layer: Layer | None) -> Callable[[tk.Event[tk.Misc]], None]:
+        return lambda _: self.draw(layer)
+
+    def draw(self, layer: Layer | None) -> None:
+        self.layer = layer
+        for button, (_, shown) in zip(self.buttons, _LAYERS, strict=True):
+            selected = shown is layer
+            button.configure(background=ACCENT if selected else "#2b2e33", foreground=BACKGROUND if selected else FOREGROUND, activebackground=ACCENT)
+        self.canvas.delete("all")
+        for y, (row, start) in enumerate(zip(keymap(layer), _ROW_START, strict=True)):
+            x = start * _UNIT
+            for cap in row:
+                size = 1.75 if cap.physical == "Caps" else 1.0
+                self._key(cap, x, y * (_HEIGHT + _GAP), size * _UNIT - _GAP)
+                x += size * _UNIT
+
+    def _key(self, cap: Cap, x: float, y: float, width: float) -> None:
+        fill, ink = _COLOURS[cap.kind]
+        self.canvas.create_rectangle(x, y, x + width, y + _HEIGHT, fill=fill, outline="#3a3d42" if cap.kind is Kind.BLANK else fill, width=1)
+        self.canvas.create_text(x + 5, y + 4, text=cap.physical, anchor="nw", fill=MUTED, font=("Segoe UI", 7))
+        if cap.label:
+            size = 11 if len(cap.label) <= 5 else 9 if len(cap.label) <= 8 else 8 if len(cap.label) <= 10 else 7
+            self.canvas.create_text(x + width / 2, y + _HEIGHT / 2 + 1, text=cap.label, fill=ink, font=("Segoe UI Semibold", size), width=width - 6)
+        if cap.hold:
+            self.canvas.create_text(x + width / 2, y + _HEIGHT - 9, text=cap.hold, fill=ink if cap.kind is Kind.HELD else MUTED, font=("Segoe UI", 7))

@@ -26,6 +26,8 @@ WM_LAYOUT_STATE: Final = _WM_APP + 2
 """Layout -> assistant: wparam is a `LayoutState` value."""
 WM_QUIT_LAYOUT: Final = _WM_APP + 3
 """Assistant -> layout: quit."""
+WM_INDICATOR: Final = _WM_APP + 4
+"""Layout -> assistant: what the layer indicator shows; wparam is `encode_indicator(...)`."""
 
 
 class LayoutState(Enum):
@@ -113,3 +115,12 @@ def decode(code: int, apps: Sequence[App]) -> Request | None:
         return Tool(code)
     except ValueError:
         return None
+
+
+def encode_indicator(layer: int, locked: bool, caps_word: bool) -> int:
+    """The indicator's state as a message's wparam. `layer`: the layer's value, 0 for the base layer."""
+    return layer | locked << 4 | caps_word << 5
+
+
+def decode_indicator(code: int) -> tuple[int, bool, bool]:
+    return code & 0xF, bool(code & 0x10), bool(code & 0x20)

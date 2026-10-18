@@ -25,7 +25,7 @@ APPS: Final[tuple[App, ...]] = (
     App("notepad", "notepad.exe", "notepad.exe"),
     App("excel", "excel.exe", "excel.exe"),
     App("word", "winword.exe", "winword.exe"),
-    App("powerpoint", "powerpnt.exe", "powerpnt.exe"),
+    App("PowerPoint", "powerpnt.exe", "powerpnt.exe"),
 )
 
 # ---- Snippets --------------------------------------------------------------------------
