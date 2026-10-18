@@ -8,7 +8,7 @@ type before it leaves. Nothing untyped crosses into the rest of the program.
 from __future__ import annotations
 
 import ctypes
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from ctypes import wintypes
 from dataclasses import dataclass
 from typing import Final, NewType
@@ -60,6 +60,32 @@ class INPUT(ctypes.Structure):
     _fields_ = (("type", wintypes.DWORD), ("u", INPUT_UNION))
 
 
+class WAVEFORMATEX(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = (
+        ("wFormatTag", wintypes.WORD),
+        ("nChannels", wintypes.WORD),
+        ("nSamplesPerSec", wintypes.DWORD),
+        ("nAvgBytesPerSec", wintypes.DWORD),
+        ("nBlockAlign", wintypes.WORD),
+        ("wBitsPerSample", wintypes.WORD),
+        ("cbSize", wintypes.WORD),
+    )
+
+
+class WAVEHDR(ctypes.Structure):
+    _fields_ = (
+        ("lpData", ctypes.c_void_p),
+        ("dwBufferLength", wintypes.DWORD),
+        ("dwBytesRecorded", wintypes.DWORD),
+        ("dwUser", ULONG_PTR),
+        ("dwFlags", wintypes.DWORD),
+        ("dwLoops", wintypes.DWORD),
+        ("lpNext", ctypes.c_void_p),
+        ("reserved", ULONG_PTR),
+    )
+
+
 # Struct sizes must match Windows exactly, or SendInput silently does nothing.
 if ctypes.sizeof(INPUT) != (40 if ctypes.sizeof(ctypes.c_void_p) == 8 else 28):
     raise ImportError(f"INPUT is {ctypes.sizeof(INPUT)} bytes; Windows expects a different size")
@@ -70,6 +96,7 @@ HOOKPROC = ctypes.WINFUNCTYPE(LRESULT, ctypes.c_int, wintypes.WPARAM, wintypes.L
 _fn = ctypes.WINFUNCTYPE
 _user32 = ctypes.WinDLL("user32", use_last_error=True)
 _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_winmm = ctypes.WinDLL("winmm")
 
 _SetWindowsHookExW = _fn(wintypes.HHOOK, ctypes.c_int, HOOKPROC, wintypes.HINSTANCE, wintypes.DWORD)(("SetWindowsHookExW", _user32))
 _CallNextHookEx = _fn(LRESULT, wintypes.HHOOK, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)(("CallNextHookEx", _user32))
@@ -85,16 +112,38 @@ _MessageBoxW = _fn(ctypes.c_int, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWS
 _CreateMutexW = _fn(wintypes.HANDLE, ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR, use_last_error=True)(("CreateMutexW", _kernel32))
 _CloseHandle = _fn(wintypes.BOOL, wintypes.HANDLE)(("CloseHandle", _kernel32))
 _GetModuleHandleW = _fn(wintypes.HMODULE, wintypes.LPCWSTR)(("GetModuleHandleW", _kernel32))
+_CreateEventW = _fn(wintypes.HANDLE, ctypes.c_void_p, wintypes.BOOL, wintypes.BOOL, wintypes.LPCWSTR)(("CreateEventW", _kernel32))
+_SetEvent = _fn(wintypes.BOOL, wintypes.HANDLE)(("SetEvent", _kernel32))
+_ResetEvent = _fn(wintypes.BOOL, wintypes.HANDLE)(("ResetEvent", _kernel32))
+_WaitForMultipleObjects = _fn(wintypes.DWORD, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE), wintypes.BOOL, wintypes.DWORD)(
+    ("WaitForMultipleObjects", _kernel32)
+)
+_HWAVEIN = wintypes.HANDLE
+_waveInOpen = _fn(wintypes.UINT, ctypes.POINTER(_HWAVEIN), wintypes.UINT, ctypes.POINTER(WAVEFORMATEX), ULONG_PTR, ULONG_PTR, wintypes.DWORD)(
+    ("waveInOpen", _winmm)
+)
+_waveInPrepareHeader = _fn(wintypes.UINT, _HWAVEIN, ctypes.POINTER(WAVEHDR), wintypes.UINT)(("waveInPrepareHeader", _winmm))
+_waveInUnprepareHeader = _fn(wintypes.UINT, _HWAVEIN, ctypes.POINTER(WAVEHDR), wintypes.UINT)(("waveInUnprepareHeader", _winmm))
+_waveInAddBuffer = _fn(wintypes.UINT, _HWAVEIN, ctypes.POINTER(WAVEHDR), wintypes.UINT)(("waveInAddBuffer", _winmm))
+_waveInStart = _fn(wintypes.UINT, _HWAVEIN)(("waveInStart", _winmm))
+_waveInReset = _fn(wintypes.UINT, _HWAVEIN)(("waveInReset", _winmm))
+_waveInClose = _fn(wintypes.UINT, _HWAVEIN)(("waveInClose", _winmm))
 
 WM_TIMER: Final = 0x0113
 WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP = 0x0100, 0x0101, 0x0104, 0x0105
 LLKHF_EXTENDED: Final = 0x01
-KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP = 0x0001, 0x0002
-MB_OK, MB_ICONHAND, MB_ICONASTERISK = 0x00, 0x10, 0x40
+KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE = 0x0001, 0x0002, 0x0004
+MB_OK, MB_ICONHAND, MB_ICONEXCLAMATION, MB_ICONASTERISK = 0x00, 0x10, 0x30, 0x40
 _WH_KEYBOARD_LL: Final = 13
 _INPUT_KEYBOARD: Final = 1
 _MAPVK_VK_TO_VSC: Final = 0
 _ERROR_ALREADY_EXISTS: Final = 183
+_INFINITE: Final = 0xFFFF_FFFF
+_WAIT_TIMEOUT: Final = 0x102
+_WAVE_MAPPER: Final = 0xFFFF_FFFF
+_WAVE_FORMAT_PCM: Final = 1
+_CALLBACK_EVENT: Final = 0x0005_0000
+_WHDR_DONE: Final = 0x01
 
 # ---- Typed API -----------------------------------------------------------------------
 
@@ -102,6 +151,7 @@ HookProc = Callable[[int, int, int], int]
 """(code, wparam, lparam) -> result, as Windows calls a low-level hook."""
 
 Lock = NewType("Lock", int)
+EventHandle = NewType("EventHandle", int)
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,3 +247,81 @@ def create_lock(name: str) -> Lock | None:
 
 def release_lock(lock: Lock) -> None:
     _CloseHandle(lock)
+
+
+def send_unicode(units: Sequence[int], extra: int) -> None:
+    """Types UTF-16 code units as characters, whatever the keyboard layout. One
+    call, so the user's own keystrokes can't land in the middle."""
+    events = (INPUT * (2 * len(units)))()
+    for i, unit in enumerate(units):
+        for j, up in enumerate((0, KEYEVENTF_KEYUP)):
+            events[2 * i + j] = INPUT(_INPUT_KEYBOARD, INPUT_UNION(ki=KEYBDINPUT(0, unit, KEYEVENTF_UNICODE | up, 0, extra)))
+    _SendInput(len(events), events, ctypes.sizeof(INPUT))
+
+
+def create_event(name: str, *, manual_reset: bool, initially_set: bool) -> EventHandle | None:
+    """A named event for this Windows session, created or (if it exists) opened."""
+    handle: int | None = _CreateEventW(None, manual_reset, initially_set, name)
+    return EventHandle(handle) if handle else None
+
+
+def set_event(event: EventHandle) -> None:
+    _SetEvent(event)
+
+
+def reset_event(event: EventHandle) -> None:
+    _ResetEvent(event)
+
+
+def close_event(event: EventHandle) -> None:
+    _CloseHandle(event)
+
+
+def wait_any(events: Sequence[EventHandle]) -> int:
+    """Blocks until one of the events is set; returns its index."""
+    handles = (wintypes.HANDLE * len(events))(*events)
+    index = int(_WaitForMultipleObjects(len(events), handles, False, _INFINITE))
+    if index >= len(events):  # WAIT_FAILED (a timeout can't happen: it waits forever)
+        raise ctypes.WinError(ctypes.get_last_error())
+    return index
+
+
+class Microphone:
+    """Records the default microphone as 16-bit mono PCM into one buffer, allocated
+    once. Windows sets `event` whenever the recording changes state, including when
+    the buffer is full. The microphone is only open between `start` and `stop`."""
+
+    __slots__ = ("_buffer", "_format", "_handle", "_header", "event")
+
+    def __init__(self, rate: int, seconds: int, event: EventHandle) -> None:
+        self._format = WAVEFORMATEX(_WAVE_FORMAT_PCM, 1, rate, rate * 2, 2, 16, 0)
+        self._buffer = ctypes.create_string_buffer(rate * 2 * seconds)
+        self._handle = _HWAVEIN()
+        self._header = WAVEHDR()
+        self.event = event
+
+    def start(self) -> int:
+        """Opens the microphone and starts recording. 0, or Windows' error code."""
+        error = int(_waveInOpen(ctypes.byref(self._handle), _WAVE_MAPPER, ctypes.byref(self._format), self.event, 0, _CALLBACK_EVENT))
+        if error:
+            return error
+        self._header = WAVEHDR(ctypes.addressof(self._buffer), len(self._buffer))
+        size = ctypes.sizeof(WAVEHDR)
+        for step in (_waveInPrepareHeader, _waveInAddBuffer):
+            if error := int(step(self._handle, ctypes.byref(self._header), size)):
+                self.stop()
+                return error
+        if error := int(_waveInStart(self._handle)):
+            self.stop()
+        return error
+
+    def full(self) -> bool:
+        return bool(self._header.dwFlags & _WHDR_DONE)
+
+    def stop(self) -> bytes:
+        """Stops, closes the microphone, and returns what was recorded."""
+        _waveInReset(self._handle)
+        recorded = ctypes.string_at(self._buffer, int(self._header.dwBytesRecorded))
+        _waveInUnprepareHeader(self._handle, ctypes.byref(self._header), ctypes.sizeof(WAVEHDR))
+        _waveInClose(self._handle)
+        return recorded

@@ -36,3 +36,5 @@ ignore = ["PLR2004", "PLR0911", "PLR0912"]
 [tool.ruff.lint.per-file-ignores]
 # The layout tables are kept as a wide grid that reads across the keyboard.
 "miryoku/layout.py" = ["E501"]
+# Win32 functions keep their Windows names, one prototype per line.
+"winapi.py" = ["E501", "N816"]

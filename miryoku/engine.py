@@ -16,6 +16,7 @@ from .layout import (
     QUIT_HOLD_MS,
     SHIFT_ONLY,
     STREAK_MS,
+    TALK,
     Action,
     Chord,
     Command,
@@ -169,6 +170,9 @@ class Engine:
     capitalised until something that isn't part of a word: a space, punctuation,
     Enter, an arrow... Digits, `_`, Backspace and Delete keep it going.
 
+    Push-to-talk: holding the talk key tells the dictation tool to listen;
+    releasing it (or switching the layout off) tells it to stop.
+
     Layer lock: the lock key on a layer keeps that layer on after its thumb is
     released. Tap the lock key again, or the escape key, to unlock.
     """
@@ -190,6 +194,8 @@ class Engine:
     caps_word: bool = False
     locked: Layer | None = None
     mods: Modifiers = field(default_factory=Modifiers)
+    talking: bool = False
+    """The push-to-talk key is held."""
 
     def on_key(self, host: Host, scancode: Scancode, down: bool, now: int) -> Verdict:
         """Entry point for every physical key event. `now` is the event's
@@ -209,6 +215,12 @@ class Engine:
             return Verdict.SWALLOW
         if not self.enabled:
             return Verdict.PASS
+        # Push-to-talk: outside the layout, so it never decides a tap-hold key.
+        if scancode == TALK:
+            if down != self.talking:
+                self.talking = down
+                host.signal(Signal.TALK_START if down else Signal.TALK_STOP)
+            return Verdict.SWALLOW
         match slot(scancode):
             case Unmapped.FREE:
                 return Verdict.PASS
@@ -329,6 +341,9 @@ class Engine:
         self.caps_word = False
         self.locked = None
         self.mods.release_all(host)  # nothing should be left, but never leave one stuck
+        if self.talking:
+            self.talking = False
+            host.signal(Signal.TALK_STOP)
 
     def apply_caps_word(self, a: Action) -> Action:
         """Caps word: capitalise letters, let word characters through, end on anything else."""

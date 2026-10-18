@@ -12,12 +12,11 @@ from enum import Enum, auto
 from typing import Final
 
 import winapi
+from channel import MAGIC, Channel
 
 from .engine import Engine, Signal, Verdict
 from .layout import TAPPING_TERM_MS, Key, Mod, Scancode
 
-MAGIC: Final = 0x4D49_524F
-"""Tags keys we send ourselves so the hook lets them through untouched."""
 LOCK_NAME: Final = "Local\\miryoku"
 """Name of the lock that stops a second copy from running in this Windows session."""
 
@@ -25,7 +24,11 @@ LOCK_NAME: Final = "Local\\miryoku"
 class WinHost:
     """What the engine needs, done with Windows calls."""
 
-    __slots__ = ()
+    __slots__ = ("channel",)
+
+    def __init__(self, channel: Channel | None) -> None:
+        self.channel = channel
+        """To the dictation tool; None if Windows wouldn't create it."""
 
     def send(self, key: Key | Mod, down: bool) -> None:
         flags = (0 if down else winapi.KEYEVENTF_KEYUP) | (winapi.KEYEVENTF_EXTENDEDKEY if key.extended else 0)
@@ -46,6 +49,9 @@ class WinHost:
                 winapi.beep(winapi.MB_ICONHAND)
             case Signal.CAPS_WORD:
                 winapi.beep(winapi.MB_ICONASTERISK)
+            case Signal.TALK_START | Signal.TALK_STOP:
+                if self.channel is not None:
+                    self.channel.set_talking(signal is Signal.TALK_START)
 
 
 class Exit(Enum):
@@ -61,9 +67,9 @@ class Keyboard:
 
     __slots__ = ("busy", "engine", "host")
 
-    def __init__(self) -> None:
+    def __init__(self, channel: Channel | None) -> None:
         self.engine = Engine()
-        self.host = WinHost()
+        self.host = WinHost(channel)
         self.busy = False
         """Set while the engine runs; a re-entrant call lets its key through."""
 
@@ -105,8 +111,9 @@ def run() -> Exit:
     lock = winapi.create_lock(LOCK_NAME)
     if lock is None:
         return Exit.ALREADY_RUNNING
+    channel = Channel.open()
     try:
-        keyboard = Keyboard()
+        keyboard = Keyboard(channel)
         hook = winapi.set_keyboard_hook(keyboard.hook_proc)
         if hook is None:
             return Exit.HOOK_REFUSED
@@ -124,8 +131,12 @@ def run() -> Exit:
             winapi.remove_hook(hook)
             keyboard.engine.release_all(keyboard.host)  # let go of anything still held
             gc.enable()
+        if channel is not None:
+            channel.ask_to_quit()  # the dictation tool stops with the layout
         return Exit.QUIT
     finally:
+        if channel is not None:
+            channel.close()
         winapi.release_lock(lock)
 
 
