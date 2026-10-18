@@ -142,6 +142,35 @@ class Engine:
     """The last tap-hold key tapped, and when (for quick tap)."""
     caps_word: bool = False
     locked: LayerId | None = None
+    mods_down: dict[Mod, int] = field(default_factory=dict[Mod, int])
+    """How many held keys want each modifier down. Windows is told only when a
+    count goes from 0 to 1 or back, so one key can't release another's modifier."""
+
+    def mod_down(self, host: Host, mod: Mod) -> None:
+        count = self.mods_down.get(mod, 0)
+        if count == 0:
+            host.send(mod.vk, True)
+        self.mods_down[mod] = count + 1
+
+    def mod_up(self, host: Host, mod: Mod) -> None:
+        count = self.mods_down.get(mod, 0)
+        if count == 1:
+            host.send(mod.vk, False)
+        if count <= 1:
+            self.mods_down.pop(mod, None)
+        else:
+            self.mods_down[mod] = count - 1
+
+    def with_mod(self, host: Host, mod: Mod, key: Key, *, tap: bool) -> None:
+        """The key with `mod` down; the modifier is added only if nothing holds it already."""
+        added = mod not in self.mods_down
+        if added:
+            host.send(mod.vk, True)
+        host.send(key.vk, True)
+        if tap:
+            host.send(key.vk, False)
+        if added:
+            host.send(mod.vk, False)
 
     def on_key(self, host: Host, scancode: Scancode, down: bool, now: int) -> Verdict:
         """Entry point for every physical key event. `now` is the event's
@@ -281,6 +310,9 @@ class Engine:
         self.last_tap = None
         self.caps_word = False
         self.locked = None
+        for mod in self.mods_down:  # nothing should be left, but never leave one stuck
+            host.send(mod.vk, False)
+        self.mods_down = {}
 
     def apply_caps_word(self, a: Action) -> Action:
         """Caps word: capitalise letters, let word characters through, end on anything else."""
@@ -307,17 +339,14 @@ class Engine:
                 host.signal(Signal.CAPS_WORD)
         a = self.apply_caps_word(a)
         match a:
-            case Key() | Mod():
+            case Key():
                 host.send(a.vk, True)
+            case Mod():
+                self.mod_down(host, a)
             case Shifted(key):
-                host.send(Mod.SHIFT.vk, True)
-                host.send(key.vk, True)
-                host.send(Mod.SHIFT.vk, False)
+                self.with_mod(host, Mod.SHIFT, key, tap=False)
             case Ctrl(key):
-                host.send(Mod.CTRL.vk, True)
-                host.send(key.vk, True)
-                host.send(key.vk, False)
-                host.send(Mod.CTRL.vk, False)
+                self.with_mod(host, Mod.CTRL, key, tap=True)
             case LayerId():
                 # A layer beyond MAX_LAYERS is ignored rather than stored.
                 if len(self.active_layers) < MAX_LAYERS:
@@ -336,8 +365,10 @@ class Engine:
 
     def release(self, host: Host, a: Action) -> None:
         match a:
-            case Key() | Mod():
+            case Key():
                 host.send(a.vk, False)
+            case Mod():
+                self.mod_up(host, a)
             case Shifted(key):
                 host.send(key.vk, False)
             case LayerId():
