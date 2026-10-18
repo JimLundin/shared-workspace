@@ -455,3 +455,29 @@ def test_home_row_letter_repeats_after_a_tap() -> None:
     t.at(1000 + QUICK_TAP_MS // 2).d("r")
     t.d("r")
     assert t.take() == "+t -t +t +t", "held t repeats instead of becoming Shift"
+
+
+# ---- modifier state -----------------------------------------------------------------
+
+
+def test_held_shift_survives_a_shifted_symbol() -> None:
+    t = Harness()
+    t.d("r")
+    t.timeout_last()  # t held: Shift
+    t.d(",")
+    t.tap("3")  # Sym layer: & (Shift+7); Shift is already down, so no Shift events
+    t.u(",")
+    t.tap("2")  # q, with Shift still held
+    assert t.take() == "+SFT +7 -7 +q -q"
+
+
+def test_releasing_one_of_two_ctrl_keys_keeps_ctrl() -> None:
+    t = Harness()
+    t.d("e")  # left Ctrl (s)
+    t.d("p")  # right Ctrl (e), other hand
+    t.timeout_last()
+    t.timeout_last()  # both held: Ctrl goes down once
+    t.u("p")  # one released: Ctrl stays down
+    t.tap("8")  # Ctrl + j
+    t.u("e")  # the last one released: Ctrl up
+    assert t.take() == "+CTL +j -j -CTL"
