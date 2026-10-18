@@ -4,7 +4,7 @@ with `pytest`."""
 from __future__ import annotations
 
 from miryoku.engine import MAX_BUFFERED, Engine, Signal, Verdict
-from miryoku.layout import ESCAPE, QUICK_TAP_MS, QUIT_HOLD_MS, STREAK_MS, Key, Mod, Scancode
+from miryoku.layout import ESCAPE, QUICK_TAP_MS, QUIT_HOLD_MS, STREAK_MS, TALK, Key, Mod, Scancode
 
 NAMES = {0xA0: "SFT", 0xA2: "CTL", 0xA4: "ALT", 0x20: "spc", 0x25: "left", 0x08: "bksp", 0xDB: "[", 0xC0: "`", 0xBE: "."}
 
@@ -496,3 +496,50 @@ def test_held_undo_repeats_like_any_key() -> None:
     t.u("=")  # z up
     t.u("c")
     assert t.take() == "+CTL +z -CTL +CTL +z -CTL -z"
+
+
+# ---- push-to-talk ----------------------------------------------------------------------
+
+
+def test_talk_key_signals_start_and_stop() -> None:
+    t = Harness()
+    assert t.key(TALK, True, 0) == Verdict.SWALLOW
+    assert t.key(TALK, True, 30) == Verdict.SWALLOW  # auto-repeat: still talking
+    assert t.key(TALK, False, 900) == Verdict.SWALLOW
+    assert t.take() == "!TALK_START !TALK_STOP"
+
+
+def test_talk_key_is_a_plain_key_when_switched_off() -> None:
+    t = Harness()
+    t.key(ESC, True, 0)
+    t.key(ESC, False, 10)
+    t.take()
+    assert t.key(TALK, True, 20) == Verdict.PASS
+    assert t.key(TALK, False, 30) == Verdict.PASS
+    assert t.take() == ""
+
+
+def test_switching_off_while_talking_stops_talking() -> None:
+    t = Harness()
+    t.key(TALK, True, 0)
+    t.key(ESC, True, 10)
+    t.key(ESC, False, 20)
+    assert t.key(TALK, False, 30) == Verdict.PASS  # off now: the release is a plain key
+    assert t.take() == "!TALK_START !TALK_STOP !OFF"
+
+
+def test_quitting_while_talking_stops_talking() -> None:
+    t = Harness()
+    t.key(TALK, True, 0)
+    t.key(ESC, True, 10)
+    assert t.key(ESC, False, 10 + QUIT_HOLD_MS) == Verdict.QUIT
+    assert t.take() == "!TALK_START !TALK_STOP"
+
+
+def test_talk_key_leaves_an_undecided_home_row_mod_alone() -> None:
+    t = Harness()
+    t.d("r")  # t or Shift: undecided
+    t.key(TALK, True, 0)
+    t.u("r")  # still a tap
+    t.key(TALK, False, 0)
+    assert t.take() == "!TALK_START +t -t !TALK_STOP"

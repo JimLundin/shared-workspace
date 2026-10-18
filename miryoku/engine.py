@@ -60,6 +60,10 @@ class Signal(Enum):
     ON = auto()
     OFF = auto()
     CAPS_WORD = auto()
+    TALK_START = auto()
+    """The push-to-talk key went down: start listening."""
+    TALK_STOP = auto()
+    """The push-to-talk key came up (or the layout let go of it): stop and transcribe."""
 
 
 MAX_LAYERS = 3

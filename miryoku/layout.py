@@ -31,6 +31,8 @@ Scancode = NewType("Scancode", int)
 
 ESCAPE: Final = Scancode(0x29)
 """The escape key (the key left of 1, § on a Nordic keyboard)."""
+TALK: Final = Scancode(0x30)
+"""The push-to-talk key: B, between the thumb keys. Hold it to dictate."""
 
 
 # ---- Vocabulary ----------------------------------------------------------------
@@ -288,8 +290,8 @@ PHYSICAL: Final[Board[Scancode]] = Board(
 )
 
 UNUSED: Final = frozenset(
-    # Keys between and below the hands (1 7 Y U G H J Z B N M <): blocked.
-    sc(code) for code in (0x02, 0x08, 0x15, 0x16, 0x22, 0x23, 0x24, 0x2C, 0x30, 0x31, 0x32, 0x56)
+    # Keys between and below the hands (1 7 Y U G H J Z N M <): blocked.
+    sc(code) for code in (0x02, 0x08, 0x15, 0x16, 0x22, 0x23, 0x24, 0x2C, 0x31, 0x32, 0x56)
 )
 
 BASE: Final[Board[Action]] = Board(
