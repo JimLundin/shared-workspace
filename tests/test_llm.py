@@ -4,6 +4,7 @@ tools and images). Against a local fake endpoint; runs anywhere."""
 from __future__ import annotations
 
 import json
+from typing import cast
 
 from assistant.llm import (
     RATE,
@@ -39,7 +40,7 @@ def settings(url: str, vocabulary: str = "", language: str = "") -> Settings:
 def body_json(raw: bytes) -> dict[str, object]:
     data: object = json.loads(raw)
     assert isinstance(data, dict)
-    return {str(k): v for k, v in data.items()}  # pyright: ignore[reportUnknownVariableType]
+    return {str(k): v for k, v in cast("dict[object, object]", data).items()}
 
 
 # ---- settings --------------------------------------------------------------------------
@@ -144,8 +145,7 @@ def test_chat_sends_images_as_data_urls() -> None:
     with fake_endpoint() as endpoint:
         endpoint.replies = [Canned(ANSWER)]
         chat(settings(endpoint.url), [user_message([Text("What is this?"), Image(b"\x89PNG")])])
-        content = body_json(endpoint.last.body)["messages"]
-        assert content == [
+        expected: object = [
             {
                 "role": "user",
                 "content": [
@@ -154,17 +154,18 @@ def test_chat_sends_images_as_data_urls() -> None:
                 ],
             }
         ]
+        assert body_json(endpoint.last.body)["messages"] == expected
 
 
 def test_chat_with_tools_returns_tool_calls() -> None:
-    call = {"id": "call_1", "type": "function", "function": {"name": "read_file", "arguments": '{"path": "a.txt"}'}}
-    answer = json.dumps({"choices": [{"message": {"role": "assistant", "content": None, "tool_calls": [call]}}]}).encode()
+    call = '{"id": "call_1", "type": "function", "function": {"name": "read_file", "arguments": "{\\"path\\": \\"a.txt\\"}"}}'
+    answer = f'{{"choices": [{{"message": {{"role": "assistant", "content": null, "tool_calls": [{call}]}}}}]}}'.encode()
     spec = ToolSpec("read_file", "Read a file", {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]})
     with fake_endpoint() as endpoint:
         endpoint.replies = [Canned(answer)]
         reply = chat(settings(endpoint.url), [user_message("read a.txt")], tools=[spec])
         assert reply == Reply("", (ToolCall("call_1", "read_file", '{"path": "a.txt"}'),))
-        assert body_json(endpoint.last.body)["tools"] == [
+        expected: object = [
             {
                 "type": "function",
                 "function": {
@@ -174,6 +175,7 @@ def test_chat_with_tools_returns_tool_calls() -> None:
                 },
             }
         ]
+        assert body_json(endpoint.last.body)["tools"] == expected
 
 
 def test_tool_calls_and_results_go_back_to_the_model() -> None:
@@ -181,7 +183,7 @@ def test_tool_calls_and_results_go_back_to_the_model() -> None:
     with fake_endpoint() as endpoint:
         endpoint.replies = [Canned(ANSWER)]
         chat(settings(endpoint.url), [assistant_message("", (call,)), tool_result("call_1", "file contents")])
-        assert body_json(endpoint.last.body)["messages"] == [
+        expected: object = [
             {
                 "role": "assistant",
                 "content": None,
@@ -189,12 +191,13 @@ def test_tool_calls_and_results_go_back_to_the_model() -> None:
             },
             {"role": "tool", "tool_call_id": "call_1", "content": "file contents"},
         ]
+        assert body_json(endpoint.last.body)["messages"] == expected
 
 
 def test_stream_passes_text_on_as_it_arrives() -> None:
-    chunks = [json.dumps({"choices": [{"delta": {"content": piece}}]}) for piece in ("Hej", " då", "!")]
+    chunks = [f'{{"choices": [{{"delta": {{"content": "{piece}"}}}}]}}' for piece in ("Hej", " då", "!")]
     with fake_endpoint() as endpoint:
-        endpoint.replies = [sse(json.dumps({"choices": [{"delta": {"role": "assistant"}}]}), *chunks)]
+        endpoint.replies = [sse('{"choices": [{"delta": {"role": "assistant"}}]}', *chunks)]
         pieces: list[str] = []
         assert stream(settings(endpoint.url), [user_message("hi")], pieces.append) == "Hej då!"
         assert pieces == ["Hej", " då", "!"]

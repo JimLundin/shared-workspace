@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-import struct
 import wave
 import zlib
 
@@ -29,13 +28,14 @@ def decode_png(data: bytes) -> tuple[int, int, bytes]:
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     pos, chunks = 8, dict[bytes, bytes]()
     while pos < len(data):
-        (length,) = struct.unpack(">I", data[pos : pos + 4])
+        length = int.from_bytes(data[pos : pos + 4], "big")
         kind, body = data[pos + 4 : pos + 8], data[pos + 8 : pos + 8 + length]
-        (crc,) = struct.unpack(">I", data[pos + 8 + length : pos + 12 + length])
+        crc = int.from_bytes(data[pos + 8 + length : pos + 12 + length], "big")
         assert crc == zlib.crc32(kind + body)
         chunks[kind] = chunks.get(kind, b"") + body
         pos += 12 + length
-    width, height, depth, color = struct.unpack(">IIBB", chunks[b"IHDR"][:10])
+    header = chunks[b"IHDR"]
+    width, height, depth, color = int.from_bytes(header[0:4], "big"), int.from_bytes(header[4:8], "big"), header[8], header[9]
     assert (depth, color) == (8, 2)  # 8-bit RGB
     assert b"IEND" in chunks
     return width, height, zlib.decompress(chunks[b"IDAT"])

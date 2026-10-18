@@ -32,7 +32,7 @@ def test_one_line_command_joins_lines_so_nothing_runs_early() -> None:
 def test_unwrap_removes_fences_and_quotes_around_a_rewrite() -> None:
     assert unwrap("```\nHello,\nworld\n```") == "Hello,\nworld"
     assert unwrap('"Hello there."') == "Hello there."
-    assert unwrap("Keep \"inner\" quotes") == 'Keep "inner" quotes'
+    assert unwrap('Keep "inner" quotes') == 'Keep "inner" quotes'
 
 
 def test_utf16_units() -> None:
