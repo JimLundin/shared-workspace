@@ -14,7 +14,7 @@ from types import ModuleType
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGES = ("miryoku", "assistant", "winapi")
-TOP_LEVEL = ("protocol", "config", "usage")
+TOP_LEVEL = ("protocol", "config", "usage", "keeper", "selfcheck")
 
 
 def modules() -> list[ModuleType]:
