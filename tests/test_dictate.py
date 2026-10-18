@@ -4,14 +4,12 @@ transcription endpoint (a local fake server). Run anywhere with `pytest`."""
 from __future__ import annotations
 
 import io
-import json
 import threading
 import wave
-from collections.abc import Iterator
+from collections.abc import Generator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-import pytest
 
 from dictate.core import RATE, Failure, Missing, Settings, long_enough, settings_from, transcribe, typed_text, utf16_units, wav
 
@@ -99,12 +97,12 @@ class FakeEndpoint:
     reply: Reply = field(default_factory=Reply)
 
 
-@pytest.fixture
-def endpoint() -> Iterator[FakeEndpoint]:
+@contextmanager
+def fake_endpoint() -> Generator[FakeEndpoint, None, None]:
     received, reply = Received(), Reply()
 
     class Handler(BaseHTTPRequestHandler):
-        def do_POST(self) -> None:  # noqa: N802 (http.server's name)
+        def do_POST(self) -> None:
             received.path = self.path
             received.authorization = self.headers.get("Authorization", "")
             received.content_type = self.headers.get("Content-Type", "")
@@ -114,7 +112,7 @@ def endpoint() -> Iterator[FakeEndpoint]:
             self.end_headers()
             self.wfile.write(reply.body)
 
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A002 (http.server's name)
+        def log_message(self, format: str, *args: object) -> None:
             pass
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -131,35 +129,39 @@ def settings(url: str, prompt: str = "", language: str = "") -> Settings:
     return Settings(url, "secret", "gpt-4o-transcribe", prompt, language)
 
 
-def test_transcribe_posts_the_audio_and_returns_the_text(endpoint: FakeEndpoint) -> None:
-    audio = wav(bytes(2 * RATE), RATE)
-    assert transcribe(settings(endpoint.url), audio) == "hello there"
-    r = endpoint.received
-    assert r.path == "/v1/audio/transcriptions"
-    assert r.authorization == "Bearer secret"
-    assert r.content_type.startswith("multipart/form-data; boundary=")
-    assert b'name="model"\r\n\r\ngpt-4o-transcribe\r\n' in r.body
-    assert b'name="response_format"\r\n\r\njson\r\n' in r.body
-    assert b'filename="speech.wav"\r\nContent-Type: audio/wav\r\n\r\n' + audio + b"\r\n" in r.body
-    assert b'name="prompt"' not in r.body
-    assert b'name="language"' not in r.body
+def test_transcribe_posts_the_audio_and_returns_the_text() -> None:
+    with fake_endpoint() as endpoint:
+        audio = wav(bytes(2 * RATE), RATE)
+        assert transcribe(settings(endpoint.url), audio) == "hello there"
+        r = endpoint.received
+        assert r.path == "/v1/audio/transcriptions"
+        assert r.authorization == "Bearer secret"
+        assert r.content_type.startswith("multipart/form-data; boundary=")
+        assert b'name="model"\r\n\r\ngpt-4o-transcribe\r\n' in r.body
+        assert b'name="response_format"\r\n\r\njson\r\n' in r.body
+        assert b'filename="speech.wav"\r\nContent-Type: audio/wav\r\n\r\n' + audio + b"\r\n" in r.body
+        assert b'name="prompt"' not in r.body
+        assert b'name="language"' not in r.body
 
 
-def test_transcribe_sends_prompt_and_language_when_set(endpoint: FakeEndpoint) -> None:
-    transcribe(settings(endpoint.url, prompt="Miryoku, Colemak", language="sv"), wav(b"", RATE))
-    assert b'name="prompt"\r\n\r\nMiryoku, Colemak\r\n' in endpoint.received.body
-    assert b'name="language"\r\n\r\nsv\r\n' in endpoint.received.body
+def test_transcribe_sends_prompt_and_language_when_set() -> None:
+    with fake_endpoint() as endpoint:
+        transcribe(settings(endpoint.url, prompt="Miryoku, Colemak", language="sv"), wav(b"", RATE))
+        assert b'name="prompt"\r\n\r\nMiryoku, Colemak\r\n' in endpoint.received.body
+        assert b'name="language"\r\n\r\nsv\r\n' in endpoint.received.body
 
 
-def test_transcribe_reports_the_servers_error(endpoint: FakeEndpoint) -> None:
-    endpoint.reply.status = 401
-    endpoint.reply.body = json.dumps({"error": {"message": "Invalid session key"}}).encode()
-    assert transcribe(settings(endpoint.url), wav(b"", RATE)) == Failure("HTTP 401: Invalid session key")
+def test_transcribe_reports_the_servers_error() -> None:
+    with fake_endpoint() as endpoint:
+        endpoint.reply.status = 401
+        endpoint.reply.body = b'{"error": {"message": "Invalid session key", "type": "auth"}}'
+        assert transcribe(settings(endpoint.url), wav(b"", RATE)) == Failure("HTTP 401: Invalid session key")
 
 
-def test_transcribe_reports_a_reply_without_text(endpoint: FakeEndpoint) -> None:
-    endpoint.reply.body = b"<html>proxy login</html>"
-    assert transcribe(settings(endpoint.url), wav(b"", RATE)) == Failure("unexpected reply: <html>proxy login</html>")
+def test_transcribe_reports_a_reply_without_text() -> None:
+    with fake_endpoint() as endpoint:
+        endpoint.reply.body = b"<html>proxy login</html>"
+        assert transcribe(settings(endpoint.url), wav(b"", RATE)) == Failure("unexpected reply: <html>proxy login</html>")
 
 
 def test_transcribe_reports_an_unreachable_endpoint() -> None:
