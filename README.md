@@ -134,6 +134,42 @@ can't change `keeper.py`, `selfcheck.py` or `toolkit.pyw`, and the keeper uses
 nothing but Python's standard library, so the normal source-edit tools cannot replace the updater. Approved code still
 runs with your account permissions.
 
+## Publishing the agent's changes to GitHub
+
+Ask the agent to "make the change and publish it to GitHub". It has a
+`publish_changes` tool: it freezes its workspace, shows the diff and destination
+for approval, runs the runtime checks, commits, and pushes a new
+`toolkit/agent-*` branch. It never force-pushes or updates `main`. Publishing does
+not install the change; ask it to publish before applying, since installation
+restarts the agent. Merge the branch on GitHub after review.
+
+Publishing requires **Git for Windows on PATH** and credentials already set up
+for the repository (for example through Git Credential Manager). Python remains
+the only dependency for all the other features. A missing Git installation,
+failed authentication, failed test or changed remote base produces an error and
+stops the push. Credentials are not written into the source or journal.
+
+Optional environment settings:
+
+| Variable | Default |
+|---|---|
+| `TOOLKIT_GIT_REMOTE` | `https://github.com/JimLundin/toolkit.git` |
+| `TOOLKIT_GIT_BASE` | `main` |
+| `TOOLKIT_GIT_AUTHOR_NAME` | `Toolkit Agent` |
+| `TOOLKIT_GIT_AUTHOR_EMAIL` | `toolkit@localhost` |
+
+The running source must match the selected remote base before publishing. After
+merging, update the running source to that base; if you installed an unmerged
+change, either select its published branch as the base or merge it first.
+
+## Agent implementation
+
+Toolkit uses its own small agent loop in `assistant/agent.py`, with no external
+agent framework. It calls the OpenAI-compatible Chat Completions endpoint through
+`assistant/llm.py`, advertises tool schemas, executes returned tool calls and feeds
+the results back to the model until completion, Stop, or the step limit. Permission
+checks, journaling, screenshots and source-edit tools are handled locally.
+
 ## Logs
 
 All in `%LOCALAPPDATA%\toolkit` (tray menu → Open logs folder):

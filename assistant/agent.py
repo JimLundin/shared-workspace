@@ -41,6 +41,7 @@ from .llm import (
     tool_result,
     user_message,
 )
+from .publishing import DEFAULT_REMOTE, PublishError, publish_source
 from .workspace import SourceError, Workspace
 
 MAX_CHARS: Final = 20_000
@@ -242,6 +243,10 @@ SOURCE_SPECS: Final = (
         "If they fail to start or crash, they're undone automatically.",
         _schema({"summary": _TEXT}, ["summary"]),
     ),
+    ToolSpec(
+        "publish_changes", "Review, test, commit and push source changes to a new Git branch; main and running source stay unchanged.",
+        _schema({"summary": _TEXT}, ["summary"]),
+    ),
     ToolSpec("discard_changes", "Throw away your changes: back to the running version.", _schema({}, [])),
 )
 
@@ -252,7 +257,9 @@ SELF_CHANGE: Final = (
     "snippets, rewrite prompts) live in config.py. Keep each change small. When done, run check_changes; fix anything "
     "it reports; then apply_changes with a one-line summary. The user approves the diff; the keeper installs it and "
     "runs runtime checks after approval, restarts the toolkit if they pass, and undoes failures. Approved code is not sandboxed. "
-    "keeper.py, selfcheck.py and toolkit.pyw are protected."
+    "keeper.py, selfcheck.py and toolkit.pyw are protected. "
+    "To save a change on GitHub, call publish_changes before apply_changes ends the task. "
+    "Publishing reviews and tests a frozen copy, then pushes a new branch; it does not install or merge into main."
 )
 
 
@@ -379,7 +386,7 @@ class Agent:
             args = Args(call.name, {str(k): v for k, v in cast("dict[object, object]", raw).items()})
             try:
                 output = tool(self, args)
-            except (ArgumentError, SourceError) as error:
+            except (ArgumentError, SourceError, PublishError) as error:
                 output = Output(f"Error: {error}", ok=False)
             except OSError as error:
                 output = Output(f"Error: {error}", ok=False)
@@ -574,6 +581,18 @@ class Agent:
         self.installing = summary
         return Output("Asked the keeper to install it.")
 
+    def publish_changes(self, args: Args) -> Output:
+        source = self.source()
+        passed, report = source.validate()
+        if not passed:
+            return Output(report[-6000:], ok=False)
+        result = publish_source(
+            source.live, source.root, args.text("summary"), self.machine.confirm, self.stop.is_set,
+            remote=os.environ.get("TOOLKIT_GIT_REMOTE", DEFAULT_REMOTE),
+            base=os.environ.get("TOOLKIT_GIT_BASE", "main"),
+        )
+        return Output(result)
+
     def discard_changes(self, _: Args) -> Output:
         self.source().reset()
         self.checked, self.check_failed = None, False
@@ -611,6 +630,7 @@ _TOOLS: Final[dict[str, Callable[[Agent, Args], Output]]] = {
     "check_changes": Agent.check_changes,
     "apply_changes": Agent.apply_changes,
     "discard_changes": Agent.discard_changes,
+    "publish_changes": Agent.publish_changes,
 }
 if set(_TOOLS) != {spec.name for spec in (*SPECS, *SOURCE_SPECS)}:
     raise ImportError("every tool the model is offered needs a method, and the other way round")
