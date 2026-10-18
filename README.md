@@ -34,7 +34,6 @@ Everything is the standard library plus our own typed Win32 bindings (`winapi/`)
    your microphone**.
 4. Double-click **`toolkit.pyw`**. A dot appears in the tray. To start it at login,
    put a shortcut to it in `shell:startup` (Win+R).
-5. For the `ai` command, add this folder to your user `PATH`.
 
 `miryoku.pyw` runs the layout alone, without the assistant.
 
@@ -101,15 +100,6 @@ the toolkit, not the model:
 
 It stops after 40 steps (`AGENT_MAX_STEPS`). Everything it does goes to its journal.
 
-## `ai` in the terminal
-
-```
-ai what does EADDRINUSE mean
-git diff | ai write a commit message
-ai -c find files over 100MB here       # suggests a command; runs it if you say y
-ai -m gpt-6-astra explain this regex
-```
-
 ## Logs
 
 All in `%LOCALAPPDATA%\toolkit` (tray menu → Open logs folder):
@@ -132,7 +122,7 @@ usage.py        the usage log
 winapi/         typed Win32 bindings: the only ctypes code
 miryoku/        the layout: layout.py (the tables), engine.py (the logic), win.py
 assistant/      llm.py (the endpoint), features.py (what each key does),
-                agent.py, cli.py; desktop.py, ui.py (Tk) and app.py on Windows
+                agent.py; desktop.py, ui.py (Tk) and app.py on Windows
 ```
 
 The logic never calls Windows directly: the layout's engine goes through a
