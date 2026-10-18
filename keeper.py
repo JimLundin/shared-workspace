@@ -126,6 +126,11 @@ def _mirror(source: Path, target: Path, *, protect: bool) -> None:
         destination.write_bytes((source / name).read_bytes())  # small files: a plain copy works everywhere
 
 
+def copy_source(source: Path, target: Path) -> None:
+    """Makes `target` an exact copy of `source`'s source files (for the agent's workspace)."""
+    _mirror(source, target, protect=False)
+
+
 def snapshot(live: Path, versions: Path) -> str:
     """Copies the running version; the copy's name. Only the newest are kept."""
     versions.mkdir(parents=True, exist_ok=True)
