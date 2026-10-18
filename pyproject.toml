@@ -17,7 +17,7 @@ warn_unreachable = true
 [[tool.mypy.overrides]]
 # The boundaries to ctypes (winapi) and Tk (assistant.ui): values inside may be Any
 # until converted; every public signature is concrete, so nothing untyped leaves.
-module = ["winapi", "winapi.*", "assistant.ui"]
+module = ["winapi", "winapi.*", "assistant.ui", "selfcheck"]
 disallow_any_expr = false
 disallow_any_explicit = false
 

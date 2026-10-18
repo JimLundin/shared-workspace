@@ -14,18 +14,17 @@ import subprocess
 import sys
 import tempfile
 import time
+import unittest
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
-
-import pytest
 
 from assistant.llm import Json
 
 from .fake_endpoint import FakeEndpoint, Reply, fake_endpoint, sse
 
 if sys.platform != "win32" or os.environ.get("TOOLKIT_E2E") != "1":
-    pytest.skip("end-to-end tests run on Windows, with TOOLKIT_E2E=1", allow_module_level=True)
+    raise unittest.SkipTest("end-to-end tests run on Windows, with TOOLKIT_E2E=1")
 
 import tkinter as tk
 
