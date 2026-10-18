@@ -15,9 +15,10 @@ from miryoku import engine, layout
 def modules() -> list[ModuleType]:
     found = [layout, engine]
     if sys.platform == "win32":
-        from miryoku import win, win32  # noqa: PLC0415 (Windows-only modules)
+        import winapi  # noqa: PLC0415 (Windows-only modules)
+        from miryoku import win  # noqa: PLC0415
 
-        found += [win, win32]
+        found += [win, winapi]
     return found
 
 
