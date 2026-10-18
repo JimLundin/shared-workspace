@@ -58,6 +58,14 @@ REWRITES: Final[dict[Tool, str]] = {
     Tool.FORMAL: "Make it more formal and professional, suitable for work email. Keep the language and meaning.",
 }
 
+# ---- Terminals -------------------------------------------------------------------------
+# Programs where Ctrl+C stops what's running, so the rewrite keys never press it there.
+
+TERMINALS: Final = frozenset({
+    "windowsterminal.exe", "openconsole.exe", "conhost.exe", "cmd.exe", "powershell.exe", "pwsh.exe",
+    "wezterm-gui.exe", "alacritty.exe", "mintty.exe",
+})  # fmt: skip
+
 # ---- Agent -----------------------------------------------------------------------------
 # Commands the agent may run without asking. A command is allowed only if it starts
 # with one of these and contains nothing that could chain another command after it.

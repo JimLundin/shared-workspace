@@ -1,6 +1,11 @@
 """What each tool and app key does. Everything that touches Windows goes through a
 `Desktop`, so the behaviour can be tested without Windows (like the layout's
-engine and its `Host`). Requests arrive one at a time, on one worker thread.
+engine and its `Host`).
+
+Requests arrive on the thread that receives the layout's messages, and anything
+quick happens right there: the microphone starts the moment a talk key goes down,
+even while an earlier dictation is still being transcribed. Anything slow is
+handed to the worker thread (`submit`), which does one job at a time, in order.
 """
 
 from __future__ import annotations
@@ -162,7 +167,7 @@ class Assistant:
         self.settings = settings
         self.record = record
         self.submit = submit
-        """Runs a job on the worker thread, after whatever is running (for follow-ups)."""
+        """Runs a job on the worker thread, after whatever is already queued."""
         self.run_agent = run_agent
         self.stop_agent = stop_agent
         self.listening: Tool | None = None
@@ -172,6 +177,7 @@ class Assistant:
     # ---- requests ----------------------------------------------------------------------
 
     def handle(self, request: Request, down: bool) -> None:
+        """A tool or app key went down or up. Returns quickly; slow work is submitted."""
         match request:
             case App():
                 if down:
@@ -181,9 +187,12 @@ class Assistant:
                     self.stop_agent()
             case Tool() if request in HOLD_TOOLS:
                 self.hold(request, down)
+            case Tool() if request in WINDOW_TOOLS:
+                if down:
+                    self.timed(request.name.lower(), lambda: self.arrange(request))
             case Tool():
                 if down:
-                    self.timed(request.name.lower(), lambda: self.act(request))
+                    self.submit(lambda: self.timed(request.name.lower(), lambda: self.act(request)))
 
     def idle(self) -> None:
         self.desktop.show_state(State.READY if self.layout_on else State.LAYOUT_OFF)
@@ -224,12 +233,12 @@ class Assistant:
             if not long_enough(pcm):
                 self.idle()
                 return
-            self.timed(tool.name.lower(), lambda: self.heard(tool, pcm))
+            self.desktop.show_state(State.WORKING)
+            self.submit(lambda: self.timed(tool.name.lower(), lambda: self.heard(tool, pcm)))
 
     # ---- the tools ---------------------------------------------------------------------
 
     def heard(self, tool: Tool, pcm: bytes) -> Failure | Outcome:
-        self.desktop.show_state(State.WORKING)
         transcript = transcribe(self.settings, wav(pcm, RATE))
         if isinstance(transcript, Failure):
             return transcript
@@ -252,12 +261,13 @@ class Assistant:
                 raise AssertionError(f"{tool} doesn't listen")
         return Outcome.DONE
 
+    def arrange(self, tool: Tool) -> Outcome:
+        self.desktop.arrange(tool)
+        return Outcome.DONE
+
     def act(self, tool: Tool) -> Failure | Outcome:
         if tool in REWRITES:
             return self.rewrite(REWRITES[tool])
-        if tool in WINDOW_TOOLS:
-            self.desktop.arrange(tool)
-            return Outcome.DONE
         match tool:
             case Tool.ASK:
                 return self.ask()
