@@ -34,9 +34,10 @@ ESCAPE: Final = Scancode(0x29)
 
 
 # ---- Vocabulary ----------------------------------------------------------------
-# A bare Key, Mod or LayerId in a layout is itself an action: a Key is tapped, a
-# Mod or LayerId is held while the key is held. Only the actions that need more
-# than that get a class of their own.
+# A bare Key, Mod or Layer in a layout is itself an action: a Key is tapped, a
+# Mod or Layer is held while the key is held. Only the actions that need more
+# than that get a type of their own. The vocabulary is Windows': keys are virtual
+# key codes, and know whether Windows treats them as extended.
 
 
 class Key(Enum):
@@ -111,12 +112,20 @@ class Key(Enum):
         vk: int = self.value
         return vk
 
+    @property
+    def extended(self) -> bool:
+        """Windows sends these with the "extended" flag (they have an E0 prefix)."""
+        return self in EXTENDED_KEYS
+
     def is_letter(self) -> bool:
         return Key.A.vk <= self.vk <= Key.Z.vk
 
     def continues_word(self) -> bool:
         """Keys that keep caps word going without being capitalised."""
         return Key.N0.vk <= self.vk <= Key.N9.vk or self in (Key.BACKSPACE, Key.DELETE)
+
+
+EXTENDED_KEYS: Final = frozenset({Key.DELETE, Key.INSERT, Key.HOME, Key.END, Key.PAGE_UP, Key.PAGE_DOWN, Key.LEFT, Key.UP, Key.RIGHT, Key.DOWN})
 
 
 class Mod(Enum):
@@ -132,57 +141,55 @@ class Mod(Enum):
         vk: int = self.value
         return vk
 
+    @property
+    def extended(self) -> bool:
+        return self is Mod.GUI
 
-def is_extended(vk: int) -> bool:
-    """Keys Windows expects with the "extended" flag when sent."""
-    return 0x21 <= vk <= 0x28 or vk in (0x2D, 0x2E, 0x5B)
 
+class Layer(Enum):
+    """A layer reached by holding a key. With none held, keys come from the base layer."""
 
-class LayerId(Enum):
-    BASE = auto()
     NAV = auto()
     NUM = auto()
     SYM = auto()
 
 
-Hold: TypeAlias = Mod | LayerId
+Hold: TypeAlias = Mod | Layer
 """What a tap-hold key does while held."""
 
 
 @dataclass(frozen=True, slots=True)
-class Shifted:
-    """The key with Shift, e.g. `Shifted(Key.N1)` is `!`."""
+class Chord:
+    """A key sent with modifiers held around it: Shift + 7 for `&`, Ctrl + Z for undo.
+    Only modifiers that aren't already held are added, and only those are released."""
 
     key: Key
+    mods: frozenset[Mod]
 
 
-@dataclass(frozen=True, slots=True)
-class Ctrl:
-    """Ctrl + key, tapped (clipboard shortcuts)."""
+Output: TypeAlias = Key | Chord
+"""What reaches Windows when a key is tapped. A bare Key is a chord without modifiers."""
 
-    key: Key
+
+class Command(Enum):
+    """Things the engine does itself, rather than sending a key."""
+
+    NOTHING = auto()
+    LOCK_LAYER = auto()
+    """Keep the held layer on after its key is released; press again to unlock."""
 
 
 @dataclass(frozen=True, slots=True)
 class TapHold:
-    """Tap = the key, hold = the `Hold`."""
+    """Tap = the output, hold = the `Hold`."""
 
-    tap: Key
+    tap: Output
     hold: Hold
 
 
-@dataclass(frozen=True, slots=True)
-class LockLayer:
-    """Keep the held layer on after its thumb is released; tap again to unlock."""
-
-
-@dataclass(frozen=True, slots=True)
-class NoAction:
-    """Does nothing."""
-
-
-Action: TypeAlias = Key | Mod | LayerId | Shifted | Ctrl | TapHold | LockLayer | NoAction
-"""What one key on one layer does."""
+Action: TypeAlias = Output | Mod | Layer | TapHold | Command
+"""What one key on one layer does. A Key or Chord is sent; a Mod or Layer is held
+while the key is held."""
 
 
 # ---- Board shape ---------------------------------------------------------------
@@ -246,13 +253,22 @@ ESC, SPACE, TAB, ENTER, BACKSPACE, CAPS_LOCK = Key.ESC, Key.SPACE, Key.TAB, Key.
 DELETE, INSERT, HOME, END, PAGE_UP, PAGE_DOWN = Key.DELETE, Key.INSERT, Key.HOME, Key.END, Key.PAGE_UP, Key.PAGE_DOWN
 LEFT, UP, RIGHT, DOWN = Key.LEFT, Key.UP, Key.RIGHT, Key.DOWN
 GUI, ALT, CTL, SFT = Mod.GUI, Mod.ALT, Mod.CTRL, Mod.SHIFT
-NAV, NUM, SYM = LayerId.NAV, LayerId.NUM, LayerId.SYM
+NAV, NUM, SYM = Layer.NAV, Layer.NUM, Layer.SYM
 # fmt: on
 
-XX: Final = NoAction()
-LOCK: Final = LockLayer()
-UNDO, REDO, COPY, PASTE, CUT = Ctrl(Z), Ctrl(Y), Ctrl(C), Ctrl(V), Ctrl(X)
-sh, ht, sc = Shifted, TapHold, Scancode
+XX, LOCK = Command.NOTHING, Command.LOCK_LAYER
+ht, sc = TapHold, Scancode
+
+
+def sh(key: Key) -> Chord:
+    return Chord(key, frozenset({Mod.SHIFT}))
+
+
+def ctl(key: Key) -> Chord:
+    return Chord(key, frozenset({Mod.CTRL}))
+
+
+UNDO, REDO, COPY, PASTE, CUT = ctl(Z), ctl(Y), ctl(C), ctl(V), ctl(X)
 
 
 # ---- The layout ----------------------------------------------------------------
@@ -322,16 +338,16 @@ def _flatten(board: Board[CellT]) -> tuple[CellT, ...]:
     return cells
 
 
-TABLE: Final = {
-    LayerId.BASE: _flatten(BASE),
-    LayerId.NAV: _flatten(NAV_LAYER),
-    LayerId.NUM: _flatten(NUM_LAYER),
-    LayerId.SYM: _flatten(SYM_LAYER),
+TABLE: Final[dict[Layer | None, tuple[Action, ...]]] = {
+    None: _flatten(BASE),
+    Layer.NAV: _flatten(NAV_LAYER),
+    Layer.NUM: _flatten(NUM_LAYER),
+    Layer.SYM: _flatten(SYM_LAYER),
 }
-"""Every layer flattened, by layer then cell."""
+"""Every layer flattened, by layer (None: the base layer) then cell."""
 
 
-def action(layer: LayerId, cell: int) -> Action:
+def action(layer: Layer | None, cell: int) -> Action:
     """What key `cell` does on `layer`."""
     return TABLE[layer][cell]
 

@@ -13,7 +13,7 @@ from typing import Final
 
 from . import win32
 from .engine import Engine, Signal, Verdict
-from .layout import TAPPING_TERM_MS, Scancode, is_extended
+from .layout import TAPPING_TERM_MS, Key, Mod, Scancode
 
 MAGIC: Final = 0x4D49_524F
 """Tags keys we send ourselves so the hook lets them through untouched."""
@@ -26,10 +26,10 @@ class WinHost:
 
     __slots__ = ()
 
-    def send(self, vk: int, down: bool) -> None:
-        flags = (0 if down else win32.KEYEVENTF_KEYUP) | (win32.KEYEVENTF_EXTENDEDKEY if is_extended(vk) else 0)
+    def send(self, key: Key | Mod, down: bool) -> None:
+        flags = (0 if down else win32.KEYEVENTF_KEYUP) | (win32.KEYEVENTF_EXTENDEDKEY if key.extended else 0)
         # The scancode, which some programs read, from Windows' own layout table.
-        win32.send_key(vk, win32.scancode_for(vk), flags, MAGIC)
+        win32.send_key(key.vk, win32.scancode_for(key.vk), flags, MAGIC)
 
     def start_timer(self) -> int:
         return win32.set_timer(TAPPING_TERM_MS)

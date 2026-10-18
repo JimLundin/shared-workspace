@@ -1,5 +1,6 @@
-"""Platform-independent key logic: decides what each physical key press or
-release turns into. No Windows code here, so it is unit-tested on any OS.
+"""Windows keyboard logic: decides what each physical key press or release turns
+into, in Windows terms (virtual keys, modifiers). It makes no Win32 calls itself;
+those go through a `Host`, so the logic can be tested without Windows.
 """
 
 from __future__ import annotations
@@ -15,15 +16,14 @@ from .layout import (
     QUIT_HOLD_MS,
     STREAK_MS,
     Action,
-    Ctrl,
+    Chord,
+    Command,
     Hold,
     Key,
-    LayerId,
-    LockLayer,
+    Layer,
     Mod,
-    NoAction,
+    Output,
     Scancode,
-    Shifted,
     TapHold,
     Unmapped,
     action,
@@ -33,9 +33,9 @@ from .layout import (
 
 
 class Host(Protocol):
-    """What the engine needs from the operating system."""
+    """What the engine needs from Windows."""
 
-    def send(self, vk: int, down: bool) -> None: ...
+    def send(self, key: Key | Mod, down: bool) -> None: ...
     def start_timer(self) -> int: ...
     def stop_timer(self, timer: int) -> None: ...
     def signal(self, signal: Signal) -> None:
@@ -75,7 +75,7 @@ class Pending:
     """A tap-hold key that is down but not yet decided."""
 
     cell: int
-    tap: Key
+    tap: Output
     hold: Hold
     timer: int
     pressed_at: int
@@ -94,6 +94,14 @@ def elapsed(now: int, then: int) -> int:
 
 def no_keys() -> list[Action | None]:
     return [None] * CELLS
+
+
+SHIFT_ONLY: frozenset[Mod] = frozenset({Mod.SHIFT})
+
+
+def is_typing(a: Action) -> bool:
+    """A typed character (for the typing streak): a key, maybe shifted, but not a shortcut."""
+    return isinstance(a, Key) or (isinstance(a, Chord) and a.mods <= SHIFT_ONLY)
 
 
 def assert_never(value: NoReturn) -> NoReturn:
@@ -132,7 +140,7 @@ class Engine:
     """False while switched off with the escape key."""
     pressed: list[Action | None] = field(default_factory=no_keys)
     """What each held layout key turned into, by cell."""
-    active_layers: list[LayerId] = field(default_factory=list[LayerId])
+    active_layers: list[Layer] = field(default_factory=list[Layer])
     pending: Pending | None = None
     buffer: list[Event] = field(default_factory=list[Event])
     """Events that arrived while a tap-hold key was undecided."""
@@ -141,7 +149,7 @@ class Engine:
     last_tap: tuple[int, int] | None = None
     """The last tap-hold key tapped, and when (for quick tap)."""
     caps_word: bool = False
-    locked: LayerId | None = None
+    locked: Layer | None = None
     mods_down: dict[Mod, int] = field(default_factory=dict[Mod, int])
     """How many held keys want each modifier down. Windows is told only when a
     count goes from 0 to 1 or back, so one key can't release another's modifier."""
@@ -149,28 +157,27 @@ class Engine:
     def mod_down(self, host: Host, mod: Mod) -> None:
         count = self.mods_down.get(mod, 0)
         if count == 0:
-            host.send(mod.vk, True)
+            host.send(mod, True)
         self.mods_down[mod] = count + 1
 
     def mod_up(self, host: Host, mod: Mod) -> None:
         count = self.mods_down.get(mod, 0)
         if count == 1:
-            host.send(mod.vk, False)
+            host.send(mod, False)
         if count <= 1:
             self.mods_down.pop(mod, None)
         else:
             self.mods_down[mod] = count - 1
 
-    def with_mod(self, host: Host, mod: Mod, key: Key, *, tap: bool) -> None:
-        """The key with `mod` down; the modifier is added only if nothing holds it already."""
-        added = mod not in self.mods_down
-        if added:
-            host.send(mod.vk, True)
-        host.send(key.vk, True)
-        if tap:
-            host.send(key.vk, False)
-        if added:
-            host.send(mod.vk, False)
+    def chord_down(self, host: Host, chord: Chord) -> None:
+        """The key goes down with the chord's modifiers around it. Modifiers something
+        else already holds are left alone; the ones added are released right after."""
+        added = [mod for mod in Mod if mod in chord.mods and mod not in self.mods_down]  # in a fixed order
+        for mod in added:
+            host.send(mod, True)
+        host.send(chord.key, True)
+        for mod in reversed(added):
+            host.send(mod, False)
 
     def on_key(self, host: Host, scancode: Scancode, down: bool, now: int) -> Verdict:
         """Entry point for every physical key event. `now` is the event's
@@ -205,11 +212,10 @@ class Engine:
     def quick_tap(self, cell: int, now: int) -> bool:
         return self.last_tap is not None and self.last_tap[0] == cell and elapsed(now, self.last_tap[1]) < QUICK_TAP_MS
 
-    def layer(self) -> LayerId:
-        """The layer keys are read from: the top held layer, else a locked one, else base."""
-        if self.active_layers:
-            return self.active_layers[-1]
-        return self.locked if self.locked is not None else LayerId.BASE
+    def layer(self) -> Layer | None:
+        """The layer keys are read from: the top held layer, else a locked one, else
+        None for the base layer."""
+        return self.active_layers[-1] if self.active_layers else self.locked
 
     def event(self, host: Host, e: Event) -> None:
         cell, down, now = e
@@ -224,8 +230,8 @@ class Engine:
                 self.release(host, current)
             return
         if current is not None:
-            # Auto-repeat: repeat plain keys (arrows, symbols...).
-            if isinstance(current, (Key, Shifted)):
+            # Auto-repeat: repeat whatever was sent (letters, arrows, symbols, undo...).
+            if isinstance(current, (Key, Chord)):
                 self.press(host, current, now)
             return
         match action(self.layer(), cell):
@@ -252,7 +258,7 @@ class Engine:
         if down and not released_meanwhile:
             # Auto-repeat of a key held since before: repeat it now, it's already decided.
             if (current := self.pressed[cell]) is not None:
-                if isinstance(current, (Key, Shifted)):
+                if isinstance(current, (Key, Chord)):
                     self.press(host, current, now)
                 return
             # Auto-repeat of a key already waiting in the buffer adds nothing.
@@ -311,7 +317,7 @@ class Engine:
         self.caps_word = False
         self.locked = None
         for mod in self.mods_down:  # nothing should be left, but never leave one stuck
-            host.send(mod.vk, False)
+            host.send(mod, False)
         self.mods_down = {}
 
     def apply_caps_word(self, a: Action) -> Action:
@@ -320,15 +326,15 @@ class Engine:
             return a
         match a:
             case Key() if a.is_letter():
-                return Shifted(a)
+                return Chord(a, SHIFT_ONLY)
             case Key() if a.continues_word():
                 return a
-            case Shifted(Key.MINUS):  # _
+            case Chord(Key.MINUS, mods) if mods == SHIFT_ONLY:  # _
                 return a
-            case Key() | Shifted() | Ctrl():
+            case Key() | Chord():
                 self.caps_word = False
                 return a
-            case Mod() | LayerId() | TapHold() | LockLayer() | NoAction():
+            case Mod() | Layer() | TapHold() | Command():
                 return a
 
     def press(self, host: Host, a: Action, now: int) -> None:
@@ -340,43 +346,41 @@ class Engine:
         a = self.apply_caps_word(a)
         match a:
             case Key():
-                host.send(a.vk, True)
+                host.send(a, True)
+            case Chord():
+                self.chord_down(host, a)
             case Mod():
                 self.mod_down(host, a)
-            case Shifted(key):
-                self.with_mod(host, Mod.SHIFT, key, tap=False)
-            case Ctrl(key):
-                self.with_mod(host, Mod.CTRL, key, tap=True)
-            case LayerId():
+            case Layer():
                 # A layer beyond MAX_LAYERS is ignored rather than stored.
                 if len(self.active_layers) < MAX_LAYERS:
                     self.active_layers.append(a)
-            case LockLayer():
+            case Command.LOCK_LAYER:
                 if self.locked is not None:
                     self.locked = None
                 elif self.active_layers:
                     self.locked = self.active_layers[-1]
-            case NoAction() | TapHold():
+            case Command.NOTHING | TapHold():
                 pass
             case _:
                 assert_never(a)
-        if isinstance(a, (Key, Shifted)):
+        if is_typing(a):
             self.last_typed_at = now
 
     def release(self, host: Host, a: Action) -> None:
         match a:
             case Key():
-                host.send(a.vk, False)
+                host.send(a, False)
+            case Chord():
+                host.send(a.key, False)
             case Mod():
                 self.mod_up(host, a)
-            case Shifted(key):
-                host.send(key.vk, False)
-            case LayerId():
+            case Layer():
                 if a in self.active_layers:
                     # Remove the most recently added copy.
                     index = len(self.active_layers) - 1 - self.active_layers[::-1].index(a)
                     del self.active_layers[index]
-            case NoAction() | Ctrl() | TapHold() | LockLayer():
+            case TapHold() | Command():
                 pass
             case _:
                 assert_never(a)

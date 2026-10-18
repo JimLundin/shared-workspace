@@ -4,7 +4,7 @@ with `pytest`."""
 from __future__ import annotations
 
 from miryoku.engine import MAX_BUFFERED, Engine, Signal, Verdict
-from miryoku.layout import ESCAPE, QUICK_TAP_MS, QUIT_HOLD_MS, STREAK_MS, Scancode
+from miryoku.layout import ESCAPE, QUICK_TAP_MS, QUIT_HOLD_MS, STREAK_MS, Key, Mod, Scancode
 
 NAMES = {0xA0: "SFT", 0xA2: "CTL", 0xA4: "ALT", 0x20: "spc", 0x25: "left", 0x08: "bksp", 0xDB: "[", 0xC0: "`", 0xBE: "."}
 
@@ -33,7 +33,8 @@ class FakeHost:
         self.log: list[str] = []
         self.timer = 0
 
-    def send(self, vk: int, down: bool) -> None:
+    def send(self, key: Key | Mod, down: bool) -> None:
+        vk = key.vk
         if vk in NAMES:
             name = NAMES[vk]
         elif 0x41 <= vk <= 0x5A or 0x30 <= vk <= 0x39:
@@ -144,7 +145,7 @@ def test_nav_layer() -> None:
     t.tap("o")
     t.tap("0")
     t.u("c")
-    assert t.take() == "+left -left +CTL +c -c -CTL"
+    assert t.take() == "+left -left +CTL +c -CTL -c"
 
 
 def test_space_tap() -> None:
