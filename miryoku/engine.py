@@ -14,6 +14,7 @@ from .layout import (
     ESCAPE,
     QUICK_TAP_MS,
     QUIT_HOLD_MS,
+    SHIFT_ONLY,
     STREAK_MS,
     Action,
     Chord,
@@ -96,9 +97,6 @@ def no_keys() -> list[Action | None]:
     return [None] * CELLS
 
 
-SHIFT_ONLY: frozenset[Mod] = frozenset({Mod.SHIFT})
-
-
 def is_typing(a: Action) -> bool:
     """A typed character (for the typing streak): a key, maybe shifted, but not a shortcut."""
     return isinstance(a, Key) or (isinstance(a, Chord) and a.mods <= SHIFT_ONLY)
@@ -106,6 +104,43 @@ def is_typing(a: Action) -> bool:
 
 def assert_never(value: NoReturn) -> NoReturn:
     raise AssertionError(f"unhandled: {value!r}")
+
+
+@dataclass(slots=True)
+class Modifiers:
+    """Which modifiers Windows has down, and how many held keys want each one.
+    Windows is told only when a count goes from 0 to 1 or back, so one key can't
+    release another's modifier."""
+
+    counts: dict[Mod, int] = field(default_factory=dict[Mod, int])
+
+    def hold(self, host: Host, mod: Mod) -> None:
+        count = self.counts.get(mod, 0)
+        if count == 0:
+            host.send(mod, True)
+        self.counts[mod] = count + 1
+
+    def release(self, host: Host, mod: Mod) -> None:
+        count = self.counts.pop(mod, 0)
+        if count > 1:
+            self.counts[mod] = count - 1
+        elif count == 1:
+            host.send(mod, False)
+
+    def chord(self, host: Host, chord: Chord) -> None:
+        """The chord's key goes down with its modifiers around it. Modifiers already
+        held are left alone; the ones added are released right after."""
+        added = [mod for mod in Mod if mod in chord.mods and mod not in self.counts]  # in a fixed order
+        for mod in added:
+            host.send(mod, True)
+        host.send(chord.key, True)
+        for mod in reversed(added):
+            host.send(mod, False)
+
+    def release_all(self, host: Host) -> None:
+        for mod in self.counts:
+            host.send(mod, False)
+        self.counts = {}
 
 
 @dataclass(slots=True)
@@ -150,34 +185,7 @@ class Engine:
     """The last tap-hold key tapped, and when (for quick tap)."""
     caps_word: bool = False
     locked: Layer | None = None
-    mods_down: dict[Mod, int] = field(default_factory=dict[Mod, int])
-    """How many held keys want each modifier down. Windows is told only when a
-    count goes from 0 to 1 or back, so one key can't release another's modifier."""
-
-    def mod_down(self, host: Host, mod: Mod) -> None:
-        count = self.mods_down.get(mod, 0)
-        if count == 0:
-            host.send(mod, True)
-        self.mods_down[mod] = count + 1
-
-    def mod_up(self, host: Host, mod: Mod) -> None:
-        count = self.mods_down.get(mod, 0)
-        if count == 1:
-            host.send(mod, False)
-        if count <= 1:
-            self.mods_down.pop(mod, None)
-        else:
-            self.mods_down[mod] = count - 1
-
-    def chord_down(self, host: Host, chord: Chord) -> None:
-        """The key goes down with the chord's modifiers around it. Modifiers something
-        else already holds are left alone; the ones added are released right after."""
-        added = [mod for mod in Mod if mod in chord.mods and mod not in self.mods_down]  # in a fixed order
-        for mod in added:
-            host.send(mod, True)
-        host.send(chord.key, True)
-        for mod in reversed(added):
-            host.send(mod, False)
+    mods: Modifiers = field(default_factory=Modifiers)
 
     def on_key(self, host: Host, scancode: Scancode, down: bool, now: int) -> Verdict:
         """Entry point for every physical key event. `now` is the event's
@@ -316,9 +324,7 @@ class Engine:
         self.last_tap = None
         self.caps_word = False
         self.locked = None
-        for mod in self.mods_down:  # nothing should be left, but never leave one stuck
-            host.send(mod, False)
-        self.mods_down = {}
+        self.mods.release_all(host)  # nothing should be left, but never leave one stuck
 
     def apply_caps_word(self, a: Action) -> Action:
         """Caps word: capitalise letters, let word characters through, end on anything else."""
@@ -348,9 +354,9 @@ class Engine:
             case Key():
                 host.send(a, True)
             case Chord():
-                self.chord_down(host, a)
+                self.mods.chord(host, a)
             case Mod():
-                self.mod_down(host, a)
+                self.mods.hold(host, a)
             case Layer():
                 # A layer beyond MAX_LAYERS is ignored rather than stored.
                 if len(self.active_layers) < MAX_LAYERS:
@@ -374,7 +380,7 @@ class Engine:
             case Chord():
                 host.send(a.key, False)
             case Mod():
-                self.mod_up(host, a)
+                self.mods.release(host, a)
             case Layer():
                 if a in self.active_layers:
                     # Remove the most recently added copy.

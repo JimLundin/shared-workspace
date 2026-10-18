@@ -167,6 +167,8 @@ class Chord:
     mods: frozenset[Mod]
 
 
+SHIFT_ONLY: Final = frozenset({Mod.SHIFT})
+
 Output: TypeAlias = Key | Chord
 """What reaches Windows when a key is tapped. A bare Key is a chord without modifiers."""
 
@@ -261,7 +263,7 @@ ht, sc = TapHold, Scancode
 
 
 def sh(key: Key) -> Chord:
-    return Chord(key, frozenset({Mod.SHIFT}))
+    return Chord(key, SHIFT_ONLY)
 
 
 def ctl(key: Key) -> Chord:
