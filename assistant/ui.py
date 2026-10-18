@@ -3,7 +3,12 @@ a screen-area picker, an answer window and the agent's window.
 
 Tk runs on a thread of its own. Every method here may be called from any other
 thread; the ones that ask the user something block until they've answered.
+
+Like `winapi` for ctypes, this module is the boundary to Tk, whose type stubs
+leave some values untyped: what it exports is fully typed; inside, some Tk values
+aren't, so the "no Any" checks are relaxed here only.
 """
+# pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false
 
 from __future__ import annotations
 
@@ -161,10 +166,16 @@ class Ui:
     # ---- an answer, with follow-ups ----------------------------------------------------
 
     def answer(self, title: str, follow_up: Callable[[str], None]) -> AnswerWindow:
-        return self._ask(lambda root, done: done(AnswerWindow(self, root, title, follow_up)))
+        def build(root: tk.Tk, done: Callable[[AnswerWindow], None]) -> None:
+            done(AnswerWindow(self, root, title, follow_up))
+
+        return self._ask(build)
 
     def agent(self, task: str, stop: Callable[[], None]) -> AgentWindow:
-        return self._ask(lambda root, done: done(AgentWindow(self, root, task, stop)))
+        def build(root: tk.Tk, done: Callable[[AgentWindow], None]) -> None:
+            done(AgentWindow(self, root, task, stop))
+
+        return self._ask(build)
 
 
 class _TextWindow:
@@ -204,7 +215,7 @@ class _TextWindow:
 
     def _read_only(self, event: tk.Event[tk.Text]) -> str | None:
         """The text can be selected and copied, not edited."""
-        if event.state & 0x4 and event.keysym.lower() in ("c", "a"):  # Ctrl+C, Ctrl+A
+        if isinstance(event.state, int) and event.state & 0x4 and event.keysym.lower() in ("c", "a"):  # Ctrl+C, Ctrl+A
             return None
         return "break" if event.keysym not in ("Up", "Down", "Prior", "Next", "Home", "End") else None
 
@@ -279,7 +290,12 @@ class AgentWindow(_TextWindow):
         self.button = ttk.Button(bottom, text="Stop", command=stop)
         self.button.pack(side="right")
         ttk.Button(bottom, text="Copy", command=self.copy_all).pack(side="right", padx=(0, 8))
-        self.window.protocol("WM_DELETE_WINDOW", lambda: (stop(), self.window.destroy()))
+
+        def close() -> None:
+            stop()
+            self.window.destroy()
+
+        self.window.protocol("WM_DELETE_WINDOW", close)
         _bring_forward(self.window, self.text)
 
     def step(self, text: str) -> None:

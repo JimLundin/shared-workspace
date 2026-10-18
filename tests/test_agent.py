@@ -141,7 +141,7 @@ def test_the_agent_uses_tools_then_answers(tmp_path: Path) -> None:
         assert "notes.txt" in rig.results()[0]
         assert rig.window.log[-1] == "done There is one file: notes.txt."
         assert rig.sent(0)[1] == {"role": "user", "content": "what's in my folder?"}
-        assert json.loads(endpoint.received[0].body)["model"] == "agent"
+        assert b'"model": "agent"' in endpoint.received[0].body
 
 
 def test_every_call_gets_a_result_even_bad_ones() -> None:

@@ -15,9 +15,9 @@ disallow_any_unimported = true
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-# The ctypes boundary. ctypes is untyped, so values here are Any until converted;
-# every public function's signature is concrete, so nothing untyped leaves it.
-module = ["winapi", "winapi.*"]
+# The boundaries to ctypes (winapi) and Tk (assistant.ui): values inside may be Any
+# until converted; every public signature is concrete, so nothing untyped leaves.
+module = ["winapi", "winapi.*", "assistant.ui"]
 disallow_any_expr = false
 disallow_any_explicit = false
 

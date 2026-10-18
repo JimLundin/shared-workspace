@@ -6,7 +6,7 @@ import os
 import subprocess
 import time
 from collections.abc import Callable
-from typing import Final
+from typing import Final, Literal
 
 from config import TERMINALS
 from protocol import MAGIC, Tool
@@ -140,7 +140,7 @@ class WinDesktop:
         try:
             os.startfile(command)  # as the Run dialog would: program names, paths, URLs, msteams:...
         except OSError:
-            subprocess.Popen(["cmd", "/c", "start", "", command], creationflags=_CREATE_NO_WINDOW)  # noqa: S603, S607 (commands come from config)
+            subprocess.Popen(["cmd", "/c", "start", "", command], creationflags=_CREATE_NO_WINDOW)
 
     def arrange(self, tool: Tool) -> None:
         hwnd = windows.foreground()
@@ -150,7 +150,7 @@ class WinDesktop:
             case Tool.SNAP_LEFT | Tool.SNAP_RIGHT:
                 if windows.is_maximized(hwnd):
                     windows.show(hwnd, windows.SW_RESTORE)
-                side = "left" if tool is Tool.SNAP_LEFT else "right"
+                side: Literal["left", "right"] = "left" if tool is Tool.SNAP_LEFT else "right"
                 windows.move(hwnd, half(screen.monitor_of(hwnd).work, side, windows.outer_rect(hwnd), windows.visible_rect(hwnd)))
             case Tool.MAXIMIZE:
                 windows.show(hwnd, windows.SW_RESTORE if windows.is_maximized(hwnd) else windows.SW_MAXIMIZE)

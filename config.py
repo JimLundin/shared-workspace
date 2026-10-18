@@ -80,7 +80,6 @@ ALLOWED_COMMANDS: Final[tuple[str, ...]] = (
     "git status",
     "git log",
     "git diff",
-    "git branch",
 )
 
 AGENT_MAX_STEPS: Final = 40
