@@ -3,7 +3,7 @@ with `pytest`."""
 
 from __future__ import annotations
 
-from miryoku.engine import MAX_BUFFERED, Engine, Signal, Verdict
+from miryoku.engine import MAX_BUFFERED, Engine, Indicator, Signal, Verdict
 from miryoku.layout import ESCAPE, QUICK_TAP_MS, QUIT_HOLD_MS, STREAK_MS, TALK, Key, Mod, Scancode
 from protocol import Request, Tool
 
@@ -28,12 +28,13 @@ def sc(name: str) -> Scancode:
 
 
 class FakeHost:
-    __slots__ = ("log", "timer", "used_features")
+    __slots__ = ("indicated", "log", "timer", "used_features")
 
     def __init__(self) -> None:
         self.log: list[str] = []
         self.timer = 0
         self.used_features: list[str] = []
+        self.indicated: list[str] = []
 
     def send(self, key: Key | Mod, down: bool) -> None:
         vk = key.vk
@@ -64,6 +65,11 @@ class FakeHost:
 
     def used(self, feature: str) -> None:
         self.used_features.append(feature)
+
+    def indicate(self, indicator: Indicator) -> None:
+        parts = [indicator.layer.name.lower()] if indicator.layer else []
+        parts += ["locked"] * indicator.locked + ["caps"] * indicator.caps_word
+        self.indicated.append(" ".join(parts) or "-")
 
 
 class Harness:
@@ -653,3 +659,49 @@ def test_usage_counts_layer_keys_holds_and_features() -> None:
     t.u("r")
     both_shifts(t)
     assert t.h.used_features == ["layer:nav", "nav:left", "hold:shift", "hold:shift", "hold:shift", "caps_word"]
+
+
+# ---- the layer indicator ---------------------------------------------------------------
+
+
+def test_indicator_shows_a_held_layer_while_held() -> None:
+    t = Harness()
+    t.d("c")
+    t.timeout_last()  # Space held: Nav
+    t.tap("o")
+    t.u("c")
+    assert t.h.indicated == ["nav", "-"]
+
+
+def test_indicator_stays_quiet_for_taps_and_typing() -> None:
+    t = Harness()
+    t.tap("c")  # Space, tapped
+    for name in ("2", "3", "r"):
+        t.tap(name)
+    assert t.h.indicated == []
+
+
+def test_indicator_shows_a_locked_layer_until_unlocked() -> None:
+    t = Harness()
+    t.d(".")
+    t.timeout_last()  # Backspace held: Num
+    t.tap("=")  # Lock, right top-row pinky
+    t.u(".")  # still locked
+    t.tap("=")  # unlock
+    assert t.h.indicated == ["num", "num locked", "-"]
+
+
+def test_indicator_shows_caps_word() -> None:
+    t = Harness()
+    both_shifts(t)
+    t.tap("c")  # Space ends caps word
+    assert t.h.indicated[-2:] == ["caps", "-"]
+
+
+def test_switching_off_clears_the_indicator() -> None:
+    t = Harness()
+    t.d("c")
+    t.timeout_last()
+    t.key(ESC, True, 0)
+    t.key(ESC, False, 10)
+    assert t.h.indicated == ["nav", "-"]

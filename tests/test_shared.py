@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from config import APPS
-from protocol import App, Request, Tool, decode, encode
+from protocol import App, Request, Tool, decode, decode_indicator, encode, encode_indicator
 from usage import record, record_counts, report, summarize
 
 # ---- protocol --------------------------------------------------------------------------
@@ -31,6 +31,13 @@ def test_an_app_not_in_the_list_cannot_be_sent() -> None:
     except ValueError:
         return
     raise AssertionError("expected ValueError")
+
+
+def test_indicator_round_trips() -> None:
+    for layer in range(6):
+        for locked in (False, True):
+            for caps in (False, True):
+                assert decode_indicator(encode_indicator(layer, locked, caps)) == (layer, locked, caps)
 
 
 # ---- usage log -------------------------------------------------------------------------
