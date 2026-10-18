@@ -458,6 +458,7 @@ def main() -> None:
             for window in trial:
                 window.destroy()
             trial.clear()
+            _log(f"on trial: {summary}" if summary else "trial over")
             if summary is None:
                 return
             window = tk.Toplevel(root, padx=14, pady=10)

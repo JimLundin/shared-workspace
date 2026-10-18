@@ -28,7 +28,7 @@ if sys.platform != "win32" or os.environ.get("TOOLKIT_E2E") != "1":
 
 import tkinter as tk
 
-from protocol import LAYOUT_WINDOW, MAGIC, WM_QUIT_LAYOUT
+from protocol import ASSISTANT_WINDOW, MAGIC
 from winapi import clipboard, inputs, screen, system, windows
 from winapi.shapes import Rect
 
@@ -81,19 +81,28 @@ def type_ascii(text: str) -> None:
 
 
 @contextmanager
-def toolkit(endpoint: FakeEndpoint, home: Path) -> Generator[None, None, None]:
+def toolkit(endpoint: FakeEndpoint, home: Path, live: Path = ROOT) -> Generator[None, None, None]:
+    """The toolkit as the user starts it: the keeper, running the layout and the assistant
+    from `live`. Logs and state go under `home` (it's LOCALAPPDATA)."""
     env = {**os.environ, "OPENAI_BASE_URL": endpoint.url, "OPENAI_API_KEY": "k", "TOOLKIT_CHAT_MODEL": "chat", "LOCALAPPDATA": str(home)}
-    process = subprocess.Popen([sys.executable, "-m", "assistant"], cwd=ROOT, env=env)
+    process = subprocess.Popen([sys.executable, str(live / "keeper.py")], cwd=live, env=env)
     try:
-        assert wait_for(lambda: windows.find(LAYOUT_WINDOW) is not None, lambda: None, 20), "the layout didn't start"
-        time.sleep(1)
+        assert wait_for(lambda: both_ready(home), lambda: None, 30), "the toolkit didn't start"
+        time.sleep(0.5)
         yield
     finally:
-        if (hwnd := windows.find(LAYOUT_WINDOW)) is not None:
-            system.post_message(hwnd, WM_QUIT_LAYOUT, 0, 0)
-        wait_for(lambda: windows.find(LAYOUT_WINDOW) is None, lambda: None, 5)
-        process.terminate()
-        process.wait()
+        if (hwnd := windows.find(ASSISTANT_WINDOW)) is not None:
+            system.post_message(hwnd, system.WM_CLOSE, 0, 0)  # as Quit in the tray menu: the keeper stops everything
+        try:
+            process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            process.wait()
+
+
+def both_ready(home: Path) -> bool:
+    state = home / "toolkit" / "keeper"
+    return (state / "ready-layout").exists() and (state / "ready-assistant").exists()
 
 
 @contextmanager

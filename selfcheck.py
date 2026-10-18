@@ -115,6 +115,7 @@ def run_tests(root: Path, problems: list[str]) -> tuple[int, int]:
 def check(root: Path) -> tuple[bool, str]:
     """Whether the copy at `root` is sound, and a report. Imports from `root`, so run
     it in a process of its own (as `main` does)."""
+    os.environ.pop("TOOLKIT_E2E", None)  # never the end-to-end tests: they'd start a second toolkit
     sys.path.insert(0, str(root))
     os.chdir(root)
     problems: list[str] = []

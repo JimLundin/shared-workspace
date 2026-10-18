@@ -1,14 +1,17 @@
 # Toolkit
 
 A personal toolkit for a locked-down Windows laptop: no admin rights, nothing to
-install but Python. Two programs:
+install but Python. It changes itself: ask its agent for a new feature or a fix,
+approve the diff, and it installs and reloads the change, and undoes it by itself
+if it fails. Three programs:
 
 - **the layout** (`miryoku/`): Colemak Mod-DH in the Miryoku style on the
   laptop's own ISO keyboard: home row mods, layers, caps word, snippets;
 - **the assistant** (`assistant/`): dictation, rewriting, questions, screen
   reading, app switching, window placement, and an agent, all through your
-  company's OpenAI-style endpoint. It starts the layout, restarts it if it
-  crashes, and lives in the notification area (the tray).
+  company's OpenAI-style endpoint. It lives in the notification area (the tray);
+- **the keeper** (`keeper.py`): runs the other two, restarts them if they crash,
+  and installs the agent's changes to them (see *Changing the toolkit*).
 
 Everything is the standard library plus our own typed Win32 bindings (`winapi/`).
 
@@ -35,7 +38,7 @@ Everything is the standard library plus our own typed Win32 bindings (`winapi/`)
 4. Double-click **`toolkit.pyw`**. A dot appears in the tray. To start it at login,
    put a shortcut to it in `shell:startup` (Win+R).
 
-`miryoku.pyw` runs the layout alone, without the assistant.
+`miryoku.pyw` runs the layout alone, without the assistant or the keeper.
 
 ## What you see
 
@@ -98,7 +101,28 @@ the toolkit, not the model:
   except commands on `ALLOWED_COMMANDS` in `config.py` that can't chain another.
 - **Mouse and keyboard**: asks once per task.
 
-It stops after 40 steps (`AGENT_MAX_STEPS`). Everything it does goes to its journal.
+It stops after 80 steps (`AGENT_MAX_STEPS`). Everything it does goes to its journal.
+
+## Changing the toolkit
+
+Ask the agent, by voice or typed: "add a snippet for my email address", "make
+the indicator smaller", "add a key that opens my timesheet". It works on a copy
+of the source (`%LOCALAPPDATA%\toolkit\workspace`), never the running files, then:
+
+1. **Checks**: every file compiles, every module imports, every test passes
+   (`selfcheck.py`; nothing to install). It fixes what fails.
+2. **You review** the diff, and choose Install or Cancel.
+3. **The keeper installs it**: checks again itself, keeps a copy of the running
+   version, installs, and restarts the layout and the assistant (a second or two).
+4. **A ten-minute trial**: a small window in the corner offers *Keep* and *Undo*,
+   usable with the mouse alone in case the change broke the keyboard. If the
+   change doesn't start, or crashes during the trial, it's undone by itself.
+5. Later, tray menu → **Undo the last update** goes back too; and a change that
+   keeps crashing is undone by itself.
+
+The last 20 versions are kept in `%LOCALAPPDATA%\toolkit\versions`. The agent
+can't change `keeper.py`, `selfcheck.py` or `toolkit.pyw`, and the keeper uses
+nothing but Python's standard library, so no change can break what undoes it.
 
 ## Logs
 
@@ -109,6 +133,7 @@ All in `%LOCALAPPDATA%\toolkit` (tray menu → Open logs folder):
 | `usage.jsonl` | which features were used, how long they took, whether they failed. Never what you typed or said. Tray menu → **Usage report** lists every feature by use, and the ones never used, so they can go. |
 | `agent.jsonl` | every action the agent took, with its arguments |
 | `assistant.log`, `layout.log` | problems and crashes |
+| `keeper.log` | starts, installs, trials, undos |
 
 What leaves the laptop: recordings (for transcription), and the text, selection
 or screen area you used a tool on, sent to your endpoint and nowhere else.
@@ -116,29 +141,35 @@ or screen area you used a tool on, sent to your endpoint and nowhere else.
 ## How it's built
 
 ```
-protocol.py     what the two programs say to each other (window messages)
+keeper.py       runs the programs; installs, tries and undoes changes (protected)
+selfcheck.py    compile, import, test: the gate every change passes (protected)
+protocol.py     what the layout and the assistant say to each other (window messages)
 config.py       your settings: apps, snippets, rewrite prompts, allowed commands
 usage.py        the usage log
 winapi/         typed Win32 bindings: the only ctypes code
 miryoku/        the layout: layout.py (the tables), engine.py (the logic), win.py
-assistant/      llm.py (the endpoint), features.py (what each key does),
-                agent.py; desktop.py, ui.py (Tk) and app.py on Windows
+assistant/      llm.py (the endpoint), features.py (what each key does), agent.py,
+                workspace.py (the agent's copy of the source), keymap.py;
+                desktop.py, ui.py (Tk) and app.py on Windows
 ```
 
 The logic never calls Windows directly: the layout's engine goes through a
 `Host`, the assistant's features through a `Desktop`, the agent through a
 `Machine`, so all of it is tested with fakes. The code is strictly typed, with no
-`Any` outside the two boundaries to untyped libraries (`winapi` for ctypes,
-`assistant/ui.py` for Tk), and every class has `__slots__`.
+`Any` outside the boundaries to untyped code (`winapi` for ctypes,
+`assistant/ui.py` for Tk, `selfcheck.py` for looking inside modules), and every
+class has `__slots__`. Behaviour changes come with tests.
 
 ## Tests
 
 ```
-pytest                                   # everything, anywhere
-mypy . && pyright && ruff check .
-TOOLKIT_E2E=1 pytest tests/test_windows_e2e.py tests/test_windows_assistant_e2e.py
+python selfcheck.py                      # what every change must pass; needs only Python
+pytest                                   # the same tests, if you have pytest
+mypy . && pyright && ruff check .        # if you have them
+TOOLKIT_E2E=1 pytest tests/test_windows_*e2e.py
 ```
 
-The last line runs on Windows only: it starts the real layout and assistant,
-presses real keys and drags the real mouse for about half a minute (against a
-fake endpoint), so leave the keyboard alone while it runs.
+The last line runs on Windows only: it starts the real toolkit, presses real
+keys and drags the real mouse, and has the keeper install, undo and refuse
+changes on a copy of the toolkit (a few minutes, against a fake endpoint), so
+leave the keyboard alone while it runs.

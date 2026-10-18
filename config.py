@@ -82,5 +82,5 @@ ALLOWED_COMMANDS: Final[tuple[str, ...]] = (
     "git diff",
 )
 
-AGENT_MAX_STEPS: Final = 40
+AGENT_MAX_STEPS: Final = 80
 """The agent stops after this many actions, finished or not."""
