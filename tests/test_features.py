@@ -9,7 +9,7 @@ from typing import cast
 from assistant.features import Assistant, pick_window
 from assistant.geometry import Shot
 from assistant.icons import State
-from assistant.llm import RATE, Json, Settings
+from assistant.llm import RATE, Json, Missing, Settings
 from protocol import App, Tool
 from usage import Detail
 from winapi.shapes import Rect, Window
@@ -129,7 +129,7 @@ class Rig:
 
     __slots__ = ("agent", "assistant", "desktop", "endpoint", "used")
 
-    def __init__(self, endpoint: FakeEndpoint) -> None:
+    def __init__(self, endpoint: FakeEndpoint, missing: Missing | None = None) -> None:
         self.endpoint = endpoint
         self.desktop = FakeDesktop()
         self.used: list[tuple[str, Mapping[str, Detail]]] = []
@@ -142,6 +142,7 @@ class Rig:
             submit=lambda job: job(),
             run_agent=self.agent.append,
             stop_agent=lambda: self.agent.append("STOP"),
+            missing=missing,
         )
 
     def press(self, request: Tool | App) -> None:
@@ -394,3 +395,18 @@ def test_window_keys_arrange_the_window() -> None:
         for tool in (Tool.SNAP_LEFT, Tool.MAXIMIZE, Tool.NEXT_MONITOR):
             rig.press(tool)
         assert rig.take() == ["arrange snap_left", "arrange maximize", "arrange next_monitor"]
+
+
+# ---- without the AI settings -----------------------------------------------------------
+
+
+def test_without_ai_settings_ai_tools_say_what_is_missing_and_the_rest_works() -> None:
+    with fake_endpoint() as endpoint:
+        rig = Rig(endpoint, missing=Missing(("OPENAI_API_KEY",)))
+        rig.hold(Tool.DICTATE)
+        rig.press(Tool.FIX)
+        rig.press(TERMINAL)
+        rig.press(Tool.SNAP_LEFT)
+        problem = "problem Set OPENAI_API_KEY to use the AI tools (see the README)."
+        assert rig.take() == [problem, problem, "launch wt.exe", "arrange snap_left"]
+        assert endpoint.received == []
