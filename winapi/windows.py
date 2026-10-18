@@ -5,12 +5,11 @@ from __future__ import annotations
 
 import ctypes
 from ctypes import wintypes
-from dataclasses import dataclass
 from pathlib import PureWindowsPath
 from typing import Final
 
 from ._core import dwmapi, fn, kernel32, rect, user32
-from .shapes import Rect
+from .shapes import Rect, Window
 
 WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 _EnumWindows = fn(user32, "EnumWindows", wintypes.BOOL, WNDENUMPROC, wintypes.LPARAM)
@@ -68,17 +67,6 @@ _GW_OWNER: Final = 4
 _PROCESS_QUERY_LIMITED_INFORMATION: Final = 0x1000
 _DWMWA_EXTENDED_FRAME_BOUNDS, _DWMWA_CLOAKED = 9, 14
 _SWP_NOZORDER, _SWP_NOACTIVATE = 0x0004, 0x0010
-
-
-@dataclass(frozen=True, slots=True)
-class Window:
-    """A top-level window, as the taskbar would show it."""
-
-    handle: int
-    title: str
-    exe: str
-    """The program's file name, lowercase: `windowsterminal.exe`."""
-    minimized: bool
 
 
 def _title(hwnd: int) -> str:

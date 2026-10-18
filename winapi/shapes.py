@@ -26,6 +26,17 @@ class Rect:
         return self.left <= x < self.right and self.top <= y < self.bottom
 
 
+@dataclass(frozen=True, slots=True)
+class Window:
+    """A top-level window, as the taskbar would show it."""
+
+    handle: int
+    title: str
+    exe: str
+    """The program's file name, lowercase: `windowsterminal.exe`."""
+    minimized: bool
+
+
 def utf16_units(text: str) -> list[int]:
     """Windows types text as UTF-16 code units: two for characters past U+FFFF."""
     data = text.encode("utf-16-le")
