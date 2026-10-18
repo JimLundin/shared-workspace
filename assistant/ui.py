@@ -201,6 +201,14 @@ class Ui:
         """Shows a message in the indicator for a moment."""
         self.post(lambda root: self._overlay(root).flash(text, work, seconds))
 
+    def review(self, summary: str, diff: str) -> bool:
+        """Shows a change to the toolkit; True if the user chooses Install."""
+
+        def build(root: tk.Tk, done: Callable[[bool], None]) -> None:
+            ReviewWindow(root, summary, diff, done)
+
+        return self._ask(build)
+
     def agent(self, task: str, stop: Callable[[], None]) -> AgentWindow:
         def build(root: tk.Tk, done: Callable[[AgentWindow], None]) -> None:
             done(AgentWindow(self, root, task, stop))
@@ -474,3 +482,46 @@ class KeymapWindow:
             self.canvas.create_text(x + width / 2, y + _HEIGHT / 2 + 1, text=cap.label, fill=ink, font=("Segoe UI Semibold", size), width=width - 6)
         if cap.hold:
             self.canvas.create_text(x + width / 2, y + _HEIGHT - 9, text=cap.hold, fill=ink if cap.kind is Kind.HELD else MUTED, font=("Segoe UI", 7))
+
+
+class ReviewWindow:
+    """A change the agent wants to make to the toolkit: its summary and diff, with
+    Install and Cancel. Closing the window cancels."""
+
+    __slots__ = ("done", "finished", "window")
+
+    def __init__(self, root: tk.Tk, summary: str, diff: str, done: Callable[[bool], None]) -> None:
+        self.done, self.finished = done, False
+        self.window = tk.Toplevel(root, background=BACKGROUND, padx=12, pady=12)
+        self.window.title("Change the toolkit?")
+        tk.Label(self.window, text=summary, font=("Segoe UI Semibold", 12), background=BACKGROUND, foreground=FOREGROUND, anchor="w").pack(fill="x")
+        note = "The toolkit restarts with this change; if it fails to start or crashes, it's undone by itself."
+        tk.Label(self.window, text=note, font=("Segoe UI", 9), background=BACKGROUND, foreground=MUTED, anchor="w").pack(fill="x", pady=(2, 8))
+        frame = tk.Frame(self.window, background=BACKGROUND)
+        frame.pack(fill="both", expand=True)
+        scroll = ttk.Scrollbar(frame)
+        scroll.pack(side="right", fill="y")
+        text = tk.Text(frame, wrap="none", font=MONO, background="#17191c", foreground=FOREGROUND, relief="flat", yscrollcommand=scroll.set)
+        text.pack(side="left", fill="both", expand=True)
+        scroll.configure(command=text.yview)
+        text.tag_configure("added", foreground="#8fe3a0")
+        text.tag_configure("removed", foreground=ERROR)
+        text.tag_configure("file", foreground=ACCENT)
+        for line in diff.splitlines():
+            tag = "file" if line.startswith(("+++", "---", "@@")) else "added" if line.startswith("+") else "removed" if line.startswith("-") else ""
+            text.insert("end", line + "\n", tag)
+        text.configure(state="disabled")
+        buttons = tk.Frame(self.window, background=BACKGROUND)
+        buttons.pack(fill="x", pady=(10, 0))
+        ttk.Button(buttons, text="Install", command=lambda: self.finish(True)).pack(side="right")
+        ttk.Button(buttons, text="Cancel", command=lambda: self.finish(False)).pack(side="right", padx=(0, 8))
+        self.window.protocol("WM_DELETE_WINDOW", lambda: self.finish(False))
+        self.window.bind("<Escape>", lambda _: self.finish(False))
+        _near_pointer(self.window, 900, 640)
+        _bring_forward(self.window, text)
+
+    def finish(self, install: bool) -> None:
+        if not self.finished:
+            self.finished = True
+            self.window.destroy()
+            self.done(install)

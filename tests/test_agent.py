@@ -5,14 +5,14 @@ from __future__ import annotations
 
 import json
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Final, cast
 
 from assistant.agent import Agent, allowed, key_strokes
-from assistant.workspace import Workspace
 from assistant.geometry import Shot
 from assistant.llm import Json, Settings
+from assistant.workspace import Workspace
 from winapi.shapes import Rect, Window
 
 from .fake_endpoint import FakeEndpoint, Reply, fake_endpoint
@@ -23,10 +23,10 @@ def dumps(value: Json) -> str:
     return json.dumps(value)
 
 
-def calls(*tools: tuple[str, dict[str, Json]]) -> Reply:
+def calls(*tools: tuple[str, Mapping[str, Json]]) -> Reply:
     """The model asking for tools."""
     tool_calls: list[Json] = [
-        {"id": f"call_{i}", "type": "function", "function": {"name": name, "arguments": dumps(args)}} for i, (name, args) in enumerate(tools)
+        {"id": f"call_{i}", "type": "function", "function": {"name": name, "arguments": dumps(dict(args))}} for i, (name, args) in enumerate(tools)
     ]
     return Reply(dumps({"choices": [{"message": {"role": "assistant", "content": "On it.", "tool_calls": tool_calls}}]}).encode())
 
@@ -132,7 +132,16 @@ class Rig:
 
     def run(self, task: str = "do it", max_steps: int = 10, *, after_step: Callable[[], None] | None = None) -> None:
         settings = Settings(self.endpoint.url, "k", "transcribe", "chat", "agent", "", "")
-        agent = Agent(settings, self.machine, self.window, self.stop, max_steps=max_steps, journal=self.journal.append, after_step=after_step, workspace=self.workspace)
+        agent = Agent(
+            settings,
+            self.machine,
+            self.window,
+            self.stop,
+            max_steps=max_steps,
+            journal=self.journal.append,
+            after_step=after_step,
+            workspace=self.workspace,
+        )
         agent.run(task)
 
     def sent(self, index: int = -1) -> list[dict[str, object]]:
@@ -141,7 +150,10 @@ class Rig:
         return cast("list[dict[str, object]]", cast("dict[str, object]", data)["messages"])
 
     def results(self, index: int = -1) -> list[str]:
-        return [str(m["content"]) for m in self.sent(index) if m["role"] == "tool"]
+        """The tool results the model saw in request `index`, from its latest step."""
+        messages = self.sent(index)
+        last = max((i for i, m in enumerate(messages) if m["role"] == "assistant"), default=len(messages))
+        return [str(m["content"]) for m in messages[last:] if m["role"] == "tool"]
 
 
 # ---- the loop --------------------------------------------------------------------------
@@ -349,7 +361,7 @@ def test_the_agent_edits_checks_and_applies_a_change(tmp_path: Path) -> None:
         rig.run("greet in English")
         assert rig.machine.log == ["review Say hello", "install Say hello"]
         assert "+GREETING = 'hello'" in rig.machine.reviewed[0]
-        assert rig.results(1) == ["All checks pass."]
+        assert rig.results(2) == ["All checks pass."]
         assert rig.window.log[-1] == "done Installing: Say hello. The toolkit restarts in a moment."
         assert len(endpoint.received) == 3  # the task ends with the install
 
@@ -361,8 +373,8 @@ def test_apply_needs_a_passing_check_of_exactly_these_changes(tmp_path: Path) ->
     with fake_endpoint() as endpoint:
         rig = Rig(endpoint, calls(EDIT), calls(apply), calls(("check_changes", {})), calls(second), calls(apply), says("ok"), workspace=workspace)
         rig.run()
-        assert rig.results(1) == ["Error: run check_changes first; only checked changes can be installed."]
-        assert rig.results(4) == ["Error: the changes have changed since they were checked; run check_changes again."]
+        assert rig.results(2) == ["Error: run check_changes first; only checked changes can be installed."]
+        assert rig.results(5) == ["Error: the changes have changed since they were checked; run check_changes again."]
         assert rig.machine.log == []
 
 
@@ -370,20 +382,23 @@ def test_failing_checks_are_reported_and_block_apply(tmp_path: Path) -> None:
     workspace = source(tmp_path)
     breaking = ("write_source", {"path": "config.py", "content": "GREETING = ''\n"})
     with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(breaking), calls(("check_changes", {})), calls(("apply_changes", {"summary": "x"})), says("ok"), workspace=workspace)
+        rig = Rig(
+            endpoint, calls(breaking), calls(("check_changes", {})), calls(("apply_changes", {"summary": "x"})), says("ok"), workspace=workspace
+        )
         rig.run()
-        assert "FAILED tests.test_config.test_greeting" in rig.results(1)[0]
-        assert rig.results(2) == ["Error: the last check failed; fix the changes and check again."]
+        assert "FAILED tests.test_config.test_greeting" in rig.results(2)[0]
+        assert rig.results(3) == ["Error: the last check failed; fix the changes and check again."]
 
 
 def test_a_declined_review_installs_nothing(tmp_path: Path) -> None:
     workspace = source(tmp_path)
     with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(EDIT), calls(("check_changes", {})), calls(("apply_changes", {"summary": "x"})), says("ok"), workspace=workspace)
+        apply = ("apply_changes", {"summary": "x"})
+        rig = Rig(endpoint, calls(EDIT), calls(("check_changes", {})), calls(apply), says("ok"), workspace=workspace)
         rig.machine.approve = False
         rig.run()
         assert rig.machine.log == ["review x"]
-        assert rig.results(2) == ["The user didn't approve these changes. Ask what they'd like instead."]
+        assert rig.results(3) == ["The user didn't approve these changes. Ask what they'd like instead."]
 
 
 def test_protected_files_cant_be_edited(tmp_path: Path) -> None:
@@ -391,7 +406,7 @@ def test_protected_files_cant_be_edited(tmp_path: Path) -> None:
     with fake_endpoint() as endpoint:
         rig = Rig(endpoint, calls(("write_source", {"path": "keeper.py", "content": "x"})), says("ok"), workspace=workspace)
         rig.run()
-        assert rig.results(0)[0].startswith("Error: keeper.py is protected")
+        assert rig.results(1)[0].startswith("Error: keeper.py is protected")
 
 
 def test_each_task_starts_from_the_running_version(tmp_path: Path) -> None:
@@ -401,7 +416,7 @@ def test_each_task_starts_from_the_running_version(tmp_path: Path) -> None:
     with fake_endpoint() as endpoint:
         rig = Rig(endpoint, calls(("show_changes", {})), says("ok"), workspace=workspace)
         rig.run()
-        assert rig.results(0) == ["No changes yet."]
+        assert rig.results(1) == ["No changes yet."]
 
 
 def test_reading_and_listing_the_source(tmp_path: Path) -> None:
@@ -409,7 +424,7 @@ def test_reading_and_listing_the_source(tmp_path: Path) -> None:
     with fake_endpoint() as endpoint:
         rig = Rig(endpoint, calls(("list_source", {}), ("read_source", {"path": "config.py"})), says("ok"), workspace=workspace)
         rig.run()
-        listing, text = rig.results(0)
+        listing, text = rig.results(1)
         assert "config.py" in listing.splitlines()
         assert text == "GREETING = 'hej'\n"
 

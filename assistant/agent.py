@@ -40,10 +40,13 @@ from .llm import (
     tool_result,
     user_message,
 )
+from .workspace import SourceError, Workspace
 
 MAX_CHARS: Final = 20_000
 """Most text one tool result gives the model (a file, a command's output)."""
 MAX_FILES: Final = 200
+MAX_SOURCE_CHARS: Final = 60_000
+"""Most of one source file the model reads at once."""
 KEPT_SCREENSHOTS: Final = 2
 """Screenshots kept in the conversation; older ones are replaced by a note, to save space."""
 
@@ -75,6 +78,13 @@ class Machine(Protocol):
     def confirm(self, title: str, detail: str) -> bool:
         """Asks the user yes or no."""
         ...
+
+    def review(self, summary: str, diff: str) -> bool:
+        """Shows the user a change to the toolkit; True if they approve it."""
+        ...
+
+    def install(self, summary: str) -> None:
+        """Asks the keeper to install the workspace."""
 
 
 class Log(Protocol):
@@ -196,6 +206,41 @@ SPECS: Final = (
 )
 
 
+SOURCE_SPECS: Final = (
+    ToolSpec("list_source", "List the toolkit's own source files (your workspace copy).", _schema({}, [])),
+    ToolSpec("read_source", "Read one of the toolkit's source files. Start with README.md.", _schema({"path": _TEXT}, ["path"])),
+    ToolSpec(
+        "write_source",
+        "Write a whole source file in your workspace (new or replaced).",
+        _schema({"path": _TEXT, "content": _TEXT}, ["path", "content"]),
+    ),
+    ToolSpec(
+        "edit_source",
+        "Replace text that appears exactly once in a source file in your workspace.",
+        _schema({"path": _TEXT, "old": _TEXT, "new": _TEXT}, ["path", "old", "new"]),
+    ),
+    ToolSpec("delete_source", "Delete a source file in your workspace.", _schema({"path": _TEXT}, ["path"])),
+    ToolSpec("show_changes", "Your changes so far, as a diff against the running toolkit.", _schema({}, [])),
+    ToolSpec("check_changes", "Run every check and test on your workspace. Needed before apply_changes.", _schema({}, [])),
+    ToolSpec(
+        "apply_changes",
+        "Install your checked changes: the user reviews the diff, then the toolkit restarts with them (ending this task). "
+        "If they fail to start or crash, they're undone automatically.",
+        _schema({"summary": _TEXT}, ["summary"]),
+    ),
+    ToolSpec("discard_changes", "Throw away your changes: back to the running version.", _schema({}, [])),
+)
+
+SELF_CHANGE: Final = (
+    "You can also change the toolkit itself, the program you are part of. You work on a copy (your workspace): "
+    "read README.md first, then the files you need. Follow the code's style: strict types with no Any, __slots__ on "
+    "classes, small functions, docstrings that say why; add or update tests for what you change. User settings (apps, "
+    "snippets, rewrite prompts) live in config.py. Keep each change small. When done, run check_changes; fix anything "
+    "it reports; then apply_changes with a one-line summary. The user approves the diff; the keeper installs it and "
+    "restarts the toolkit, and undoes it by itself if it fails. keeper.py, selfcheck.py and toolkit.pyw are protected."
+)
+
+
 def _folders_first(path: Path) -> tuple[bool, str]:
     return not path.is_dir(), path.name.lower()
 
@@ -213,7 +258,22 @@ def instructions() -> str:
 
 
 class Agent:
-    __slots__ = ("after_step", "control", "journal", "log", "machine", "max_steps", "messages", "settings", "shot", "stop")
+    __slots__ = (
+        "after_step",
+        "check_failed",
+        "checked",
+        "control",
+        "installing",
+        "journal",
+        "log",
+        "machine",
+        "max_steps",
+        "messages",
+        "settings",
+        "shot",
+        "stop",
+        "workspace",
+    )
 
     def __init__(
         self,
@@ -225,6 +285,7 @@ class Agent:
         max_steps: int = AGENT_MAX_STEPS,
         journal: Callable[[dict[str, Json]], None],
         after_step: Callable[[], None] | None = None,
+        workspace: Workspace | None = None,
     ) -> None:
         self.settings = settings
         self.machine = machine
@@ -238,15 +299,26 @@ class Agent:
         self.control: bool | None = None
         """Whether the user lets the agent use the mouse and keyboard; None: not asked yet."""
         self.messages: list[Message] = []
+        self.workspace = workspace
+        """The toolkit's source, to change; None: no source tools."""
+        self.checked: str | None = None
+        """The diff that last passed its checks."""
+        self.check_failed = False
+        self.installing: str | None = None
+        """Set once the keeper has been asked to install: the task is over."""
 
     def run(self, task: str) -> bool:
         """Works on the task; True if the model said it was done."""
-        self.messages = [system_message(instructions()), user_message(task)]
+        if self.workspace is not None:
+            self.workspace.reset()  # every task starts from the running version
+        specs = (*SPECS, *SOURCE_SPECS) if self.workspace is not None else SPECS
+        prompt = f"{instructions()}\n\n{SELF_CHANGE}" if self.workspace is not None else instructions()
+        self.messages = [system_message(prompt), user_message(task)]
         for _ in range(self.max_steps):
             if self.stop.is_set():
                 self.log.done("Stopped.")
                 return False
-            reply = chat(self.settings, self.messages, model=self.settings.agent_model, tools=SPECS)
+            reply = chat(self.settings, self.messages, model=self.settings.agent_model, tools=specs)
             if isinstance(reply, Failure):
                 self.log.problem(reply.message)
                 return False
@@ -264,6 +336,9 @@ class Agent:
             if image is not None:
                 self.messages.append(user_message([Text("The screenshot you took:"), Image(image)]))
                 self.forget_old_screenshots()
+            if self.installing is not None:
+                self.log.done(f"Installing: {self.installing}. The toolkit restarts in a moment.")
+                return True
             if self.after_step is not None:
                 self.after_step()
         self.log.done(f"Stopped after {self.max_steps} steps, not finished.")
@@ -287,7 +362,7 @@ class Agent:
             args = Args(call.name, {str(k): v for k, v in cast("dict[object, object]", raw).items()})
             try:
                 output = tool(self, args)
-            except ArgumentError as error:
+            except (ArgumentError, SourceError) as error:
                 output = Output(f"Error: {error}", ok=False)
             except OSError as error:
                 output = Output(f"Error: {error}", ok=False)
@@ -422,6 +497,69 @@ class Agent:
         time.sleep(min(max(args.number("seconds"), 0), 10))
         return Output("Waited.")
 
+    # ---- the toolkit's own source ------------------------------------------------------
+
+    def source(self) -> Workspace:
+        if self.workspace is None:
+            raise ArgumentError("changing the toolkit isn't available here.")
+        return self.workspace
+
+    def list_source(self, _: Args) -> Output:
+        return Output("\n".join(self.source().files()))
+
+    def read_source(self, args: Args) -> Output:
+        text = self.source().read(args.text("path"))
+        if len(text) > MAX_SOURCE_CHARS:
+            return Output(f"{text[:MAX_SOURCE_CHARS]}\n[cut: showing {MAX_SOURCE_CHARS} of {len(text)} characters]")
+        return Output(text)
+
+    def write_source(self, args: Args) -> Output:
+        self.source().write(args.text("path"), args.text("content"))
+        return Output("Written.")
+
+    def edit_source(self, args: Args) -> Output:
+        self.source().replace(args.text("path"), args.text("old"), args.text("new"))
+        return Output("Edited.")
+
+    def delete_source(self, args: Args) -> Output:
+        self.source().delete(args.text("path"))
+        return Output("Deleted.")
+
+    def show_changes(self, _: Args) -> Output:
+        changes = self.source().changes()
+        if not changes:
+            return Output("No changes yet.")
+        return Output("\n".join(changes) + "\n\n" + self.source().diff()[:MAX_SOURCE_CHARS])
+
+    def check_changes(self, _: Args) -> Output:
+        passed, report = self.source().check()
+        self.checked = self.source().diff() if passed else None
+        self.check_failed = not passed
+        return Output("All checks pass.") if passed else Output(report[-6000:], ok=False)
+
+    def apply_changes(self, args: Args) -> Output:
+        summary, diff = args.text("summary"), self.source().diff()
+        if not diff:
+            raise ArgumentError("there are no changes to install.")
+        if self.checked is None:
+            raise ArgumentError(
+                "the last check failed; fix the changes and check again."
+                if self.check_failed
+                else "run check_changes first; only checked changes can be installed."
+            )
+        if diff != self.checked:
+            raise ArgumentError("the changes have changed since they were checked; run check_changes again.")
+        if not self.machine.review(summary, diff):
+            return Output("The user didn't approve these changes. Ask what they'd like instead.", ok=False)
+        self.machine.install(summary)
+        self.installing = summary
+        return Output("Asked the keeper to install it.")
+
+    def discard_changes(self, _: Args) -> Output:
+        self.source().reset()
+        self.checked, self.check_failed = None, False
+        return Output("Discarded: back to the running version.")
+
     def ask_user(self, args: Args) -> Output:
         answer = self.machine.ask_user(args.text("question"))
         return Output(answer if answer else "The user didn't answer.", ok=bool(answer))
@@ -445,6 +583,15 @@ _TOOLS: Final[dict[str, Callable[[Agent, Args], Output]]] = {
     "scroll": Agent.scroll,
     "wait": Agent.wait,
     "ask_user": Agent.ask_user,
+    "list_source": Agent.list_source,
+    "read_source": Agent.read_source,
+    "write_source": Agent.write_source,
+    "edit_source": Agent.edit_source,
+    "delete_source": Agent.delete_source,
+    "show_changes": Agent.show_changes,
+    "check_changes": Agent.check_changes,
+    "apply_changes": Agent.apply_changes,
+    "discard_changes": Agent.discard_changes,
 }
-if set(_TOOLS) != {spec.name for spec in SPECS}:
+if set(_TOOLS) != {spec.name for spec in (*SPECS, *SOURCE_SPECS)}:
     raise ImportError("every tool the model is offered needs a method, and the other way round")

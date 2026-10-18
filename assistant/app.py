@@ -47,6 +47,7 @@ from .keymap import indicator_text
 from .llm import MAX_SECONDS, RATE, Json, Missing, Settings
 from .report import write_report
 from .ui import AgentWindow, Ui
+from .workspace import Workspace
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 LOCK_NAME: Final = "Local\\toolkit-assistant"
@@ -165,6 +166,12 @@ class WinMachine:
     def confirm(self, title: str, detail: str) -> bool:
         return system.ask_yes_no(f"{title}\n\n{detail}", "Toolkit agent")
 
+    def review(self, summary: str, diff: str) -> bool:
+        return self.ui.review(summary, diff)
+
+    def install(self, summary: str) -> None:
+        keeper.ask("install", summary)
+
 
 def write_journal(entry: Mapping[str, Json]) -> None:
     with contextlib.suppress(OSError):
@@ -203,7 +210,7 @@ class AgentRunner:
         started = time.monotonic()
         finished = False
         try:
-            finished = Agent(self.settings, self.machine, window, stop, journal=write_journal).run(task)
+            finished = Agent(self.settings, self.machine, window, stop, journal=write_journal, workspace=Workspace()).run(task)
         except Exception:
             log(traceback.format_exc())
             window.problem("Something went wrong; it's in the assistant's log.")
