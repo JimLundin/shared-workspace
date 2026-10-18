@@ -4,6 +4,7 @@ with `pytest`."""
 from __future__ import annotations
 
 from miryoku.engine import MAX_BUFFERED, Engine, Signal, Verdict
+from protocol import App, Request, Tool
 from miryoku.layout import ESCAPE, QUICK_TAP_MS, QUIT_HOLD_MS, STREAK_MS, TALK, Key, Mod, Scancode
 
 NAMES = {0xA0: "SFT", 0xA2: "CTL", 0xA4: "ALT", 0x20: "spc", 0x25: "left", 0x08: "bksp", 0xDB: "[", 0xC0: "`", 0xBE: "."}
@@ -27,11 +28,12 @@ def sc(name: str) -> Scancode:
 
 
 class FakeHost:
-    __slots__ = ("log", "timer")
+    __slots__ = ("log", "timer", "used_features")
 
     def __init__(self) -> None:
         self.log: list[str] = []
         self.timer = 0
+        self.used_features: list[str] = []
 
     def send(self, key: Key | Mod, down: bool) -> None:
         vk = key.vk
@@ -52,6 +54,16 @@ class FakeHost:
 
     def signal(self, signal: Signal) -> None:
         self.log.append(f"!{signal.name}")
+
+    def request(self, request: Request, down: bool) -> None:
+        name = request.name.lower() if isinstance(request, Tool) else f"app:{request.name}"
+        self.log.append(f"?{name}{'+' if down else '-'}")
+
+    def type_text(self, text: str) -> None:
+        self.log.append(f"~{text}")
+
+    def used(self, feature: str) -> None:
+        self.used_features.append(feature)
 
 
 class Harness:
@@ -501,12 +513,12 @@ def test_held_undo_repeats_like_any_key() -> None:
 # ---- push-to-talk ----------------------------------------------------------------------
 
 
-def test_talk_key_signals_start_and_stop() -> None:
+def test_talk_key_requests_dictation_while_held() -> None:
     t = Harness()
     assert t.key(TALK, True, 0) == Verdict.SWALLOW
     assert t.key(TALK, True, 30) == Verdict.SWALLOW  # auto-repeat: still talking
     assert t.key(TALK, False, 900) == Verdict.SWALLOW
-    assert t.take() == "!TALK_START !TALK_STOP"
+    assert t.take() == "?dictate+ ?dictate-"
 
 
 def test_talk_key_is_a_plain_key_when_switched_off() -> None:
@@ -525,7 +537,7 @@ def test_switching_off_while_talking_stops_talking() -> None:
     t.key(ESC, True, 10)
     t.key(ESC, False, 20)
     assert t.key(TALK, False, 30) == Verdict.PASS  # off now: the release is a plain key
-    assert t.take() == "!TALK_START !TALK_STOP !OFF"
+    assert t.take() == "?dictate+ ?dictate- !OFF"
 
 
 def test_quitting_while_talking_stops_talking() -> None:
@@ -533,7 +545,7 @@ def test_quitting_while_talking_stops_talking() -> None:
     t.key(TALK, True, 0)
     t.key(ESC, True, 10)
     assert t.key(ESC, False, 10 + QUIT_HOLD_MS) == Verdict.QUIT
-    assert t.take() == "!TALK_START !TALK_STOP"
+    assert t.take() == "?dictate+ ?dictate-"
 
 
 def test_talk_key_leaves_an_undecided_home_row_mod_alone() -> None:
@@ -542,4 +554,102 @@ def test_talk_key_leaves_an_undecided_home_row_mod_alone() -> None:
     t.key(TALK, True, 0)
     t.u("r")  # still a tap
     t.key(TALK, False, 0)
-    assert t.take() == "!TALK_START +t -t !TALK_STOP"
+    assert t.take() == "?dictate+ +t -t ?dictate-"
+
+
+# ---- tools and apps layers ---------------------------------------------------------------
+
+
+def test_tools_layer_key_requests_its_tool() -> None:
+    t = Harness()
+    t.d("v")  # Tab thumb: Tools while held
+    t.tap("9")  # Fix (right hand, top row)
+    t.u("v")
+    assert t.take() == "?fix+ ?fix-"
+
+
+def test_hold_to_talk_tools_keep_going_while_held() -> None:
+    t = Harness()
+    t.d("v")
+    t.timeout_last()  # Tools held
+    t.d("i")  # Dictate (tidied): first key of the right home row
+    t.u("v")  # letting go of the thumb first doesn't cut it short
+    t.u("i")
+    assert t.take() == "?dictate_clean+ ?dictate_clean-"
+
+
+def test_tab_still_taps() -> None:
+    t = Harness()
+    t.tap("v")
+    assert t.take() == "+0x9 -0x9"
+
+
+def test_apps_layer_key_requests_its_app() -> None:
+    t = Harness()
+    t.d("/")  # Delete thumb: Apps while held
+    t.tap("2")  # the first app (left hand, top row)
+    t.u("/")
+    assert t.take() == "?app:terminal+ ?app:terminal-"
+
+
+def test_window_keys_are_on_the_apps_layer() -> None:
+    t = Harness()
+    t.d("/")
+    t.tap("caps")  # bottom row, left: snap left
+    t.u("/")
+    assert t.take() == "?snap_left+ ?snap_left-"
+
+
+# ---- snippets --------------------------------------------------------------------------
+
+BACKSPACES = " ".join(["+bksp -bksp"] * 5)
+
+
+def type_thx(t: Harness) -> None:
+    for name in (";", ";", "r", "l", "a"):  # , , t h x
+        t.tap(name)
+
+
+def test_snippet_replaces_its_trigger() -> None:
+    t = Harness()
+    type_thx(t)
+    assert t.take() == f"+0xbc -0xbc +0xbc -0xbc +t -t +h -h +x {BACKSPACES} ~Thanks! -x"
+    assert "snippet:,,thx" in t.h.used_features
+
+
+def test_snippet_survives_a_corrected_typo() -> None:
+    t = Harness()
+    for name in (";", ";", "r", "l", "s"):  # , , t h c
+        t.tap(name)
+    t.tap(".")  # Backspace thumb, tapped
+    t.tap("a")  # x
+    assert t.take().endswith(f"+x {BACKSPACES} ~Thanks! -x")
+
+
+def test_snippet_is_forgotten_after_moving_the_cursor() -> None:
+    t = Harness()
+    t.tap(";")
+    t.tap(";")
+    t.d("c")  # Space thumb: Nav
+    t.timeout_last()
+    t.tap("o")  # Left arrow
+    t.u("c")
+    for name in ("r", "l", "a"):
+        t.tap(name)
+    assert "~" not in t.take()
+
+
+# ---- usage counts ----------------------------------------------------------------------
+
+
+def test_usage_counts_layer_keys_holds_and_features() -> None:
+    t = Harness()
+    t.d("c")
+    t.timeout_last()  # Space held: Nav
+    t.tap("o")  # Left
+    t.u("c")
+    t.d("r")
+    t.timeout_last()  # Shift held
+    t.u("r")
+    both_shifts(t)
+    assert t.h.used_features == ["layer:nav", "nav:left", "hold:shift", "hold:shift", "hold:shift", "caps_word"]
