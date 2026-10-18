@@ -10,7 +10,6 @@ import os
 import subprocess
 import sys
 import time
-import tkinter as tk
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -23,6 +22,7 @@ if sys.platform != "win32" or os.environ.get("TOOLKIT_E2E") != "1":
     pytest.skip("end-to-end tests run on Windows, with TOOLKIT_E2E=1", allow_module_level=True)
 
 import ctypes  # noqa: E402
+import tkinter as tk  # noqa: E402
 
 from winapi import inputs  # noqa: E402 (Windows only)
 
