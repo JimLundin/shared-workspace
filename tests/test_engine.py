@@ -481,3 +481,17 @@ def test_releasing_one_of_two_ctrl_keys_keeps_ctrl() -> None:
     t.tap("8")  # Ctrl + j
     t.u("e")  # the last one released: Ctrl up
     assert t.take() == "+CTL +j -j -CTL"
+
+
+# ---- chords ---------------------------------------------------------------------------
+
+
+def test_held_undo_repeats_like_any_key() -> None:
+    t = Harness()
+    t.d("c")
+    t.timeout_last()  # Nav layer held
+    t.d("=")  # Undo: Ctrl + z, with z held
+    t.d("=")  # auto-repeat: another Ctrl + z
+    t.u("=")  # z up
+    t.u("c")
+    assert t.take() == "+CTL +z -CTL +CTL +z -CTL -z"
