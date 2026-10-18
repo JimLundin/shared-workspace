@@ -88,7 +88,8 @@ An app key brings the app forward, starts it if it isn't running, and pressed
 again goes through its windows. Change the apps in `config.py`.
 
 **Snippets**: type the trigger and it's replaced: `,,date` `,,time` `,,now`
-`,,week` `,,shrug` `,,thx` `,,mvh` `,,br`. Add your own in `config.py`.
+`,,week` `,,shrug` `,,thx` `,,mvh` `,,br`. Add your own in `config.py`. Physical navigation, window changes, pointer movement
+and injected toolkit text reset a partially typed trigger.
 
 ## The agent
 
@@ -109,20 +110,29 @@ Ask the agent, by voice or typed: "add a snippet for my email address", "make
 the indicator smaller", "add a key that opens my timesheet". It works on a copy
 of the source (`%LOCALAPPDATA%\toolkit\workspace`), never the running files, then:
 
-1. **Checks**: every file compiles, every module imports, every test passes
-   (`selfcheck.py`; nothing to install). It fixes what fails.
-2. **You review** the diff, and choose Install or Cancel.
-3. **The keeper installs it**: checks again itself, keeps a copy of the running
-   version, installs, and restarts the layout and the assistant (a second or two).
-4. **A ten-minute trial**: a small window in the corner offers *Keep* and *Undo*,
-   usable with the mouse alone in case the change broke the keyboard. If the
-   change doesn't start, or crashes during the trial, it's undone by itself.
-5. Later, tray menu → **Undo the last update** goes back too; and a change that
-   keeps crashing is undone by itself.
+1. **Syntax checks**: every Python file, including the `.pyw` launchers, compiles.
+   This step does not import or run proposed code.
+2. **You review** the complete diff in a window owned by the protected keeper.
+   Choose **Run checks and install** or Cancel. Approval allows this code and its
+   tests to run with your Windows account: review only changes you trust. The
+   updater provides recovery, not a sandbox for approved Python code.
+3. **Runtime checks**: the keeper checks its own copy of the reviewed source:
+   every module imports and every test passes. Cancelled or failing changes are
+   not installed. A candidate changed during review or checks is refused.
+4. **Install and restart**: the keeper saves the current version and durable
+   recovery state, installs the checked copy, clears old bytecode, and restarts
+   the layout and assistant. File-write failures restore the previous version.
+5. **A ten-minute trial** offers Keep and Undo, usable with the mouse. Startup
+   failure or a crash undoes the change. Quitting/rebooting during the trial also
+   restores the previous version on the next launch; choose Keep before quitting
+   if you want the update to stay.
+6. **Later**, tray menu → Undo the last update still works after restarting.
+   Repeated crashes restore the previous version too.
 
 The last 20 versions are kept in `%LOCALAPPDATA%\toolkit\versions`. The agent
 can't change `keeper.py`, `selfcheck.py` or `toolkit.pyw`, and the keeper uses
-nothing but Python's standard library, so no change can break what undoes it.
+nothing but Python's standard library, so the normal source-edit tools cannot replace the updater. Approved code still
+runs with your account permissions.
 
 ## Logs
 
@@ -159,6 +169,21 @@ The logic never calls Windows directly: the layout's engine goes through a
 `Any` outside the boundaries to untyped code (`winapi` for ctypes,
 `assistant/ui.py` for Tk, `selfcheck.py` for looking inside modules), and every
 class has `__slots__`. Behaviour changes come with tests.
+
+## Development
+
+The canonical source is the private repository `JimLundin/toolkit`. Clone it and
+run checks with Python 3.10 or later. Runtime use still needs only Python; the
+extra development tools below are optional locally and required by CI.
+
+GitHub Actions checks Python 3.10 and 3.12 on Windows and Linux, plus Mypy,
+Pyright and Ruff. Desktop end-to-end tests are available through the manual
+**Windows desktop tests** workflow on a dedicated self-hosted Windows runner
+labelled `toolkit-desktop`; they take control of its keyboard and mouse.
+
+If Windows refuses injected keys in an elevated application, the layout switches
+off and passes physical keys through. Use the plain keyboard there, then tap §
+to re-enable the layout when you return to a normal application.
 
 ## Tests
 

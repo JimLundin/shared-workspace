@@ -18,6 +18,8 @@ if sys.platform != "win32" or os.environ.get("TOOLKIT_E2E") != "1":
 
 from assistant.workspace import Workspace
 from keeper import ask, copy_source
+from protocol import MAGIC
+from winapi import inputs, screen, windows
 
 from .fake_endpoint import fake_endpoint
 from .test_windows_assistant_e2e import ROOT, both_ready, logs, toolkit, wait_for
@@ -34,6 +36,12 @@ def change(live: Path, home: Path, summary: str, edit: str, old: str, new: str) 
     workspace.reset()
     workspace.replace(edit, old, new)
     ask("install", summary, folder=home / "toolkit" / "keeper" / "requests")
+    assert wait_for(lambda: windows.find("Toolkit update review") is not None, lambda: None, 30), keeper_log(home)
+    hwnd = windows.find("Toolkit update review")
+    assert hwnd is not None
+    rect = windows.outer_rect(hwnd)
+    # Dedicated desktop test: click the keeper-owned approval button.
+    inputs.click(rect.right - 90, rect.bottom - 25, "left", 1, screen.virtual_screen(), MAGIC)
 
 
 def test_the_toolkit_changes_itself_and_undoes_what_fails() -> None:

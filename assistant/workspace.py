@@ -10,6 +10,7 @@ import sys
 from pathlib import Path, PurePosixPath
 
 from keeper import LIVE, PROTECTED, WORKSPACE, copy_source, source_files
+from selfcheck import compile_all
 
 
 class SourceError(Exception):
@@ -32,13 +33,16 @@ class Workspace:
 
     def _path(self, name: str) -> Path:
         relative = PurePosixPath(name.replace("\\", "/"))
-        if relative.is_absolute() or ".." in relative.parts or ":" in name:
+        if relative.is_absolute() or ".." in relative.parts or ":" in name or any(p.endswith((".", " ")) for p in relative.parts):
             raise SourceError(f"{name} is outside the toolkit's source")
-        return self.root / relative
+        path = self.root / relative
+        if not path.resolve().is_relative_to(self.root.resolve()):
+            raise SourceError(f"{name} is outside the toolkit's source")
+        return path
 
     def _writable(self, name: str) -> Path:
         path = self._path(name)
-        if PurePosixPath(name.replace("\\", "/")).as_posix() in PROTECTED:
+        if PurePosixPath(name.replace("\\", "/")).as_posix().lower() in PROTECTED:
             raise SourceError(f"{name} is protected: the keeper and its checks can only be changed by a person")
         return path
 
@@ -86,6 +90,12 @@ class Workspace:
             after = (self.root / name).read_text(encoding="utf-8", errors="replace").splitlines(keepends=True) if (self.root / name).exists() else []
             parts.append("".join(difflib.unified_diff(before, after, f"running/{name}", f"changed/{name}")))
         return "\n".join(parts)
+
+    def validate(self) -> tuple[bool, str]:
+        """Compile without importing or executing unapproved source."""
+        problems: list[str] = []
+        compile_all(self.root, problems)
+        return not problems, "\n".join(problems) or "Syntax checks pass; runtime checks require review."
 
     def check(self, timeout_s: float = 300) -> tuple[bool, str]:
         """The running version's selfcheck (which the agent can't change) run on the workspace."""

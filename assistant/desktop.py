@@ -16,6 +16,7 @@ from winapi.shapes import Rect, Window
 from .geometry import Shot, fit, half, to_monitor
 from .icons import State
 from .png import encode_png
+from .textio import paste_text
 from .ui import AnswerWindow, Ui
 
 _VK_CONTROL, _VK_C, _VK_V = 0xA2, 0x43, 0x56
@@ -86,12 +87,7 @@ class WinDesktop:
         return text
 
     def paste(self, text: str) -> None:
-        saved = clipboard.get_text(self.owner)
-        clipboard.set_text(self.owner, text)
-        _shortcut(_VK_V)
-        time.sleep(_PASTE_WAIT_S)
-        if saved is not None:
-            clipboard.set_text(self.owner, saved)
+        paste_text(self.owner, text, clipboard, lambda: _shortcut(_VK_V), lambda: time.sleep(_PASTE_WAIT_S))
 
     def type_text(self, text: str) -> None:
         inputs.type_text(text, MAGIC)

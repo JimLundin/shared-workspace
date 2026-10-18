@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import difflib
+import hashlib
 import json
 import os
 import shutil
@@ -26,6 +28,8 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
+from collections.abc import Callable
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
@@ -108,13 +112,49 @@ def source_files(root: Path) -> list[str]:
     found: list[str] = []
     for path in root.rglob("*"):
         relative = path.relative_to(root)
+        if path.is_symlink():
+            raise OSError(f"Source links are not supported: {relative}")
         if path.is_file() and not any(p.startswith(".") or p == "__pycache__" for p in relative.parts) and path.suffix != ".pyc":
             found.append(relative.as_posix())
     return sorted(found)
 
 
+def source_digest(root: Path) -> str:
+    """Identify exactly which source bytes were approved and checked."""
+    digest = hashlib.sha256()
+    for name in source_files(root):
+        digest.update(name.encode("utf-8") + b"\0")
+        digest.update(hashlib.sha256((root / name).read_bytes()).digest())
+    return digest.hexdigest()
+
+
+def source_diff(before: Path, after: Path) -> str:
+    parts: list[str] = []
+    for name in sorted(set(source_files(before)) | set(source_files(after))):
+        old = (before / name).read_text(encoding="utf-8", errors="replace").splitlines(keepends=True) if (before / name).exists() else []
+        new = (after / name).read_text(encoding="utf-8", errors="replace").splitlines(keepends=True) if (after / name).exists() else []
+        parts.extend(difflib.unified_diff(old, new, f"running/{name}", f"candidate/{name}"))
+    return "".join(parts)
+
+
+def prepare_candidate(workspace: Path, live: Path, candidate: Path, approve: Callable[[Path], bool]) -> bool:
+    """Freeze and review source without importing it. Return False on cancellation."""
+    copy_source(workspace, candidate)
+    for name in PROTECTED:
+        if (candidate / name).read_bytes() != (live / name).read_bytes():
+            raise OSError(f"The protected file {name} was changed")
+    digest = source_digest(candidate)
+    accepted = approve(candidate)
+    if source_digest(candidate) != digest:
+        raise OSError("The candidate changed during review; review it again")
+    return accepted
+
+
 def _mirror(source: Path, target: Path, *, protect: bool) -> None:
     """Makes `target`'s source files the same as `source`'s."""
+    if protect:
+        for cache in target.rglob("__pycache__"):
+            shutil.rmtree(cache)
     keep = PROTECTED if protect else frozenset[str]()
     wanted = {f for f in source_files(source) if f not in keep}
     for name in source_files(target) if target.exists() else []:
@@ -123,7 +163,12 @@ def _mirror(source: Path, target: Path, *, protect: bool) -> None:
     for name in wanted:
         destination = target / name
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes((source / name).read_bytes())  # small files: a plain copy works everywhere
+        temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary.write_bytes((source / name).read_bytes())
+            temporary.replace(destination)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def copy_source(source: Path, target: Path) -> None:
@@ -167,6 +212,8 @@ class Check(Protocol):
         """(passed, report) once finished."""
         ...
 
+    def cancel(self) -> None: ...
+
 
 class World(Protocol):
     """What the keeper does to the computer."""
@@ -189,12 +236,53 @@ class Stage(Enum):
     TRIAL = auto()
 
 
+class RefusedCheck:
+    __slots__ = ()
+
+    def result(self) -> tuple[bool, str]:
+        return False, "The user cancelled the review."
+
+    def cancel(self) -> None:
+        pass
+
+
+class Recovery:
+    """Durable rollback target; pending means restore before starting any child."""
+
+    __slots__ = ("path",)
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def read(self) -> tuple[str | None, bool]:
+        if not self.path.exists():
+            return None, False
+        raw: object = json.loads(self.path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError("Invalid update recovery state")
+        data = cast("dict[str, object]", raw)
+        version, pending = data.get("version"), data.get("pending")
+        if version is not None and (not isinstance(version, str) or not version or Path(version).name != version or version in (".", "..")):
+            raise ValueError("Invalid rollback version")
+        if not isinstance(pending, bool):
+            raise ValueError("Invalid trial state")
+        return version, pending
+
+    def write(self, version: str | None, pending: bool) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_suffix(".tmp")
+        data: dict[str, str | bool | None] = {"version": version, "pending": pending}
+        temporary.write_text(json.dumps(data), encoding="utf-8")
+        temporary.replace(self.path)
+
+
 class Keeper:
     """Everything the keeper decides, driven by `request` and a regular `tick`."""
 
-    __slots__ = ("check", "children", "crashes", "deadline", "done", "fresh", "stage", "summary", "undoable", "world")
+    __slots__ = ("check", "children", "crashes", "deadline", "done", "fresh", "recovery", "stage", "summary", "undoable", "world")
 
-    def __init__(self, world: World) -> None:
+    def __init__(self, world: World, recovery: Recovery | None = None) -> None:
+        self.recovery = recovery
         self.world = world
         self.children: dict[str, Child] = {}
         self.stage = Stage.STARTING
@@ -208,6 +296,22 @@ class Keeper:
         self.crashes: list[float] = []
         self.done = False
         """The assistant was quit: the keeper should exit."""
+
+    def recover(self) -> None:
+        """Recover an interrupted install/trial before loading the live source."""
+        if self.recovery is None:
+            return
+        version, pending = self.recovery.read()
+        self.undoable = version
+        if pending and version is not None:
+            self.world.restore(version)
+            self.undoable = None
+            self.persist(False)
+            self.world.notify("Update undone: the previous trial or installation was interrupted.")
+
+    def persist(self, pending: bool) -> None:
+        if self.recovery is not None:
+            self.recovery.write(self.undoable, pending)
 
     def start(self, now: float) -> None:
         for name in PROGRAMS:
@@ -227,11 +331,13 @@ class Keeper:
                     self.world.notify("Busy installing; try again in a moment.")
                     return
                 if self.stage is Stage.TRIAL:
+                    self.persist(False)
                     self.world.show_trial(None)
                 self.check, self.summary = self.world.start_check(), summary
                 self.stage, self.deadline = Stage.CHECKING, now + CHECK_S
             case "keep":
                 if self.stage is Stage.TRIAL:
+                    self.persist(False)
                     self.stage = Stage.RUNNING
                     self.world.show_trial(None)
             case "undo":
@@ -258,6 +364,7 @@ class Keeper:
                     return
                 self.running(now)  # quitting on purpose is handled as usual
                 if now > self.deadline and not self.done:
+                    self.persist(False)
                     self.stage = Stage.RUNNING
                     self.world.show_trial(None)
             case Stage.RUNNING:
@@ -267,6 +374,8 @@ class Keeper:
         result = self.check.result() if self.check is not None else (False, "no check")
         if result is None:
             if now > self.deadline:
+                if self.check is not None:
+                    self.check.cancel()
                 self.world.notify("Not installed: the checks took too long.")
                 self.stage = Stage.RUNNING
             return
@@ -275,11 +384,23 @@ class Keeper:
             self.world.notify(f"Not installed: the change failed its checks.\n\n{report[-3000:]}")
             self.stage = Stage.RUNNING
             return
-        self.undoable = self.world.snapshot()
-        self.stop_all()
-        self.world.install()
-        self.start(now)
-        self.fresh = True
+        previous = self.undoable
+        try:
+            version = self.world.snapshot()
+            self.undoable = version
+            self.persist(True)  # write before stopping or changing any live file
+        except OSError as error:
+            self.undoable = previous
+            self.world.notify(f"Not installed: couldn't save the rollback version. {error}")
+            self.stage = Stage.RUNNING
+            return
+        try:
+            self.stop_all()
+            self.world.install()
+            self.fresh = True
+            self.start(now)
+        except OSError as error:
+            self.rollback(f"installation failed: {error}", now)
 
     def starting(self, now: float) -> None:
         failed = any(child.poll() is not None for child in self.children.values()) or now > self.deadline
@@ -319,12 +440,20 @@ class Keeper:
 
     def rollback(self, why: str, now: float) -> None:
         on_trial = self.stage is Stage.TRIAL
-        version, self.undoable = self.undoable, None
+        version = self.undoable
+        self.persist(True)
         self.stop_all()
-        if version is not None:
-            self.world.restore(version)
-        self.start(now)
+        try:
+            if version is not None:
+                self.world.restore(version)
+        except OSError as error:
+            self.world.notify(f"Recovery needs another attempt: {error}. Restart Toolkit to retry.")
+            self.done = True  # durable pending state lets the next launch retry
+            return
+        self.undoable = None
+        self.persist(False)
         self.fresh = False
+        self.start(now)
         self.crashes = []
         self.world.notify(f"Update undone: {why}.")
         if on_trial:
@@ -374,24 +503,37 @@ class _Process:
 
 
 class _Check:
-    __slots__ = ("output", "process")
+    __slots__ = ("candidate", "deadline", "digest", "output", "process")
 
-    def __init__(self) -> None:
+    def __init__(self, candidate: Path) -> None:
+        self.candidate = candidate
+        self.digest = source_digest(candidate)
+        self.deadline = time.monotonic() + CHECK_S
         STATE.mkdir(parents=True, exist_ok=True)
         self.output = STATE / "check.txt"
         with self.output.open("wb") as out:
             self.process = subprocess.Popen(
-                [_pythonw(), str(LIVE / "selfcheck.py"), str(WORKSPACE)], stdout=out, stderr=subprocess.STDOUT, creationflags=0x0800_0000
+                [_pythonw(), str(LIVE / "selfcheck.py"), str(candidate)], stdout=out, stderr=subprocess.STDOUT, creationflags=0x0800_0000
             )
+
+    def cancel(self) -> None:
+        if self.process.poll() is None:
+            self.process.kill()
+        self.process.wait()
 
     def result(self) -> tuple[bool, str] | None:
         code = self.process.poll()
         if code is None:
+            if time.monotonic() > self.deadline:
+                self.cancel()
+                return False, "Runtime checks timed out."
             return None
+        if source_digest(self.candidate) != self.digest:
+            return False, "The candidate changed during its checks; review it again."
         return code == 0, self.output.read_text(encoding="utf-8", errors="replace")
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915 (the protected keeper owns its Windows UI)
     if sys.platform != "win32":
         sys.exit("the keeper runs on Windows")
     import msvcrt  # noqa: PLC0415 (Windows only)
@@ -413,8 +555,42 @@ def main() -> None:
         window.geometry(f"{width}x{height}+{root.winfo_screenwidth() - width - 24}+{root.winfo_screenheight() - height - 72}")
         window.attributes("-topmost", True)  # pyright: ignore[reportUnknownMemberType] (Tk's stubs)
 
+    def approve(candidate: Path) -> bool:
+        """Keeper-owned approval: unapproved source cannot replace this prompt."""
+        window = tk.Toplevel(root, padx=12, pady=12)
+        window.title("Toolkit update review")
+        window.geometry("900x640")
+        tk.Label(window, text="Run checks and install this change?", font=("Segoe UI", 12)).pack(anchor="w")
+        tk.Label(window, text="These checks execute the proposed code with your Windows account. Approve only code you trust.").pack(anchor="w")
+        text = tk.Text(window, wrap="none", font=("Consolas", 10))
+        text.insert("1.0", source_diff(LIVE, candidate))
+        text.configure(state="disabled")
+        text.pack(fill="both", expand=True)
+        answer = [False]
+
+        def finish(accepted: bool) -> None:
+            answer[0] = accepted
+            window.destroy()
+
+        buttons = tk.Frame(window)
+        buttons.pack(anchor="e")
+        tk.Button(buttons, text="Cancel", command=lambda: finish(False)).pack(side="left")
+        tk.Button(buttons, text="Run checks and install", command=lambda: finish(True)).pack(side="left")
+        window.protocol("WM_DELETE_WINDOW", lambda: finish(False))
+
+        def escape(_: object) -> None:
+            finish(False)
+
+        window.bind("<Escape>", escape)
+        window.attributes("-topmost", True)  # pyright: ignore[reportUnknownMemberType]
+        root.wait_window(window)
+        return answer[0]
+
     class WinWorld:
-        __slots__ = ()
+        __slots__ = ("candidate",)
+
+        def __init__(self) -> None:
+            self.candidate = STATE / "candidate"
 
         def start(self, name: str) -> Child:
             flag = STATE / f"ready-{name}"
@@ -432,7 +608,9 @@ def main() -> None:
 
         def start_check(self) -> Check:
             _log("checking the workspace")
-            return _Check()
+            if not prepare_candidate(WORKSPACE, LIVE, self.candidate, approve):
+                return RefusedCheck()
+            return _Check(self.candidate)
 
         def snapshot(self) -> str:
             return snapshot(LIVE, VERSIONS)
@@ -443,7 +621,7 @@ def main() -> None:
 
         def install(self) -> None:
             _log("installing the workspace")
-            install(WORKSPACE, LIVE)
+            install(self.candidate, LIVE)
 
         def notify(self, text: str) -> None:
             _log(text)
@@ -473,16 +651,23 @@ def main() -> None:
             corner(window, 420, 120)
             trial.append(window)
 
-    keeper = Keeper(WinWorld())
+    keeper = Keeper(WinWorld(), Recovery(STATE / "recovery.json"))
+    keeper.recover()
     keeper.start(time.monotonic())
 
     def loop() -> None:
         now = time.monotonic()
         for action, summary in [*((c, "") for c in choices), *take_requests()]:
             _log(f"request {action} {summary}")
-            keeper.request(action, summary, now)
+            try:
+                keeper.request(action, summary, now)
+            except OSError as error:
+                keeper.world.notify(f"Request failed: {error}")
         choices.clear()
-        keeper.tick(now)
+        try:
+            keeper.tick(now)
+        except OSError as error:
+            _log(f"keeper error: {error}")
         if keeper.done:
             root.destroy()
         else:

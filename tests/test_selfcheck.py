@@ -69,3 +69,10 @@ def test_a_crashing_test_module_fails(tmp_path: Path) -> None:
     code, report = selfcheck(tree(tmp_path, {**SOUND, "tests/test_bad.py": "raise RuntimeError('boom')\n"}))
     assert code == 1
     assert "boom" in report
+
+
+
+def test_broken_windowless_launcher_fails(tmp_path: Path) -> None:
+    code, report = selfcheck(tree(tmp_path, {**SOUND, "toolkit.pyw": "def broken(:\n"}))
+    assert code == 1
+    assert "doesn't compile: toolkit.pyw" in report

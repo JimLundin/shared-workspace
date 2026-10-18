@@ -89,3 +89,22 @@ def test_check_runs_selfcheck_on_the_workspace(tmp_path: Path) -> None:
     ok, report = w.check()
     assert not ok
     assert "FAILED tests.test_config.test_greeting" in report
+
+
+
+def test_validation_does_not_import_candidate_modules(tmp_path: Path) -> None:
+    w = workspace(tmp_path)
+    marker = tmp_path / "outside"
+    w.write("candidate.py", f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\n")
+    assert w.validate()[0]
+    assert not marker.exists()
+
+
+def test_protected_file_aliases_are_refused(tmp_path: Path) -> None:
+    w = workspace(tmp_path)
+    for name in ("KEEPER.PY", "keeper.py.", "keeper.py ", "SELFcheck.PY"):
+        try:
+            w.write(name, "hacked")
+        except SourceError:
+            continue
+        raise AssertionError(f"accepted protected alias {name}")

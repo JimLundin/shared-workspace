@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from ._core import LRESULT, ULONG_PTR, fn, kernel32, user32
-from .shapes import Rect, utf16_units
+from .shapes import Rect, require_input_count, utf16_units
 
 
 class KBDLLHOOKSTRUCT(ctypes.Structure):
@@ -137,7 +137,9 @@ def _key(vk: int, scancode: int, flags: int, extra: int) -> INPUT:
 def _send(events: Sequence[INPUT]) -> int:
     """All in one call, so the user's own input can't land in the middle."""
     array = (INPUT * len(events))(*events)
-    return int(_SendInput(len(events), array, ctypes.sizeof(INPUT)))
+    sent = int(_SendInput(len(events), array, ctypes.sizeof(INPUT)))
+    require_input_count(sent, len(events))
+    return sent
 
 
 def send_key(vk: int, scancode: int, flags: int, extra: int) -> None:

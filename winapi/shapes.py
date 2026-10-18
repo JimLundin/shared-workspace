@@ -41,3 +41,9 @@ def utf16_units(text: str) -> list[int]:
     """Windows types text as UTF-16 code units: two for characters past U+FFFF."""
     data = text.encode("utf-16-le")
     return [int.from_bytes(data[i : i + 2], "little") for i in range(0, len(data), 2)]
+
+
+def require_input_count(sent: int, expected: int) -> None:
+    """Reject partial input rather than silently losing keystrokes or clicks."""
+    if sent != expected:
+        raise OSError(f"Windows accepted {sent} of {expected} input events. Switch the layout off with § in elevated applications.")

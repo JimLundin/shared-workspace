@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import threading
 import time
 from collections.abc import Callable
@@ -138,7 +139,20 @@ def allowed(command: str) -> bool:
     if any(c in _UNSAFE for c in command) or "--output" in command:
         return False
     lower = command.lower()
-    return any(lower == p.lower() or lower.startswith(p.lower() + " ") for p in ALLOWED_COMMANDS)
+    if not any(lower == p.lower() or lower.startswith(p.lower() + " ") for p in ALLOWED_COMMANDS):
+        return False
+    if lower.startswith("git "):
+        try:
+            words = shlex.split(lower)
+        except ValueError:
+            return False
+        safe = {
+            "status": {"--short", "--branch", "--porcelain", "-s", "-b"},
+            "log": {"--oneline", "--stat", "--name-only", "--no-decorate"},
+            "diff": {"--stat", "--name-only", "--name-status", "--cached", "--staged", "--no-ext-diff", "--no-textconv"},
+        }
+        return words[1] in safe and all(w in safe[words[1]] or (w.startswith("-") and w[1:].isdigit()) for w in words[2:])
+    return True
 
 
 _MODIFIERS: Final = {"ctrl": 0xA2, "control": 0xA2, "shift": 0xA0, "alt": 0xA4, "win": 0x5B, "windows": 0x5B}
@@ -221,10 +235,10 @@ SOURCE_SPECS: Final = (
     ),
     ToolSpec("delete_source", "Delete a source file in your workspace.", _schema({"path": _TEXT}, ["path"])),
     ToolSpec("show_changes", "Your changes so far, as a diff against the running toolkit.", _schema({}, [])),
-    ToolSpec("check_changes", "Run every check and test on your workspace. Needed before apply_changes.", _schema({}, [])),
+    ToolSpec("check_changes", "Check syntax without executing code. Runtime tests follow keeper approval.", _schema({}, [])),
     ToolSpec(
         "apply_changes",
-        "Install your checked changes: the user reviews the diff, then the toolkit restarts with them (ending this task). "
+        "Submit changes to the keeper: it reviews a frozen copy, runs tests after approval, and installs if they pass. "
         "If they fail to start or crash, they're undone automatically.",
         _schema({"summary": _TEXT}, ["summary"]),
     ),
@@ -237,7 +251,8 @@ SELF_CHANGE: Final = (
     "classes, small functions, docstrings that say why; add or update tests for what you change. User settings (apps, "
     "snippets, rewrite prompts) live in config.py. Keep each change small. When done, run check_changes; fix anything "
     "it reports; then apply_changes with a one-line summary. The user approves the diff; the keeper installs it and "
-    "restarts the toolkit, and undoes it by itself if it fails. keeper.py, selfcheck.py and toolkit.pyw are protected."
+    "runs runtime checks after approval, restarts the toolkit if they pass, and undoes failures. Approved code is not sandboxed. "
+    "keeper.py, selfcheck.py and toolkit.pyw are protected."
 )
 
 
@@ -332,6 +347,8 @@ class Agent:
             for call in reply.tool_calls:  # every call needs a result, even once stopped
                 output = Output("Stopped by the user.", ok=False) if self.stop.is_set() else self.call(call)
                 self.messages.append(tool_result(call.id, output.text))
+                if self.installing is not None:
+                    break
                 image = output.image or image
             if image is not None:
                 self.messages.append(user_message([Text("The screenshot you took:"), Image(image)]))
@@ -532,10 +549,10 @@ class Agent:
         return Output("\n".join(changes) + "\n\n" + self.source().diff()[:MAX_SOURCE_CHARS])
 
     def check_changes(self, _: Args) -> Output:
-        passed, report = self.source().check()
+        passed, report = self.source().validate()
         self.checked = self.source().diff() if passed else None
         self.check_failed = not passed
-        return Output("All checks pass.") if passed else Output(report[-6000:], ok=False)
+        return Output("Syntax checks pass. Runtime checks run after approval.") if passed else Output(report[-6000:], ok=False)
 
     def apply_changes(self, args: Args) -> Output:
         summary, diff = args.text("summary"), self.source().diff()
@@ -551,6 +568,8 @@ class Agent:
             raise ArgumentError("the changes have changed since they were checked; run check_changes again.")
         if not self.machine.review(summary, diff):
             return Output("The user didn't approve these changes. Ask what they'd like instead.", ok=False)
+        if self.stop.is_set():
+            return Output("Stopped by the user.", ok=False)
         self.machine.install(summary)
         self.installing = summary
         return Output("Asked the keeper to install it.")

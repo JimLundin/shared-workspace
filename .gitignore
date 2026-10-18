@@ -3,3 +3,9 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 uv.lock
+.pyright/
+.venv/
+.env
+.env.*
+*.log
+*.jsonl

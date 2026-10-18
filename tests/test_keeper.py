@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from keeper import PROTECTED, Keeper, Stage, ask, install, restore, snapshot, source_files, take_requests
+from keeper import PROTECTED, Keeper, Recovery, Stage, ask, install, prepare_candidate, restore, snapshot, source_files, take_requests
 
 # ---- a fake world for the keeper's logic -----------------------------------------------
 
@@ -33,6 +33,9 @@ class FakeCheck:
 
     def result(self) -> tuple[bool, str] | None:
         return self.outcome
+
+    def cancel(self) -> None:
+        self.outcome = (False, "cancelled")
 
 
 class World:
@@ -309,3 +312,120 @@ def test_requests_arrive_in_order(tmp_path: Path) -> None:
 
 def test_the_keeper_and_its_checker_are_protected() -> None:
     assert {"keeper.py", "selfcheck.py", "toolkit.pyw"} <= PROTECTED
+
+
+def test_install_failure_restores_and_restarts() -> None:
+    class FailingWorld(World):
+        __slots__ = ()
+
+        def install(self) -> None:
+            raise PermissionError('locked file')
+
+    world = FailingWorld()
+    keeper = running(world)
+    keeper.request('install', 'change', 10)
+    world.check.outcome = (True, 'ok')
+    keeper.tick(20)
+    assert 'restore v1' in world.log
+    assert set(keeper.children) == {'layout', 'assistant'}
+
+
+
+def test_undo_survives_keeper_restart(tmp_path: Path) -> None:
+    recovery = Recovery(tmp_path / "recovery.json")
+    world = World()
+    keeper = Keeper(world, recovery)
+    keeper.start(0)
+    world.come_up()
+    keeper.tick(1)
+    installed(world, keeper)
+    keeper.request("keep", "", 30)
+    restarted = Keeper(world, recovery)
+    restarted.recover()
+    restarted.request("undo", "", 40)
+    assert "restore v1" in world.log
+
+
+def test_interrupted_trial_is_restored_before_starting(tmp_path: Path) -> None:
+    recovery = Recovery(tmp_path / "recovery.json")
+    recovery.write("v1", True)
+    world = World()
+    keeper = Keeper(world, recovery)
+    keeper.recover()
+    keeper.start(0)
+    assert world.log[0] == "restore v1"
+    assert recovery.read() == (None, False)
+
+
+def test_recovery_failure_preserves_retry_state(tmp_path: Path) -> None:
+    class FailingRestore(World):
+        __slots__ = ()
+
+        def restore(self, version: str) -> None:
+            raise PermissionError("locked backup")
+
+    recovery = Recovery(tmp_path / "recovery.json")
+    recovery.write("v1", True)
+    keeper = Keeper(FailingRestore(), recovery)
+    keeper.undoable = "v1"
+    keeper.rollback("failed", 0)
+    assert keeper.done
+    assert recovery.read() == ("v1", True)
+
+
+def test_completed_trial_persists_undo_target(tmp_path: Path) -> None:
+    recovery = Recovery(tmp_path / "recovery.json")
+    world = World()
+    keeper = Keeper(world, recovery)
+    keeper.start(0)
+    world.come_up()
+    keeper.tick(1)
+    installed(world, keeper)
+    keeper.tick(700)
+    assert recovery.read() == ("v1", False)
+
+
+
+def test_candidate_review_does_not_execute_code_and_is_frozen(tmp_path: Path) -> None:
+    live, workspace, candidate = (tmp_path / name for name in ("live", "workspace", "candidate"))
+    marker = tmp_path / "executed"
+    protected = dict.fromkeys(PROTECTED, "# protected\n")
+    write(live, {**protected, "config.py": "OLD"})
+    write(workspace, {**protected, "candidate.py": f"from pathlib import Path\nPath({str(marker)!r}).touch()\n"})
+    assert not prepare_candidate(workspace, live, candidate, lambda _: False)
+    assert not marker.exists()
+    write(workspace, {"candidate.py": "NEW"})
+    assert "Path(" in (candidate / "candidate.py").read_text(encoding="utf-8")
+
+
+def test_changed_candidate_during_review_is_refused(tmp_path: Path) -> None:
+    live, workspace, candidate = (tmp_path / name for name in ("live", "workspace", "candidate"))
+    protected = dict.fromkeys(PROTECTED, "# protected\n")
+    write(live, protected)
+    write(workspace, protected)
+
+    def mutate(root: Path) -> bool:
+        write(root, {"new.py": "X = 1"})
+        return True
+
+    try:
+        prepare_candidate(workspace, live, candidate, mutate)
+    except OSError:
+        pass
+    else:
+        raise AssertionError("changed source must be reviewed again")
+
+
+
+def test_failed_second_update_keeps_first_update_undoable_after_restart(tmp_path: Path) -> None:
+    recovery = Recovery(tmp_path / "recovery.json")
+    world = World()
+    keeper = Keeper(world, recovery)
+    keeper.start(0)
+    world.come_up()
+    keeper.tick(1)
+    installed(world, keeper)
+    keeper.request("install", "broken second update", 30)
+    world.check.outcome = (False, "broken")
+    keeper.tick(31)
+    assert recovery.read() == ("v1", False)

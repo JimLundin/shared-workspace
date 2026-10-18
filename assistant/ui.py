@@ -15,9 +15,10 @@ from __future__ import annotations
 import queue
 import threading
 import tkinter as tk
+import traceback
 from collections.abc import Callable
 from tkinter import ttk
-from typing import Final, TypeVar
+from typing import Final, TypeVar, cast
 
 from miryoku.layout import Layer
 from winapi import windows
@@ -84,7 +85,10 @@ class Ui:
                 job = self._jobs.get_nowait()
             except queue.Empty:
                 break
-            job(root)
+            try:
+                job(root)
+            except Exception:
+                traceback.print_exc()
         root.after(20, lambda: self._poll(root))
 
     def post(self, job: Job) -> None:
@@ -93,9 +97,18 @@ class Ui:
 
     def _ask(self, build: Callable[[tk.Tk, Callable[[T], None]], None]) -> T:
         """Builds a window on the Tk thread and waits for the answer it gives."""
-        answers: queue.Queue[T] = queue.Queue()
-        self.post(lambda root: build(root, answers.put))
-        return answers.get()
+        answers: queue.Queue[tuple[T | None, Exception | None]] = queue.Queue()
+        def job(root: tk.Tk) -> None:
+            try:
+                build(root, lambda value: answers.put((value, None)))
+            except Exception as error:
+                answers.put((None, error))
+
+        self.post(job)
+        answer, error = answers.get()
+        if error is not None:
+            raise error
+        return cast("T", answer)
 
     # ---- a text box --------------------------------------------------------------------
 
@@ -495,7 +508,7 @@ class ReviewWindow:
         self.window = tk.Toplevel(root, background=BACKGROUND, padx=12, pady=12)
         self.window.title("Change the toolkit?")
         tk.Label(self.window, text=summary, font=("Segoe UI Semibold", 12), background=BACKGROUND, foreground=FOREGROUND, anchor="w").pack(fill="x")
-        note = "The toolkit restarts with this change; if it fails to start or crashes, it's undone by itself."
+        note = "Approve running this code and its tests with your Windows account, then installing it if the checks pass."
         tk.Label(self.window, text=note, font=("Segoe UI", 9), background=BACKGROUND, foreground=MUTED, anchor="w").pack(fill="x", pady=(2, 8))
         frame = tk.Frame(self.window, background=BACKGROUND)
         frame.pack(fill="both", expand=True)
@@ -513,7 +526,7 @@ class ReviewWindow:
         text.configure(state="disabled")
         buttons = tk.Frame(self.window, background=BACKGROUND)
         buttons.pack(fill="x", pady=(10, 0))
-        ttk.Button(buttons, text="Install", command=lambda: self.finish(True)).pack(side="right")
+        ttk.Button(buttons, text="Run checks and install", command=lambda: self.finish(True)).pack(side="right")
         ttk.Button(buttons, text="Cancel", command=lambda: self.finish(False)).pack(side="right", padx=(0, 8))
         self.window.protocol("WM_DELETE_WINDOW", lambda: self.finish(False))
         self.window.bind("<Escape>", lambda _: self.finish(False))

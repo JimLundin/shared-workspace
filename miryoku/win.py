@@ -17,6 +17,7 @@ import usage
 from config import APPS
 from protocol import (
     ASSISTANT_WINDOW,
+    LAYOUT_MAGIC,
     LAYOUT_WINDOW,
     MAGIC,
     WM_INDICATOR,
@@ -53,7 +54,7 @@ class WinHost:
     def send(self, key: Key | Mod, down: bool) -> None:
         flags = (0 if down else inputs.KEYEVENTF_KEYUP) | (inputs.KEYEVENTF_EXTENDEDKEY if key.extended else 0)
         # The scancode, which some programs read, from Windows' own layout table.
-        inputs.send_key(key.vk, inputs.scancode_for(key.vk), flags, MAGIC)
+        inputs.send_key(key.vk, inputs.scancode_for(key.vk), flags, LAYOUT_MAGIC)
 
     def start_timer(self) -> int:
         return system.set_timer(TAPPING_TERM_MS)
@@ -76,7 +77,7 @@ class WinHost:
         self.tell_assistant(WM_REQUEST, encode(request, APPS), int(down))
 
     def type_text(self, text: str) -> None:
-        inputs.type_text(text, MAGIC)
+        inputs.type_text(text, LAYOUT_MAGIC)
 
     def used(self, feature: str) -> None:
         self.counts[feature] = self.counts.get(feature, 0) + 1
@@ -113,11 +114,13 @@ class Exit(Enum):
 class Keyboard:
     """The engine, plus what the hook callback needs around it."""
 
-    __slots__ = ("busy", "engine", "host")
+    __slots__ = ("busy", "engine", "foreground", "host", "pointer")
 
     def __init__(self) -> None:
         self.engine = Engine()
         self.host = WinHost()
+        self.foreground = 0
+        self.pointer = inputs.cursor_position()
         self.busy = False
         """Set while the engine runs; a re-entrant call lets its key through."""
 
@@ -131,13 +134,26 @@ class Keyboard:
             except Exception:
                 # A bug must never eat the keyboard: report it and let the key through.
                 traceback.print_exc(file=sys.stderr)
+                self.engine.enabled = False
+                self.engine.typed = ""
+                with contextlib.suppress(OSError):
+                    self.engine.release_all(self.host)
+                self.host.signal(Signal.OFF)
         return inputs.call_next_hook(code, wparam, lparam)
 
     def swallow(self, key: inputs.KeyEvent, down: bool) -> bool:
         """Runs the engine on one key; True if the original key should be blocked."""
         # Our own keys, and extended keys (arrows, numpad Enter...), which share
         # scancodes with main keys, are never ours.
-        if key.extra == MAGIC or key.flags & inputs.LLKHF_EXTENDED or self.busy:
+        if self.busy or key.extra == LAYOUT_MAGIC:
+            return False
+        foreground = windows.foreground()
+        pointer = inputs.cursor_position()
+        if foreground != self.foreground or pointer != self.pointer or key.flags & inputs.LLKHF_EXTENDED or key.extra == MAGIC:
+            self.engine.typed = ""
+        self.foreground = foreground
+        self.pointer = pointer
+        if key.extra == MAGIC or key.flags & inputs.LLKHF_EXTENDED:
             return False
         self.busy = True
         try:

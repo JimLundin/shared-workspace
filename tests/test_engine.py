@@ -705,3 +705,14 @@ def test_switching_off_clears_the_indicator() -> None:
     t.key(ESC, True, 0)
     t.key(ESC, False, 10)
     assert t.h.indicated == ["nav", "-"]
+
+
+def test_native_navigation_invalidates_partial_snippets() -> None:
+    t = Harness()
+    for name in (';', ';', 'r'):
+        t.tap(name)
+    assert t.e.typed == ',,t'
+    assert t.key(Scancode(0x4B), True, 1) is Verdict.PASS
+    for name in ('l', 'a'):
+        t.tap(name)
+    assert '~Thanks!' not in t.take()

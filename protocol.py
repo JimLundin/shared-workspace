@@ -16,6 +16,9 @@ from keeper import ASSISTANT_WINDOW as ASSISTANT_WINDOW  # noqa: PLC0414 (an exp
 from keeper import LAYOUT_WINDOW as LAYOUT_WINDOW  # noqa: PLC0414 (an explicit re-export)
 from keeper import WM_QUIT_LAYOUT as WM_QUIT_LAYOUT  # noqa: PLC0414 (an explicit re-export)
 
+LAYOUT_MAGIC: Final = 0x4D49_5250
+"""Layout output: bypass remapping without invalidating its own snippet history."""
+
 MAGIC: Final = 0x4D49_524F
 """Tags input the toolkit sends, so the layout's hook lets it through untouched."""
 

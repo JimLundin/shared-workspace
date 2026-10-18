@@ -361,7 +361,7 @@ def test_the_agent_edits_checks_and_applies_a_change(tmp_path: Path) -> None:
         rig.run("greet in English")
         assert rig.machine.log == ["review Say hello", "install Say hello"]
         assert "+GREETING = 'hello'" in rig.machine.reviewed[0]
-        assert rig.results(2) == ["All checks pass."]
+        assert rig.results(2) == ["Syntax checks pass. Runtime checks run after approval."]
         assert rig.window.log[-1] == "done Installing: Say hello. The toolkit restarts in a moment."
         assert len(endpoint.received) == 3  # the task ends with the install
 
@@ -380,14 +380,15 @@ def test_apply_needs_a_passing_check_of_exactly_these_changes(tmp_path: Path) ->
 
 def test_failing_checks_are_reported_and_block_apply(tmp_path: Path) -> None:
     workspace = source(tmp_path)
-    breaking = ("write_source", {"path": "config.py", "content": "GREETING = ''\n"})
+    breaking = ("write_source", {"path": "config.py", "content": "GREETING = (\n"})
     with fake_endpoint() as endpoint:
         rig = Rig(
             endpoint, calls(breaking), calls(("check_changes", {})), calls(("apply_changes", {"summary": "x"})), says("ok"), workspace=workspace
         )
         rig.run()
-        assert "FAILED tests.test_config.test_greeting" in rig.results(2)[0]
+        assert "doesn't compile" in rig.results(2)[0]
         assert rig.results(3) == ["Error: the last check failed; fix the changes and check again."]
+        assert not any(entry.startswith("install") for entry in rig.machine.log)
 
 
 def test_a_declined_review_installs_nothing(tmp_path: Path) -> None:
@@ -434,3 +435,21 @@ def test_without_a_workspace_there_are_no_source_tools() -> None:
         rig = Rig(endpoint, says("ok"))
         rig.run()
         assert b"read_source" not in endpoint.last.body
+
+
+def test_git_external_execution_options_require_confirmation() -> None:
+    for command in ('git diff --ext-diff', 'git log --textconv', 'git diff --output=out.txt', 'git diff --o=out.txt'):
+        assert not allowed(command), command
+
+
+def test_check_changes_does_not_execute_candidate_code(tmp_path: Path) -> None:
+    workspace = source(tmp_path)
+    marker = tmp_path / 'outside-workspace'
+    content = f'from pathlib import Path\nPath({str(marker)!r}).write_text("executed")\n'
+    with fake_endpoint() as endpoint:
+        rig = Rig(
+            endpoint, calls(('write_source', {'path': 'candidate.py', 'content': content})),
+            calls(('check_changes', {})), says('ok'), workspace=workspace
+        )
+        rig.run()
+    assert not marker.exists(), 'unapproved code executed during checks'

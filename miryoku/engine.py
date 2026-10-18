@@ -273,6 +273,7 @@ class Engine:
             return Verdict.SWALLOW
         match slot(scancode):
             case Unmapped.FREE:
+                self.typed = ""
                 return Verdict.PASS
             case Unmapped.BLOCKED:
                 return Verdict.SWALLOW

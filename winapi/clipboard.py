@@ -64,11 +64,17 @@ def set_text(hwnd: int, text: str) -> bool:
     if not _open(hwnd):
         return False
     try:
-        _EmptyClipboard()
         handle = _GlobalAlloc(_GMEM_MOVEABLE, size)
         if not handle:
             return False
         pointer = _GlobalLock(handle)
+        if not pointer:
+            _GlobalFree(handle)
+            return False
+        if not _EmptyClipboard():
+            _GlobalUnlock(handle)
+            _GlobalFree(handle)
+            return False
         ctypes.memmove(pointer, data, size)
         _GlobalUnlock(handle)
         if not _SetClipboardData(_CF_UNICODETEXT, handle):

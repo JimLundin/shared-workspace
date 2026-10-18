@@ -40,9 +40,9 @@ def _windows_only(error: BaseException) -> bool:
 
 
 def _sources(root: Path) -> Iterator[Path]:
-    for path in sorted(root.rglob("*.py")):
+    for path in sorted(root.rglob("*")):
         relative = path.relative_to(root)
-        if not any(part.startswith((".", "__pycache__")) for part in relative.parts):
+        if path.suffix in (".py", ".pyw") and not any(part.startswith((".", "__pycache__")) for part in relative.parts):
             yield path
 
 
@@ -51,7 +51,7 @@ def _modules(root: Path) -> Iterator[str]:
     for path in _sources(root):
         relative = path.relative_to(root).with_suffix("")
         parts = relative.parts
-        if parts[0] == "tests" or path.name == "selfcheck.py":
+        if parts[0] == "tests" or path.name == "selfcheck.py" or path.suffix == ".pyw":
             continue
         if len(parts) == 1 or (root / parts[0] / "__init__.py").exists():
             yield ".".join(p for p in parts if p != "__init__") if parts[-1] == "__init__" else ".".join(parts)
@@ -80,7 +80,10 @@ def _call(test: Callable[..., object]) -> None:
     for name in inspect.signature(test).parameters:
         if name != "tmp_path":
             raise TypeError(f"selfcheck can only give a test tmp_path, not {name}")
-        arguments[name] = Path(tempfile.mkdtemp(prefix="selfcheck-"))
+        with tempfile.TemporaryDirectory(prefix="selfcheck-") as scratch:
+            arguments[name] = Path(scratch)
+            test(**arguments)
+            return
     test(**arguments)
 
 
