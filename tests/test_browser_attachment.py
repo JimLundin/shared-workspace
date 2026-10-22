@@ -22,13 +22,15 @@ from .test_browser import Channel, decoded
 
 
 @contextmanager
-def consent_browser(tmp_path: Path, *, approval_delay: float = 0) -> Generator[tuple[Browser, list[str]]]:
+def consent_browser(tmp_path: Path, approval: threading.Event) -> Generator[tuple[Browser, list[str], threading.Event]]:
     """A real CDP socket whose WebSocket upgrade waits for browser consent."""
     approvals: list[str] = []
+    requested = threading.Event()
 
     def approve(_connection: ServerConnection, request: Request) -> Response | None:
         approvals.append(request.path)
-        time.sleep(approval_delay)
+        requested.set()
+        assert approval.wait(timeout=5), "The test did not release browser consent."
         return None
 
     def commands(connection: ServerConnection) -> None:
@@ -47,28 +49,42 @@ def consent_browser(tmp_path: Path, *, approval_delay: float = 0) -> Generator[t
     thread.start()
     try:
         with patch("assistant.browser.user_data_root", return_value=tmp_path):
-            yield browser, approvals
+            yield browser, approvals, requested
     finally:
+        approval.set()
         browser.close()
         server.shutdown()
         thread.join(timeout=2)
 
 
 def test_attachment_waits_for_consent_then_reuses_the_approved_connection(tmp_path: Path) -> None:
-    with consent_browser(tmp_path, approval_delay=2.5) as (browser, approvals):
-        first = decoded(browser.request("attach", {}, threading.Event()).text)
-        second = decoded(browser.request("attach", {}, threading.Event()).text)
-        assert first == second and first["mode"] == "attached"
-        assert approvals == ["/devtools/browser/fixture"]
+    approval = threading.Event()
+    sockets: list[socket.socket] = []
+    create = socket.create_connection
 
+    def connecting(address: tuple[str, int], timeout: float) -> socket.socket:
+        transport = create(address, timeout=timeout)
+        sockets.append(transport)
+        return transport
 
-def test_approved_attachment_survives_idle_without_another_consent_request(tmp_path: Path) -> None:
-    with consent_browser(tmp_path) as (browser, approvals):
-        first = decoded(browser.request("attach", {}, threading.Event()).text)
-        time.sleep(2.5)
-        second = decoded(browser.request("attach", {}, threading.Event()).text)
-        assert first == second and first["mode"] == "attached"
-        assert approvals == ["/devtools/browser/fixture"]
+    with (
+        consent_browser(tmp_path, approval) as (browser, approvals, requested),
+        patch("assistant.browser.socket.create_connection", new=connecting),
+        ThreadPoolExecutor(max_workers=1) as worker,
+    ):
+        pending = worker.submit(browser.request, "attach", {}, threading.Event())
+        try:
+            assert requested.wait(timeout=3) and not pending.done()
+            # A TCP connection deadline must not expire while consent is pending,
+            # or later while the approved browser is idle. Inspect the real socket.
+            assert len(sockets) == 1 and sockets[0].gettimeout() is None
+            approval.set()
+            first = decoded(pending.result(timeout=3).text)
+            second = decoded(browser.request("attach", {}, threading.Event()).text)
+            assert first == second and first["mode"] == "attached"
+            assert sockets[0].gettimeout() is None and approvals == ["/devtools/browser/fixture"]
+        finally:
+            approval.set()
 
 
 def test_endpoint_discovery_is_bounded_and_accepts_only_a_local_browser_path() -> None:

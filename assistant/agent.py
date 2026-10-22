@@ -373,7 +373,7 @@ SOURCE_SPECS: Final = (
     ToolSpec("delete_source", "Delete a source file in your workspace.", _schema({"path": _TEXT}, ["path"])),
     ToolSpec("show_changes", "Your changes so far, as a diff against the running toolkit.", _schema({}, [])),
     ToolSpec(
-        "check_changes", "Run syntax and runtime checks; fix failures before applying. In approval mode, runtime checks follow keeper review.",
+        "check_changes", "Run fast editing checks. The keeper runs full Windows checks before install; in approval mode, checks follow review.",
         _schema({}, []),
     ),
     ToolSpec(
@@ -896,8 +896,8 @@ class Agent:
         diff = source.diff()
         passed, report = source.validate()
         if passed and not self.settings.agent_approvals:
-            self.log.step("Running the toolkit's runtime checks...")
-            passed, report = source.check()
+            self.log.step("Running the toolkit's fast editing checks...")
+            passed, report = source.check(fast=True)
         if passed and source.diff() != diff:
             passed, report = False, "The workspace changed during its checks; run check_changes again."
         self.checked = diff if passed else None

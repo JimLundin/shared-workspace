@@ -1,6 +1,6 @@
 """The vocabulary the layout is written in: what it can and can't express."""
 
-from miryoku.layout import Chord, Command, Key, Layer, Mod, TapHold
+from miryoku.layout import Command, Key, Layer, Mod
 
 
 def test_layers_have_no_base() -> None:
@@ -13,16 +13,6 @@ def test_keys_carry_their_windows_details() -> None:
     assert not Key.A.extended
     assert Key.LEFT.extended
     assert Mod.GUI.extended
-
-
-def test_a_chord_can_hold_several_modifiers() -> None:
-    redo = Chord(Key.Z, frozenset({Mod.CTRL, Mod.SHIFT}))
-    assert redo.mods == {Mod.CTRL, Mod.SHIFT}
-
-
-def test_a_tap_hold_key_can_tap_a_chord() -> None:
-    paren = Chord(Key.N9, frozenset({Mod.SHIFT}))
-    assert TapHold(paren, Layer.SYM).tap == paren
 
 
 def test_engine_commands_are_named_values() -> None:

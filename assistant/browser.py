@@ -95,8 +95,13 @@ def endpoint(data: bytes) -> str:
 
 
 def read_endpoint(root: Path) -> str:
-    with (root / "DevToolsActivePort").open("rb") as stream:
-        return endpoint(stream.read(513))
+    try:
+        with (root / "DevToolsActivePort").open("rb") as stream:
+            return endpoint(stream.read(513))
+    except (FileNotFoundError, PermissionError) as error:
+        # Edge can replace or briefly lock this file while publishing its port.
+        # Startup already retries BrowserError under its deadline and Stop check.
+        raise BrowserError("The browser debugging endpoint is not readable yet.") from error
 
 
 def mapping(value: Json) -> dict[str, Json]:

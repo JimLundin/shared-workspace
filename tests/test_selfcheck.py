@@ -3,7 +3,12 @@
 import os
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import AbstractContextManager
 from pathlib import Path
+from unittest.mock import patch
+
+from selfcheck import compile_all
 
 SELFCHECK = Path(__file__).resolve().parent.parent / "selfcheck.py"
 
@@ -16,9 +21,9 @@ def tree(root: Path, files: dict[str, str]) -> Path:
     return root
 
 
-def selfcheck(root: Path) -> tuple[int, str]:
+def selfcheck(root: Path, *options: str) -> tuple[int, str]:
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
-    done = subprocess.run([sys.executable, str(SELFCHECK), str(root)], capture_output=True, text=True, timeout=60, env=env, check=False)
+    done = subprocess.run([sys.executable, str(SELFCHECK), str(root), *options], capture_output=True, text=True, timeout=60, env=env, check=False)
     return done.returncode, done.stdout + done.stderr
 
 
@@ -74,3 +79,37 @@ def test_broken_windowless_launcher_fails(tmp_path: Path) -> None:
     code, report = selfcheck(tree(tmp_path, {**SOUND, "toolkit.pyw": "def broken(:\n"}))
     assert code == 1
     assert "doesn't compile: toolkit.pyw" in report
+
+
+def test_fast_checks_defer_native_tests_but_the_default_install_gate_runs_them(tmp_path: Path) -> None:
+    root = tree(tmp_path, {**SOUND, "tests/test_windows_native.py": "def test_native():\n    assert False, 'native integration failed'\n"})
+    code, report = selfcheck(root, "--fast")
+    assert code == 0, report
+    assert "2 passed" in report and "1 native module deferred" in report
+    code, report = selfcheck(root)
+    assert code == 1 and "FAILED tests.test_windows_native.test_native" in report
+
+
+def test_fast_checks_still_compile_native_tests_and_import_production_modules(tmp_path: Path) -> None:
+    root = tree(tmp_path, {**SOUND, "tests/test_windows_native.py": "def broken(:\n"})
+    code, report = selfcheck(root, "--fast")
+    assert code == 1 and "doesn't compile: tests/test_windows_native.py" in report
+    (root / "tests/test_windows_native.py").unlink()
+    tree(root, {"tools/broken.py": "import no_such_dependency\n"})
+    code, report = selfcheck(root, "--fast")
+    assert code == 1 and "doesn't import: tools.broken" in report
+
+
+def test_compile_prunes_dependency_and_cache_directories_before_opening_them(tmp_path: Path) -> None:
+    root = tree(tmp_path, {**SOUND, **{f"{folder}/broken.py": "def broken(:\n" for folder in (".runtime", ".python", ".venv", "__pycache__")}})
+    scandir = os.scandir
+
+    def scan(path: str | os.PathLike[str] | int) -> AbstractContextManager[Iterator[os.DirEntry[str]]]:
+        if not isinstance(path, int):
+            assert Path(path).name not in (".runtime", ".python", ".venv", "__pycache__"), "entered excluded dependencies"
+        return scandir(path)
+
+    problems: list[str] = []
+    with patch("os.scandir", new=scan):
+        compile_all(root, problems)
+    assert not problems

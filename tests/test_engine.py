@@ -1,8 +1,10 @@
 """Engine tests: scripted key presses in, Windows key events out. Run anywhere
 with `pytest`."""
 
+from unittest.mock import patch
+
 from miryoku.engine import MAX_BUFFERED, Engine, Indicator, Signal, Verdict
-from miryoku.layout import AGENT, ESCAPE, QUICK_TAP_MS, QUIT_HOLD_MS, STREAK_MS, TALK, Key, Layer, Mod, Scancode
+from miryoku.layout import AGENT, ESCAPE, QUICK_TAP_MS, QUIT_HOLD_MS, STREAK_MS, TALK, Chord, Key, Layer, Mod, Scancode, TapHold
 from protocol import Request, Tool
 
 NAMES = {0xA0: "SFT", 0xA2: "CTL", 0xA4: "ALT", 0x20: "spc", 0x25: "left", 0x08: "bksp", 0xDB: "[", 0xC0: "`", 0xBE: "."}
@@ -382,6 +384,18 @@ def test_released_key_can_be_pressed_again_while_a_tap_hold_is_pending() -> None
     assert t.take() == "-j"
 
 
+def test_an_already_held_letter_repeats_while_a_modifier_is_undecided() -> None:
+    t = Harness()
+    t.d("8")
+    assert t.take() == "+j"
+    t.at(STREAK_MS + 1).d("e")
+    t.d("8")
+    assert t.take() == "+j"
+    t.u("e")
+    t.u("8")
+    assert t.take() == "+s -s -j"
+
+
 def test_full_buffer_decides_hold() -> None:
     # More distinct keys down than nine fingers can press: decide as a hold.
     plain = ["2", "3", "4", "5", "6", "8", "9", "0", "-", "=", "t", "i", "caps", "s", "d", "f", "k", "l", ";"]
@@ -518,12 +532,13 @@ def test_backspace_thumb_repeats_after_a_tap() -> None:
 
 
 def test_after_a_pause_the_thumb_is_a_layer_again() -> None:
-    t = Harness()
-    t.at(0).tap(",")
-    t.at(QUICK_TAP_MS * 2).d(",")
-    t.tap("w")
-    t.u(",")  # Num layer: 4
-    assert t.take() == "+bksp -bksp +4 -4"
+    for pause in (QUICK_TAP_MS, QUICK_TAP_MS * 2):
+        t = Harness()
+        t.at(0).tap(",")
+        t.at(pause).d(",")
+        t.tap("w")
+        t.u(",")  # Num layer: 4
+        assert t.take() == "+bksp -bksp +4 -4"
 
 
 def test_home_row_letter_repeats_after_a_tap() -> None:
@@ -573,6 +588,36 @@ def test_releasing_one_of_two_ctrl_keys_keeps_ctrl() -> None:
 
 
 # ---- chords ---------------------------------------------------------------------------
+
+
+def test_tap_hold_chords_release_only_the_modifiers_they_added() -> None:
+    t = Harness()
+    t.e.press(t.h, Mod.CTRL, 0)
+    assert t.take() == "+CTL"
+    redo = TapHold(Chord(Key.Z, frozenset({Mod.CTRL, Mod.SHIFT})), Layer.SYM)
+    with patch("miryoku.engine.action", return_value=redo):
+        t.tap("2")
+    assert t.take() == "+SFT +z -SFT -z"
+    t.e.release(t.h, Mod.CTRL)
+    assert t.take() == "-CTL"
+
+
+def test_overlapping_layers_release_the_most_recent_copy_and_preserve_other_layers() -> None:
+    t = Harness()
+    for layer in (Layer.NAV, Layer.NUM, Layer.NAV):
+        t.e.press(t.h, layer, 0)
+    t.e.release(t.h, Layer.NAV)
+    assert t.e.layer() is Layer.NUM
+    t.tap("w")
+    assert t.take() == "+4 -4"
+    t.e.press(t.h, Layer.NAV, 0)
+    t.e.release(t.h, Layer.NUM)  # removing a layer below the top must preserve both NAV holds
+    t.e.release(t.h, Layer.NAV)
+    assert t.e.layer() is Layer.NAV
+    t.tap("o")
+    assert t.take() == "+left -left"
+    t.e.release(t.h, Layer.NAV)
+    assert t.e.layer() is None
 
 
 def test_held_undo_repeats_like_any_key() -> None:
@@ -729,6 +774,17 @@ def test_snippet_replaces_its_trigger() -> None:
     type_thx(t)
     assert t.take() == f"+0xbc -0xbc +0xbc -0xbc +t -t +h -h +x {BACKSPACES} ~Thanks! -x"
     assert "snippet:,,thx" in t.h.used_features
+
+
+def test_snippets_can_include_shifted_characters() -> None:
+    t = Harness()
+    snippets: dict[str, str] = {"ABC": "Expanded."}
+    with patch.dict("miryoku.engine.SNIPPETS", snippets, clear=True):
+        for key in (Key.A, Key.B, Key.C):
+            chord = Chord(key, frozenset({Mod.SHIFT}))
+            t.e.press(t.h, chord, 0)
+            t.e.release(t.h, chord)
+    assert "~Expanded." in t.take() and "snippet:ABC" in t.h.used_features
 
 
 def test_snippet_survives_a_corrected_typo() -> None:

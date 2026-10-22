@@ -16,7 +16,7 @@ from unittest.mock import patch
 if sys.platform != "win32":
     raise unittest.SkipTest("Windows computer automation")
 
-from assistant import commands
+from assistant import commands, uia
 from assistant.app import WinMachine
 from assistant.desktop import WinDesktop
 from assistant.geometry import Shot, fit
@@ -79,11 +79,34 @@ def control(page: dict[str, Json], name: str) -> dict[str, Json]:
     return next(row for row in controls(page) if row["automation_id"] == f"fixture_{name}")
 
 
-def act(handle: int, row: dict[str, Json], action: str, value: str = "", *, ok: bool = True) -> str:
-    request: dict[str, Json] = {"operation": "act", "handle": handle, "id": row["id"], "action": action, "value": value}
-    code, text = WinMachine.__new__(WinMachine).inspect_ui(request, threading.Event())
-    assert (code == 0) == ok, text
-    return text
+def batch(folder: Path, requests: list[dict[str, Json]]) -> list[tuple[bool, str]]:
+    """Run real UIA scripts in fresh scopes, sharing only PowerShell startup.
+
+    IDs come from an earlier process; a later process verifies the resulting UI.
+    Large read results go to a fixture file so combined output cannot be truncated.
+    """
+    destination = folder / "uia-results.json"
+    blocks = [
+        "try { $response = & {\n" + uia.script(request) +
+        "\n}; @{ok=$true; text=[string]$response} } catch { @{ok=$false; text=$_.Exception.Message} }\n"
+        for request in requests
+    ]
+    script = "$results = @(\n" + "".join(blocks) + ")\n"
+    script += (
+        f"[IO.File]::WriteAllText({powershell_path(destination)}, "
+        "(ConvertTo-Json -InputObject $results -Depth 4 -Compress), [Text.UTF8Encoding]::new($false))"
+    )
+    code, output = commands.powershell(script)
+    assert code == 0, output
+    data = cast(Json, json.loads(destination.read_text(encoding="utf-8")))
+    assert isinstance(data, list) and len(data) == len(requests)
+    results: list[tuple[bool, str]] = []
+    for row in data:
+        assert isinstance(row, dict)
+        ok, text = row["ok"], row["text"]
+        assert isinstance(ok, bool) and isinstance(text, str)
+        results.append((ok, text))
+    return results
 
 
 def test_powershell_preserves_utf8_large_scripts_cwd_and_failure_status(tmp_path: Path) -> None:
@@ -145,32 +168,43 @@ def test_uia_controls_are_inspected_and_operated_across_separate_processes(tmp_p
         editor, button = control(page, "editor"), control(page, "button")
         assert "set_value" in cast("list[Json]", editor["actions"])
         value = 'Åäö "literal" $value `value`\nSecond line'
-        act(handle, editor, "set_value", value)
-        assert decoded(act(handle, editor, "read"))["text"] == value
-        act(handle, button, "invoke")
-        assert control(inspect(handle, query="fixture_status"), "status")["name"] == "Pressed 1"
         checkbox = control(page, "checkbox")
-        act(handle, checkbox, "toggle")
-        assert control(inspect(handle, query="fixture_checkbox"), "checkbox")["value"] == "On"
         slider = control(page, "slider")
-        act(handle, slider, "set_range", "65")
-        slider_value = control(inspect(handle, query="fixture_slider"), "slider")["value"]
-        assert isinstance(slider_value, dict) and slider_value["value"] == 65
-        selected = decoded(act(handle, control(page, "beta"), "select"))["control"]
-        assert isinstance(selected, dict) and selected["value"] is True
-        act(handle, control(page, "choices"), "expand")
-        act(handle, control(page, "choices"), "collapse")
         password = control(page, "password")
         assert password["password"] is True and password["value"] is None, password
         assert "fixture-only-secret" not in json.dumps(page)
-        assert "Unsupported action" in act(handle, password, "read", ok=False)
-        assert "disabled" in act(handle, control(page, "disabled"), "invoke", ok=False)
-        stale: dict[str, Json] = {"id": "42.2147483647.2147483646"}
-        assert "changed or disappeared" in act(handle, stale, "invoke", ok=False)
-        first = inspect(handle, limit=2)
+
+        def action(row: dict[str, Json], operation: str, text: str = "") -> dict[str, Json]:
+            return {"operation": "act", "handle": handle, "id": row["id"], "action": operation, "value": text}
+
+        results = batch(tmp_path, [
+            action(editor, "set_value", value), action(editor, "read"), action(button, "invoke"),
+            action(checkbox, "toggle"), action(slider, "set_range", "65"), action(control(page, "beta"), "select"),
+            action(control(page, "choices"), "expand"), action(control(page, "choices"), "collapse"),
+            action(password, "read"), action(control(page, "disabled"), "invoke"),
+            action({"id": "42.2147483647.2147483646"}, "invoke"),
+            {"operation": "inspect", "handle": handle, "limit": 2, "offset": 0, "depth": 10},
+            {"operation": "inspect", "handle": handle, "limit": 2, "offset": 2, "depth": 10},
+            action(editor, "set_value", "'\"\n" * 10000), action(editor, "read"),
+        ])
+        assert [ok for ok, _text in results] == [True] * 8 + [False] * 3 + [True] * 4, results
+        assert decoded(results[1][1])["text"] == value
+        selected = decoded(results[5][1])["control"]
+        assert isinstance(selected, dict) and selected["value"] is True
+        for index, expected in ((6, "Expanded"), (7, "Collapsed")):
+            changed = decoded(results[index][1])["control"]
+            assert isinstance(changed, dict) and changed["value"] == expected
+        for index, expected in ((8, "Unsupported action"), (9, "disabled"), (10, "changed or disappeared")):
+            assert expected in results[index][1]
+        first, second = decoded(results[11][1]), decoded(results[12][1])
         assert first["next_offset"] == 2
-        second = inspect(handle, limit=2, offset=2)
         assert {str(row["id"]) for row in controls(first)}.isdisjoint(str(row["id"]) for row in controls(second))
-        act(handle, editor, "set_value", "'\"\n" * 10000)
-        long_read = act(handle, editor, "read")
+        long_read = results[14][1]
         assert len(long_read) < 19000 and decoded(long_read)["truncated"] is True
+        # A third process must see the effects of actions made with the first
+        # process's control IDs; no AutomationElement instances are shared.
+        after = inspect(handle)
+        assert control(after, "status")["name"] == "Pressed 1"
+        assert control(after, "checkbox")["value"] == "On"
+        slider_value = control(after, "slider")["value"]
+        assert isinstance(slider_value, dict) and slider_value["value"] == 65

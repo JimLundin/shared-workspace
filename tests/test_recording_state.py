@@ -3,7 +3,7 @@
 from dataclasses import replace
 
 from assistant.llm import RATE
-from assistant.recording_state import Publication, RecordingState, StoredState, completion_phase, published
+from assistant.recording_state import Batch, Phase, Publication, RecordingState, StoredState, completion_phase, duration, published
 
 
 def observation() -> Publication:
@@ -26,8 +26,9 @@ def test_publication_rejects_older_progress_and_keeps_capture_finished() -> None
     current = published(initial, incoming, stopping=False)
     assert current is not None and current.seconds == 10 and current.pending_seconds == 2
     assert initial.seconds == 0
-    old = replace(incoming, saved=replace(incoming.saved, revision=9, frames=RATE * 9))
-    assert published(current, old, stopping=False) is None
+    # Revisions, captured frames and transcribed progress must each reject stale data independently.
+    for stale in (replace(incoming.saved, revision=9), replace(incoming.saved, frames=RATE * 9, pending=RATE)):
+        assert published(current, replace(incoming, saved=stale), stopping=False) is None
     less_transcribed = replace(incoming, saved=replace(incoming.saved, revision=11, pending=RATE * 3))
     assert published(current, less_transcribed, stopping=False) is None
     final = replace(incoming, saved=replace(incoming.saved, revision=11, exported_revision=11, pending=0, finished=True))
@@ -44,9 +45,29 @@ def test_capture_reservation_and_pause_take_precedence_over_worker_updates() -> 
     assert published(RecordingState(phase="starting"), incoming, stopping=False) is None
     assert published(RecordingState(identity="meeting-2"), incoming, stopping=False) is None
     current = RecordingState(identity="meeting-1", phase="starting")
+    started = published(current, incoming, stopping=False)
+    assert started is not None and started.phase == "starting"
+    recording = published(replace(current, phase="recording"), incoming, stopping=False)
+    assert recording is not None and recording.phase == "recording"
     stopping = published(current, incoming, stopping=True, phase="finishing")
     assert stopping is not None and stopping.phase == "stopping" and stopping.control == "stop"
     final = replace(incoming, saved=replace(incoming.saved, finished=True))
     paused = published(stopping, final, stopping=True, paused="Close the transcript to retry", phase="saved")
     assert paused is not None and paused.phase == "paused" and paused.control == "retry"
     assert paused.detail == "Close the transcript to retry"
+
+
+def test_recording_controls_and_elapsed_labels_follow_capture_progress() -> None:
+    initial = RecordingState()
+    assert not initial.visible and not initial.capturing and initial.control == "open"
+    phases: tuple[tuple[Phase, bool, str], ...] = (
+        ("starting", True, "stop"), ("recording", True, "stop"), ("stopping", True, "stop"),
+        ("finishing", False, "open"), ("paused", False, "retry"), ("saved", False, "open"), ("interrupted", False, "open"),
+    )
+    for phase, capturing, control in phases:
+        state = replace(initial, phase=phase)
+        assert state.visible and state.capturing == capturing and state.control == control
+    assert Batch(10, b"\x00\x00\x01\x00").end == 12
+    assert [duration(seconds) for seconds in (-1, 0, 59.9, 60, 3599, 3600, 3661)] == [
+        "00:00:00", "00:00:00", "00:00:59", "00:01:00", "00:59:59", "01:00:00", "01:01:01",
+    ]

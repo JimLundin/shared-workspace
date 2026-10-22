@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Final, cast
 from unittest.mock import patch
 
-from assistant.agent import Agent, allowed, key_strokes
+from assistant.agent import Agent, Output, allowed, key_strokes
 from assistant.agent_session import LiveMessage
 from assistant.geometry import Shot
 from assistant.llm import Json, Settings, ToolCall, settings_from
@@ -55,7 +55,7 @@ def says(text: str) -> Reply:
 
 
 class FakeMachine:
-    __slots__ = ("answers", "approve", "commands", "confirms", "log", "reviewed")
+    __slots__ = ("answers", "approve", "commands", "confirms", "executed", "log", "reviewed")
 
     def __init__(self) -> None:
         self.log: list[str] = []
@@ -64,11 +64,13 @@ class FakeMachine:
         self.confirms: list[bool] = []
         self.answers: list[str | None] = []
         self.commands: dict[str, tuple[int, str]] = {}
+        self.executed: list[tuple[str, float, str | None, threading.Event | None]] = []
 
     def run_powershell(
         self, command: str, timeout_s: float, *, cwd: str | None = None, cancel: threading.Event | None = None,
     ) -> tuple[int, str]:
         self.log.append(f"ran {command}")
+        self.executed.append((command, timeout_s, cwd, cancel))
         return self.commands.get(command, (0, "ok"))
 
     def screenshot(self, *, area: Rect | None = None, handle: int = 0, monitor: int = -1, longest: int = 1280) -> tuple[bytes, Shot]:
@@ -236,6 +238,24 @@ class Rig:
         return [str(m["output"]) for m in messages[last:] if m.get("type") == "function_call_output"]
 
 
+class ToolRig:
+    """Exercise the public tool boundary; SDK transport has its own scenarios below."""
+
+    __slots__ = ("agent", "journal", "machine", "window")
+
+    def __init__(self, *, approvals: bool = False, workspace: Workspace | None = None, machine: FakeMachine | None = None) -> None:
+        self.machine = machine if machine is not None else FakeMachine()
+        self.window = FakeWindow()
+        self.journal: list[dict[str, Json]] = []
+        self.agent = Agent(
+            Settings("", "", "", "", "", "", "", agent_approvals=approvals), self.machine, self.window,
+            threading.Event(), journal=self.journal.append, workspace=workspace,
+        )
+
+    def call(self, name: str, **arguments: Json) -> Output:
+        return self.agent.call(ToolCall("fixture", name, dumps(arguments)))
+
+
 # ---- the loop --------------------------------------------------------------------------
 
 
@@ -390,38 +410,41 @@ def test_model_failures_end_the_task() -> None:
 
 
 def test_the_journal_records_each_action() -> None:
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("set_clipboard", {"text": "hi"})), says("Done."))
-        rig.run()
-        assert [(e["tool"], e["ok"]) for e in rig.journal] == [("set_clipboard", True)]
+    rig = ToolRig()
+    assert rig.call("set_clipboard", text="hi").ok
+    assert rig.machine.log == ["clipboard hi"]
+    assert [(e["tool"], e["ok"]) for e in rig.journal] == [("set_clipboard", True)]
 
 
 # ---- what needs permission -------------------------------------------------------------
 
 
 def test_commands_need_confirmation() -> None:
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("run_powershell", {"command": "Remove-Item C:\\temp\\x"})), says("ok"))
-        rig.machine.confirms = [False]
-        rig.run(approvals=True)
-        assert "ran Remove-Item C:\\temp\\x" not in rig.machine.log
-        assert rig.results() == ["The user declined: don't run this. Ask them, or try something else."]
+    rig = ToolRig(approvals=True)
+    result = rig.call("run_powershell", command="Remove-Item C:\\temp\\x")
+    assert not result.ok and result.text == "The user declined: don't run this. Ask them, or try something else."
+    assert not rig.machine.executed
 
 
 def test_confirmed_commands_run_and_report_their_output() -> None:
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("run_powershell", {"command": "Stop-Process -Name notepad"})), says("ok"))
-        rig.machine.confirms = [True]
-        rig.machine.commands = {"Stop-Process -Name notepad": (1, "no such process")}
-        rig.run(approvals=True)
-        assert rig.results() == ["Exit code 1.\nno such process"]
+    rig = ToolRig(approvals=True)
+    rig.machine.confirms = [True]
+    rig.machine.commands = {"Stop-Process -Name notepad": (1, "no such process")}
+    result = rig.call("run_powershell", command="Stop-Process -Name notepad")
+    assert not result.ok and result.text == "Exit code 1.\nno such process"
+    assert rig.machine.executed == [("Stop-Process -Name notepad", 120, None, rig.agent.stop)]
 
 
 def test_allowed_commands_run_without_asking() -> None:
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("run_powershell", {"command": "git status"})), says("ok"))
-        rig.run(approvals=True)
-        assert rig.machine.log == ["ran git status"]
+    rig = ToolRig(approvals=True)
+    for timeout in (1, 600):
+        result = rig.call("run_powershell", command="git status", timeout_seconds=timeout, cwd="work folder")
+        assert result.ok and result.text == "Exit code 0.\nok"
+        assert rig.machine.executed[-1] == ("git status", timeout, "work folder", rig.agent.stop)
+    assert rig.machine.log == ["ran git status", "ran git status"]
+    for timeout in (0, 601):
+        assert not rig.call("run_powershell", command="git status", timeout_seconds=timeout).ok
+    assert len(rig.machine.executed) == 2
 
 
 def test_allowed_means_nothing_can_be_chained_on() -> None:
@@ -434,34 +457,31 @@ def test_allowed_means_nothing_can_be_chained_on() -> None:
 
 
 def test_mouse_and_keyboard_need_permission_once_per_task() -> None:
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("screenshot", {})), calls(("click", {"x": 640, "y": 360}), ("type_text", {"text": "hi"})), says("ok"))
-        rig.machine.confirms = [True]
-        rig.run(approvals=True)
-        assert [entry for entry in rig.machine.log if entry.startswith("confirm")] == [
-            "confirm Let the agent use the mouse and keyboard?: Until this task ends. Stop it any time from its window."
-        ]
-        assert "click left x1 at 1280,720" in rig.machine.log  # the screenshot was half size
-        assert "type hi" in rig.machine.log
+    rig = ToolRig(approvals=True)
+    rig.machine.confirms = [True]
+    assert rig.call("screenshot").ok
+    assert rig.call("click", x=640, y=360).ok
+    assert rig.call("type_text", text="hi").ok
+    assert [entry for entry in rig.machine.log if entry.startswith("confirm")] == [
+        "confirm Let the agent use the mouse and keyboard?: Until this task ends. Stop it any time from its window."
+    ]
+    assert "click left x1 at 1280,720" in rig.machine.log
+    assert "type hi" in rig.machine.log
 
 
 def test_declining_the_mouse_and_keyboard_is_remembered_for_the_task() -> None:
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("type_text", {"text": "a"})), calls(("type_text", {"text": "b"})), says("ok"))
-        rig.machine.confirms = [False]
-        rig.run(approvals=True)
-        assert [entry for entry in rig.machine.log if entry.startswith(("confirm", "type"))] == [
-            "confirm Let the agent use the mouse and keyboard?: Until this task ends. Stop it any time from its window."
-        ]
-        assert "declined" in rig.results()[0]
+    rig = ToolRig(approvals=True)
+    for text in ("a", "b"):
+        result = rig.call("type_text", text=text)
+        assert not result.ok and "declined" in result.text
+    assert rig.machine.log == ["confirm Let the agent use the mouse and keyboard?: Until this task ends. Stop it any time from its window."]
 
 
 def test_clicks_before_any_screenshot_are_refused() -> None:
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("click", {"x": 1, "y": 1})), says("ok"))
-        rig.machine.confirms = [True]
-        rig.run()
-        assert rig.results() == ["Error: take a screenshot first; coordinates are in the latest screenshot."]
+    rig = ToolRig()
+    result = rig.call("click", x=1, y=1)
+    assert not result.ok and result.text == "Error: take a screenshot first; coordinates are in the latest screenshot."
+    assert not rig.machine.log
 
 
 # ---- screenshots -----------------------------------------------------------------------
@@ -512,33 +532,39 @@ def test_follow_up_asks_for_desktop_control_again() -> None:
 
 def test_read_file_returns_text_and_says_when_it_was_cut(tmp_path: Path) -> None:
     big = tmp_path / "big.log"
-    big.write_text("x" * 50_000, encoding="utf-8")
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("read_file", {"path": str(big)})), says("ok"))
-        rig.run()
-        result = rig.results()[0]
-        assert result.startswith("x" * 100)
-        assert result.endswith("[cut: showing 20000 of 50000 characters]")
+    rig = ToolRig()
+    for length in (19_999, 20_000, 20_001, 50_000):
+        big.write_text("x" * length, encoding="utf-8")
+        result = rig.call("read_file", path=str(big))
+        suffix = f"\n[cut: showing 20000 of {length} characters]" if length > 20_000 else ""
+        assert result.ok and result.text == "x" * min(length, 20_000) + suffix
 
 
 def test_find_files_matches_names_under_a_folder(tmp_path: Path) -> None:
     (tmp_path / "a").mkdir()
     (tmp_path / "a" / "report.xlsx").write_bytes(b"")
     (tmp_path / "notes.txt").write_text("", encoding="utf-8")
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("find_files", {"folder": str(tmp_path), "pattern": "*.xlsx"})), says("ok"))
-        rig.run()
-        assert rig.results() == [str(tmp_path / "a" / "report.xlsx")]
+    rig = ToolRig()
+    result = rig.call("find_files", folder=str(tmp_path), pattern="*.xlsx")
+    assert result.ok and result.text == str(tmp_path / "a" / "report.xlsx")
+    for name in ("second.xlsx", "third.xlsx"):
+        (tmp_path / name).touch()
+    with patch("assistant.agent.MAX_FILES", 2):
+        bounded = rig.call("find_files", folder=str(tmp_path), pattern="*.xlsx")
+    lines = bounded.text.splitlines()
+    assert bounded.ok and "[stopped at 2 files]" in lines
+    assert len(lines) == 3 and len(set(lines)) == 3
 
 
 def test_write_file_asks_first_and_then_writes(tmp_path: Path) -> None:
-    target = tmp_path / "out" / "summary.md"
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("write_file", {"path": str(target), "content": "# Summary\n"})), says("ok"))
-        rig.machine.confirms = [True]
-        rig.run(approvals=True)
-        assert target.read_text(encoding="utf-8") == "# Summary\n"
-        assert rig.machine.log[0].startswith(f"confirm Write a file?: {target}")
+    target = tmp_path / "out" / "reports" / "summary.md"
+    rig = ToolRig(approvals=True)
+    declined = rig.call("write_file", path=str(target), content="not approved")
+    assert not declined.ok and not target.exists()
+    rig.machine.confirms = [True]
+    written = rig.call("write_file", path=str(target), content="# Summary\n")
+    assert written.ok and target.read_text(encoding="utf-8") == "# Summary\n"
+    assert rig.machine.log[0].startswith(f"confirm Write a file?: {target}")
 
 
 def test_default_tools_write_run_and_control_the_desktop_without_approval(tmp_path: Path) -> None:
@@ -579,11 +605,11 @@ def test_stop_prevents_actions_even_with_approvals_disabled(tmp_path: Path) -> N
 
 
 def test_ask_user_passes_the_answer_back() -> None:
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("ask_user", {"question": "Which folder?"})), says("ok"))
-        rig.machine.answers = ["Downloads"]
-        rig.run()
-        assert rig.results() == ["Downloads"]
+    rig = ToolRig()
+    rig.machine.answers = ["Downloads"]
+    answer = rig.call("ask_user", question="Which folder?")
+    assert answer.ok and answer.text == "Downloads"
+    assert not rig.call("ask_user", question="Another folder?").ok
 
 
 # ---- keys ------------------------------------------------------------------------------
@@ -659,20 +685,17 @@ def test_a_declined_review_installs_nothing(tmp_path: Path) -> None:
 
 def test_protected_files_cant_be_edited(tmp_path: Path) -> None:
     workspace = source(tmp_path)
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("write_source", {"path": "keeper.py", "content": "x"})), says("ok"), workspace=workspace)
-        rig.run()
-        assert rig.results(1)[0].startswith("Error: keeper.py is protected")
+    result = ToolRig(workspace=workspace).call("write_source", path="keeper.py", content="x")
+    assert not result.ok and result.text.startswith("Error: keeper.py is protected")
 
 
 def test_first_source_use_starts_from_the_running_version(tmp_path: Path) -> None:
     workspace = source(tmp_path)
     workspace.root.mkdir()
     (workspace.root / "leftover.py").write_text("x = 1\n", encoding="utf-8")
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("show_changes", {})), says("ok"), workspace=workspace)
-        rig.run()
-        assert rig.results(1) == ["No changes yet."]
+    result = ToolRig(workspace=workspace).call("show_changes")
+    assert result.ok and result.text == "No changes yet."
+    assert not (workspace.root / "leftover.py").exists()
 
 
 def test_source_edits_survive_follow_up_requests(tmp_path: Path) -> None:
@@ -687,13 +710,11 @@ def test_source_edits_survive_follow_up_requests(tmp_path: Path) -> None:
 
 
 def test_reading_and_listing_the_source(tmp_path: Path) -> None:
-    workspace = source(tmp_path)
-    with fake_endpoint() as endpoint:
-        rig = Rig(endpoint, calls(("list_source", {}), ("read_source", {"path": "config.py"})), says("ok"), workspace=workspace)
-        rig.run()
-        listing, text = rig.results(1)
-        assert "config.py" in listing.splitlines()
-        assert text == "GREETING = 'hej'\n"
+    rig = ToolRig(workspace=source(tmp_path))
+    listing = rig.call("list_source")
+    text = rig.call("read_source", path="config.py")
+    assert listing.ok and "config.py" in listing.text.splitlines()
+    assert text.ok and text.text == "GREETING = 'hej'\n"
 
 
 def test_without_a_workspace_there_are_no_source_tools() -> None:
@@ -712,13 +733,36 @@ def test_approval_mode_defers_runtime_checks_until_keeper_review(tmp_path: Path)
     workspace = source(tmp_path)
     marker = tmp_path / 'outside-workspace'
     content = f'from pathlib import Path\nPath({str(marker)!r}).write_text("executed")\n'
-    with fake_endpoint() as endpoint:
-        rig = Rig(
-            endpoint, calls(('write_source', {'path': 'candidate.py', 'content': content})),
-            calls(('check_changes', {})), says('ok'), workspace=workspace
-        )
-        rig.run(approvals=True)
+    rig = ToolRig(approvals=True, workspace=workspace)
+    assert rig.call("write_source", path="candidate.py", content=content).ok
+    assert rig.call("check_changes").ok
     assert not marker.exists(), 'unapproved code executed during checks'
+
+
+def test_fast_editing_checks_leave_native_failures_for_the_full_install_gate(tmp_path: Path) -> None:
+    workspace = source(tmp_path)
+    (workspace.live / "tests/test_windows_native.py").write_text("def test_native():\n    assert False, 'native failure'\n")
+    rig = ToolRig(workspace=workspace)
+    assert rig.call("edit_source", path="config.py", old="'hej'", new="'hello'").ok
+    checked = rig.call("check_changes")
+    assert checked.ok and "1 native module deferred" in checked.text
+    passed, report = workspace.check()
+    assert not passed and "FAILED tests.test_windows_native.test_native" in report
+
+
+def test_stop_during_confirmation_prevents_the_approved_write(tmp_path: Path) -> None:
+    class StopOnConfirmation(FakeMachine):
+        __slots__ = ()
+
+        def confirm(self, title: str, detail: str, *, cancel: threading.Event | None = None) -> bool:
+            assert cancel is not None
+            cancel.set()
+            return True
+
+    rig = ToolRig(approvals=True, machine=StopOnConfirmation())
+    path = tmp_path / "never-written.txt"
+    result = rig.call("write_file", path=str(path), content="too late")
+    assert not result.ok and not path.exists()
 
 
 def test_runtime_failure_returns_to_the_agent_to_fix_before_installing(tmp_path: Path) -> None:

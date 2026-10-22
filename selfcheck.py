@@ -1,6 +1,6 @@
 """selfcheck: is this copy of the toolkit sound? Uses installed or bundled SDK dependencies.
 
-    python selfcheck.py [FOLDER]
+    python selfcheck.py [FOLDER] [--fast] [--durations N]
 
 1. Every .py file compiles.
 2. Every module imports (off Windows, the ones that need Windows are skipped).
@@ -9,18 +9,22 @@
 
 Prints a report; exits 0 if sound, 1 if not. The keeper runs this on every change
 before installing it, so the agent can't change it (see keeper.py).
+The optional fast editing profile defers tests/test_windows_*.py. The keeper
+always uses the default full profile. Both profiles compile and import all source.
 
 It looks inside arbitrary modules, which is untyped by nature, so like the other
 boundaries (winapi, assistant/ui.py) it's exempt from the "no Any" rule inside.
 """
 # pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownVariableType=false
 
+import argparse
 import importlib
 import inspect
 import os
 import py_compile
 import sys
 import tempfile
+import time
 import traceback
 import unittest
 from collections.abc import Callable, Iterator
@@ -38,10 +42,13 @@ def _windows_only(error: BaseException) -> bool:
 
 
 def _sources(root: Path) -> Iterator[Path]:
-    for path in sorted(root.rglob("*")):
-        relative = path.relative_to(root)
-        if path.suffix in (".py", ".pyw") and not any(part.startswith((".", "__pycache__")) for part in relative.parts):
-            yield path
+    # Do not enumerate bundled interpreters and dependencies just to discard them.
+    for folder, directories, files in os.walk(root):
+        directories[:] = sorted(name for name in directories if not name.startswith((".", "__pycache__")))
+        for name in sorted(files):
+            path = Path(folder) / name
+            if path.suffix in (".py", ".pyw") and not name.startswith((".", "__pycache__")):
+                yield path
 
 
 def _modules(root: Path) -> Iterator[str]:
@@ -85,10 +92,12 @@ def _call(test: Callable[..., object]) -> None:
     test(**arguments)
 
 
-def run_tests(root: Path, problems: list[str]) -> tuple[int, int]:
+def run_tests(root: Path, problems: list[str], *, fast: bool = False, timings: list[tuple[float, str]] | None = None) -> tuple[int, int]:
     """Passed tests, and skipped test modules."""
     passed = skipped = 0
     for path in sorted((root / "tests").glob("test_*.py")):
+        if fast and path.name.startswith("test_windows_"):
+            continue
         name = f"tests.{path.stem}"
         try:
             module = importlib.import_module(name)
@@ -103,6 +112,7 @@ def run_tests(root: Path, problems: list[str]) -> tuple[int, int]:
             continue
         for attribute, test in sorted(vars(module).items()):
             if attribute.startswith("test_") and callable(test) and getattr(test, "__module__", None) == name:
+                started = time.perf_counter()
                 try:
                     _call(test)
                     passed += 1
@@ -110,10 +120,13 @@ def run_tests(root: Path, problems: list[str]) -> tuple[int, int]:
                     pass
                 except Exception as error:
                     problems.append(f"FAILED {name}.{attribute}\n{''.join(traceback.format_exception(error))}")
+                finally:
+                    if timings is not None:
+                        timings.append((time.perf_counter() - started, f"{name}.{attribute}"))
     return passed, skipped
 
 
-def check(root: Path) -> tuple[bool, str]:
+def check(root: Path, *, fast: bool = False, durations: int = 0) -> tuple[bool, str]:
     """Whether the copy at `root` is sound, and a report. Imports from `root`, so run
     it in a process of its own (as `main` does)."""
     os.environ.pop("TOOLKIT_E2E", None)  # never the end-to-end tests: they'd start a second toolkit
@@ -123,17 +136,33 @@ def check(root: Path) -> tuple[bool, str]:
 
     activate()
     problems: list[str] = []
+    timings: list[tuple[float, str]] = []
+    started = time.perf_counter()
     compile_all(root, problems)
+    timings.append((time.perf_counter() - started, "compile all source"))
     if not problems:
+        started = time.perf_counter()
         import_all(root, problems)
-    passed, skipped = run_tests(root, problems) if not problems else (0, 0)
+        timings.append((time.perf_counter() - started, "import all modules"))
+    passed, skipped = run_tests(root, problems, fast=fast, timings=timings if durations else None) if not problems else (0, 0)
     summary = f"{passed} passed, {len([p for p in problems if p.startswith('FAILED')])} failed, {skipped} module{'' if skipped == 1 else 's'} skipped"
+    if fast:
+        deferred = len(list((root / "tests").glob("test_windows_*.py")))
+        summary += f", {deferred} native module{'' if deferred == 1 else 's'} deferred (full checks run before install)"
+    if durations:
+        summary += "\nSlowest checks:\n" + "\n".join(f"{seconds:7.3f}s {name}" for seconds, name in sorted(timings, reverse=True)[:durations])
     return not problems, "\n\n".join([*problems, summary]) + "\n"
 
 
 def main() -> None:
-    root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).parent).resolve()
-    ok, report = check(root)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("folder", nargs="?", type=Path, default=Path(__file__).parent)
+    parser.add_argument("--fast", action="store_true", help="editing checks; defer Windows integration modules")
+    parser.add_argument("--durations", type=int, default=0, metavar="N", help="report the N slowest checks")
+    args = parser.parse_args()
+    if args.durations < 0:
+        parser.error("durations must be nonnegative")
+    ok, report = check(args.folder.resolve(), fast=args.fast, durations=args.durations)
     sys.stdout.write(report)
     sys.exit(0 if ok else 1)
 

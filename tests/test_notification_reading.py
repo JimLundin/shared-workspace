@@ -6,8 +6,10 @@ from assistant.notification_reading import START_SECONDS, Finished, Paused, Scro
 def test_reading_waits_then_moves_at_a_bounded_pace_to_the_last_line() -> None:
     state = Waiting(0, 10)
     assert advance(state, 9, 500, 20, paused=False) == state
+    assert advance(state, 10, 500, 20, paused=False) == Scrolling(0, 10)
     assert advance(state, 12, 500, 20, paused=False) == Scrolling(40, 12)
     assert advance(Scrolling(40, 12), 15, 500, 20, paused=False) == Scrolling(100, 15)
+    assert advance(Scrolling(40, 12), 12, 500, 20, paused=False) == Scrolling(40, 12)
     assert advance(Scrolling(40, 12), 100, 500, 20, paused=False) == Finished(500)
 
 
@@ -33,6 +35,7 @@ def test_reduced_motion_pages_overlap_and_still_reach_the_end() -> None:
     assert displayed(500, 500, 200, 20, smooth=False) == 500
     assert displayed(12.5, 500, 200, 20, smooth=True) == 12.5
     assert displayed(75, 500, 200, 20, smooth=False, origin=75) == 75
+    assert displayed(150, 500, 200, 20, smooth=False, origin=75) == 75
     assert displayed(255, 500, 200, 20, smooth=False, origin=75) == 255
 
 

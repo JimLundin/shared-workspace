@@ -1,18 +1,11 @@
-"""Copied source can use the installed SDK bundle and native Tk panel."""
+"""Interpreter handoff and dependency ABI validation, without native startup."""
 
 import os
-import subprocess
-import sys
-import unittest
 from pathlib import Path
 from typing import cast
 from unittest.mock import Mock, patch
 
 import runtime
-from keeper import copy_source
-from runtime import activate
-
-ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_old_file_association_hands_off_before_loading_dependencies(tmp_path: Path) -> None:
@@ -71,25 +64,3 @@ def test_dependency_abi_is_checked_before_native_modules_are_loaded(tmp_path: Pa
         else:
             raise AssertionError("A different Python ABI must not load the bundled native modules.")
         load.assert_not_called()
-
-
-def test_copied_source_starts_the_sdk_and_native_panel_with_the_inherited_bundle(tmp_path: Path) -> None:
-    inherited = os.environ.get("TOOLKIT_BUNDLED_RUNTIME")
-    if not (ROOT / ".runtime").is_dir() and not inherited:
-        raise unittest.SkipTest("Windows bundle integration")
-    activate()
-    source = tmp_path / "source"
-    copy_source(ROOT, source)
-    assert not (source / ".runtime").exists()
-    assert not (source / ".python").exists()
-    script = (
-        "from runtime import activate; activate(); import assistant.sdk; "
-        "from tests.test_windows_agent_panel import test_native_inline_questions_approvals_and_stop_share_one_composer as check; "
-        "check(); print('Copied SDK and native panel passed')"
-    )
-    checked = subprocess.run(
-        [sys.executable, "-S", "-c", script], cwd=source, env=dict(os.environ, PYTHONUTF8="1"),
-        capture_output=True, timeout=75, check=False,
-    )
-    assert checked.returncode == 0, (checked.stdout + checked.stderr).decode("utf-8", errors="replace")
-    assert b"Copied SDK and native panel passed" in checked.stdout

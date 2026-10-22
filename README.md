@@ -304,15 +304,16 @@ of the source (`%LOCALAPPDATA%\toolkit\workspace`), never the running files. Dra
 edits stay available for follow-up requests in the same conversation, then:
 
 1. **Check and fix**: every Python file, including the `.pyw` launchers, compiles.
-   The agent runs imports and tests on a fresh copy of its draft and sees the
-   results, so it can fix runtime failures and check again before applying.
+   The agent imports production modules and runs fast tests on a fresh copy of
+   its draft. Windows integration tests are deferred until submission, so it can
+   fix failures and check again quickly while editing.
 2. **Submit**: the agent sends the checked change to the keeper. There is no
    approval step by default. With `TOOLKIT_AGENT_APPROVALS=ask`, the agent runs
    syntax checks first and the keeper shows the complete diff before running
    the proposed code and tests.
 3. **Verify**: the keeper checks its own frozen copy of the source: every module
-   imports and every test passes. Failed checks or changes to the candidate
-   during checks prevent installation.
+   imports and the full suite, including Windows integrations, passes. Failed
+   checks or changes to the candidate during checks prevent installation.
 4. **Install and restart**: the keeper saves the current version and durable
    recovery state, installs the checked copy, clears old bytecode, and restarts
    the layout and assistant. File-write failures restore the previous version.
@@ -484,12 +485,33 @@ to re-enable the layout when you return to a normal application.
 ## Tests
 
 ```
-python selfcheck.py                      # with installed or bundled SDK dependencies
-pytest                                   # the same tests, if you have pytest
-mypy . && pyright && ruff check .        # if you have them
+python selfcheck.py --fast --durations 10 # editing: defer Windows integration modules
+python selfcheck.py --durations 10        # full gate, required before install
+python -m pytest -q tests/test_pcm.py     # one area, with optional pytest installed
+mypy . && pyright && ruff check .         # if you have them
 TOOLKIT_E2E=1 pytest tests/test_windows_*e2e.py
 python scripts/bundle.py dist/toolkit-sdk-python315-win64.zip
 ```
+
+Both check profiles compile every Python source and import production modules.
+`--fast` defers `tests/test_windows_*.py`; the keeper and CI use the full profile.
+There is no pytest dependency in the installed bundle. CI runs the suite once
+through selfcheck for each platform and checks the extracted Windows bundle too.
+
+For focused mutation testing, install pytest in your development environment:
+
+```
+python scripts/mutate.py assistant/recording_state.py --tests tests/test_recording_state.py --limit 0 --workers 2 --output dist/recording-mutations.json
+```
+
+The runner freezes the source, makes one change per disposable copy, and records
+which tests detect it. Timeouts and collection failures are reported separately.
+Use `--function NAME` to narrow the scope and `--replace BEFORE AFTER` to seed a
+specific regression. Native desktop tests require `--workers 1`. Mutation runs
+are an explicit audit command; they do not slow editing checks or installation.
+See the [test audit](docs/testing-audit.md) for measurements and surviving
+mutations, and the [dependency inventory](docs/testing-dependencies.md) for the
+changes needed to replace patch-heavy tests with tests through explicit interfaces.
 
 Inside an extracted Windows bundle, use `.python\python.exe selfcheck.py` to run
 checks with its matching interpreter. The bundle builder can run on Windows or

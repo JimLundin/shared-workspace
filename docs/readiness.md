@@ -23,8 +23,10 @@ input, pre-review execution, retained rollback state, interrupted trials, failed
 installs/restores, source changes during review, and windowless launcher syntax.
 Windows-only boundary tests mock input functions without sending real keystrokes.
 
-GitHub Actions runs selfcheck and pytest on Windows/Linux Python 3.15,
-plus Mypy, Pyright and Ruff. The manual desktop workflow requires an interactive,
+GitHub Actions runs the full selfcheck once on Windows/Linux Python 3.15,
+checks the extracted Windows bundle, and runs Mypy, Pyright and Ruff. Editing
+uses `selfcheck.py --fast`; the keeper always uses the full Windows gate before
+installation. The manual desktop workflow requires an interactive,
 dedicated self-hosted Windows runner labelled toolkit-desktop. Do not run it on a
 workstation someone is using.
 

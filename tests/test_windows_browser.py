@@ -14,7 +14,9 @@ from unittest.mock import patch
 if sys.platform != "win32":
     raise unittest.SkipTest("Native Edge browser automation")
 
-from assistant.browser import MAX_OUTPUT, Browser, BrowserError, InterruptedError, Product, edge_path
+import msvcrt
+
+from assistant.browser import MAX_OUTPUT, Browser, BrowserError, InterruptedError, Product, edge_path, read_endpoint
 from assistant.llm import Json
 
 from .browser_fixture import fixture
@@ -39,6 +41,21 @@ def act(browser: Browser, target: str, page: dict[str, Json], name: str, action:
 def installed() -> None:
     if edge_path() is None:
         raise unittest.SkipTest("Microsoft Edge is not installed")
+
+
+def test_endpoint_publication_recovers_after_a_native_file_lock(tmp_path: Path) -> None:
+    with (tmp_path / "DevToolsActivePort").open("w+b") as stream:
+        stream.write(b"12345\n/devtools/browser/fixture\n")
+        stream.flush()
+        stream.seek(0)
+        msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+        try:
+            with TestCase().assertRaises(BrowserError):
+                read_endpoint(tmp_path)
+        finally:
+            stream.seek(0)
+            msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+    assert read_endpoint(tmp_path) == "ws://127.0.0.1:12345/devtools/browser/fixture"
 
 
 def test_background_edge_controls_frames_shadow_roots_and_saved_profile(tmp_path: Path) -> None:

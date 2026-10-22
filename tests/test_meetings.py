@@ -287,21 +287,30 @@ def test_restart_recovers_pending_audio_without_opening_the_microphone(tmp_path:
     store.append(SPEECH)
     opened: list[str] = []
     capture = GeneratedCapture(0)
+    exported = threading.Event()
 
     def create(source: AudioSource) -> GeneratedCapture:
         opened.append(source)
         return capture
 
+    def published(state: RecordingState) -> None:
+        if state.phase == "interrupted" and state.pending_seconds == 0 and state.revision == state.exported_revision:
+            exported.set()
+
     with fake_endpoint() as endpoint:
-        service = Meetings(settings(endpoint.url), create, root=tmp_path)
+        service = Meetings(settings(endpoint.url), create, root=tmp_path, on_update=published)
         try:
             service.start_worker()
-            wait_for(lambda: store.state().finished and store.state().pending == 0)
-            wait_for(lambda: "hello there" in store.transcript.read_text(encoding="utf-8"))
-            assert not opened
-            assert "capture was not restarted" in store.transcript.read_text(encoding="utf-8")
+            # Committing text to the journal precedes publishing its file. Wait
+            # for the public completion update before opening that file on Windows.
+            assert exported.wait(5), service.snapshot()
         finally:
             service.close()
+        saved = store.state()
+        assert saved.finished and saved.pending == 0 and saved.revision == saved.exported_revision
+        assert not opened
+        transcript = store.transcript.read_text(encoding="utf-8")
+        assert "hello there" in transcript and "capture was not restarted" in transcript
 
 
 def test_failed_requests_retain_the_audio_and_retry_without_duplicate_text(tmp_path: Path) -> None:

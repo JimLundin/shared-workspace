@@ -106,15 +106,18 @@ class Workspace:
         compile_all(self.root, problems)
         return not problems, "\n".join(problems) or "Syntax checks pass."
 
-    def check(self, timeout_s: float = 300) -> tuple[bool, str]:
+    def check(self, timeout_s: float = 300, *, fast: bool = False) -> tuple[bool, str]:
         """Run the stable selfcheck on a fresh copy so tests cannot leave stale bytecode in the draft."""
         with tempfile.TemporaryDirectory(prefix="toolkit-check-") as scratch:
             candidate = Path(scratch) / "source"
             copy_source(self.root, candidate)
             digest = source_digest(candidate)
+            command = [sys.executable, str(self.live / "selfcheck.py"), str(candidate)]
+            if fast:
+                command.append("--fast")
             try:
                 done = subprocess.run(
-                    [sys.executable, str(self.live / "selfcheck.py"), str(candidate)], capture_output=True, timeout=timeout_s, check=False
+                    command, capture_output=True, timeout=timeout_s, check=False
                 )
             except subprocess.TimeoutExpired:
                 return False, f"the checks took more than {timeout_s:.0f} seconds"
