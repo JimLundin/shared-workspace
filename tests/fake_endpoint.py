@@ -1,10 +1,8 @@
 """A local stand-in for an OpenAI-style endpoint: it records each request and
 answers with the replies it's given, in order (the last one repeats)."""
 
-from __future__ import annotations
-
 import threading
-from collections.abc import Generator
+from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -23,6 +21,7 @@ class Reply:
     body: bytes = b'{"text": "hello there"}'
     status: int = 200
     content_type: str = "application/json"
+    content_length: int | None = None
 
 
 def sse(*events: str) -> Reply:
@@ -36,6 +35,8 @@ class FakeEndpoint:
     url: str
     received: list[Received] = field(default_factory=list[Received])
     replies: list[Reply] = field(default_factory=lambda: [Reply()])
+    respond: Callable[[Received], Reply] | None = None
+    stream: Callable[[Received], Iterator[bytes]] | None = None
 
     @property
     def last(self) -> Received:
@@ -43,19 +44,32 @@ class FakeEndpoint:
 
 
 @contextmanager
-def fake_endpoint() -> Generator[FakeEndpoint, None, None]:
+def fake_endpoint() -> Generator[FakeEndpoint]:
     endpoint = FakeEndpoint("")
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
             length = int(self.headers.get("Content-Length", "0"))
-            endpoint.received.append(
-                Received(self.path, self.headers.get("Authorization", ""), self.headers.get("Content-Type", ""), self.rfile.read(length))
-            )
-            reply = endpoint.replies.pop(0) if len(endpoint.replies) > 1 else endpoint.replies[0]
+            request = Received(self.path, self.headers.get("Authorization", ""), self.headers.get("Content-Type", ""), self.rfile.read(length))
+            endpoint.received.append(request)
+            if endpoint.stream is not None:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                try:
+                    for chunk in endpoint.stream(request):
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                    pass  # Stopping a streamed request closes its socket.
+                return
+            if endpoint.respond is not None:
+                reply = endpoint.respond(request)
+            else:
+                reply = endpoint.replies.pop(0) if len(endpoint.replies) > 1 else endpoint.replies[0]
             self.send_response(reply.status)
             self.send_header("Content-Type", reply.content_type)
-            self.send_header("Content-Length", str(len(reply.body)))
+            self.send_header("Content-Length", str(len(reply.body) if reply.content_length is None else reply.content_length))
             self.end_headers()
             self.wfile.write(reply.body)
 

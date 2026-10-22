@@ -11,5 +11,7 @@ uv.lock
 *.jsonl
 
 .runtime/
+.python/
+.bundle-cache/
 dist/
 *.egg-info/

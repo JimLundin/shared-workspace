@@ -2,8 +2,6 @@
 nobody declared. Enums, exceptions, protocols, tuples, ctypes structures
 and SDK lifecycle hooks are exempt: their bases manage their own storage."""
 
-from __future__ import annotations
-
 import importlib
 import inspect
 import pkgutil

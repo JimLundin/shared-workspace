@@ -7,11 +7,9 @@ mistake (a row of the wrong length, a key used twice) fails the import, so a
 broken layout never starts.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Final, Generic, NewType, TypeAlias, TypeVar
+from typing import Final, NewType
 
 from config import APPS
 from protocol import App, Tool
@@ -36,6 +34,10 @@ ESCAPE: Final = Scancode(0x29)
 """The escape key (the key left of 1, § on a Nordic keyboard)."""
 TALK: Final = Scancode(0x30)
 """The push-to-talk key: B, between the thumb keys. Hold it to dictate."""
+AGENT: Final = Scancode(0x31)
+"""N, immediately to the right of B. Hold it to speak a task for the agent."""
+VOICE_KEYS: Final = {TALK: Tool.DICTATE, AGENT: Tool.AGENT_VOICE}
+"""Dedicated voice buttons, available on every layer without a tap-hold delay."""
 
 
 # ---- Vocabulary ----------------------------------------------------------------
@@ -161,7 +163,7 @@ class Layer(Enum):
     APPS = auto()
 
 
-Hold: TypeAlias = Mod | Layer
+type Hold = Mod | Layer
 """What a tap-hold key does while held."""
 
 
@@ -176,7 +178,7 @@ class Chord:
 
 SHIFT_ONLY: Final = frozenset({Mod.SHIFT})
 
-Output: TypeAlias = Key | Chord
+type Output = Key | Chord
 """What reaches Windows when a key is tapped. A bare Key is a chord without modifiers."""
 
 
@@ -196,7 +198,7 @@ class TapHold:
     hold: Hold
 
 
-Action: TypeAlias = Output | Mod | Layer | TapHold | Command | Tool | App
+type Action = Output | Mod | Layer | TapHold | Command | Tool | App
 """What one key on one layer does. A Key or Chord is sent; a Mod or Layer is held
 while the key is held; a Tool or App is a request to the assistant (see `protocol`)."""
 
@@ -237,14 +239,12 @@ def describe(a: Action) -> str:
 
 # ---- Board shape ---------------------------------------------------------------
 
-CellT = TypeVar("CellT")
-
 CELLS: Final = 36
 """Keys on the board: three rows of ten, plus six thumb keys."""
 
 
 @dataclass(frozen=True, slots=True)
-class Row(Generic[CellT]):
+class Row[CellT]:
     """One row across the keyboard: five keys for the left hand, five for the right."""
 
     left: tuple[CellT, CellT, CellT, CellT, CellT]
@@ -252,7 +252,7 @@ class Row(Generic[CellT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Thumbs(Generic[CellT]):
+class Thumbs[CellT]:
     """The thumb keys: three per hand."""
 
     left: tuple[CellT, CellT, CellT]
@@ -260,7 +260,7 @@ class Thumbs(Generic[CellT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Board(Generic[CellT]):
+class Board[CellT]:
     """The whole board, written the way it looks. Used for the physical keys
     (`Board[Scancode]`) and for every layer (`Board[Action]`), so they line up."""
 
@@ -328,12 +328,12 @@ PHYSICAL: Final[Board[Scancode]] = Board(
     top=      Row((sc(0x03), sc(0x04), sc(0x05), sc(0x06), sc(0x07)), (sc(0x09), sc(0x0A), sc(0x0B), sc(0x0C), sc(0x0D))),  # 2 3 4 5 6    | 8 9 0 + acute
     home=     Row((sc(0x10), sc(0x11), sc(0x12), sc(0x13), sc(0x14)), (sc(0x17), sc(0x18), sc(0x19), sc(0x1A), sc(0x1B))),  # Q W E R T    | I O P Å ¨
     bottom=   Row((sc(0x3A), sc(0x1E), sc(0x1F), sc(0x20), sc(0x21)), (sc(0x25), sc(0x26), sc(0x27), sc(0x28), sc(0x2B))),  # Caps A S D F | K L Ö Ä '
-    thumbs=Thumbs((                    sc(0x2D), sc(0x2E), sc(0x2F)), (sc(0x33), sc(0x34), sc(0x35))),                      # X C V        | , . -
+    thumbs=Thumbs((                    sc(0x2D), sc(0x2E), sc(0x2F)), (sc(0x32), sc(0x33), sc(0x34))),                      # X C V        | M , .
 )
 
 UNUSED: Final = frozenset(
-    # Keys between and below the hands (1 7 Y U G H J Z N M <): blocked.
-    sc(code) for code in (0x02, 0x08, 0x15, 0x16, 0x22, 0x23, 0x24, 0x2C, 0x31, 0x32, 0x56)
+    # Keys between and below the hands (1 7 Y U G H J Z - <): blocked.
+    sc(code) for code in (0x02, 0x08, 0x15, 0x16, 0x22, 0x23, 0x24, 0x2C, 0x35, 0x56)
 )
 
 BASE: Final[Board[Action]] = Board(
@@ -393,7 +393,7 @@ class LayoutError(Exception):
     """The layout is inconsistent; raised at import, never at runtime."""
 
 
-def _flatten(board: Board[CellT]) -> tuple[CellT, ...]:
+def _flatten[CellT](board: Board[CellT]) -> tuple[CellT, ...]:
     cells = board.cells()
     if len(cells) != CELLS:
         raise LayoutError(f"a board has {len(cells)} keys, expected {CELLS}")

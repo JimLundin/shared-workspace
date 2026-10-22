@@ -1,7 +1,5 @@
 """Message loops, timers, events, locks, sounds and message boxes."""
 
-from __future__ import annotations
-
 import ctypes
 from collections.abc import Iterator, Sequence
 from ctypes import wintypes

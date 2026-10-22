@@ -1,7 +1,5 @@
 """Clipboard contention must not replace the selection with old clipboard text."""
 
-from __future__ import annotations
-
 from assistant.textio import paste_text
 from winapi.shapes import require_input_count
 

@@ -15,8 +15,6 @@ boundaries (winapi, assistant/ui.py) it's exempt from the "no Any" rule inside.
 """
 # pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownVariableType=false
 
-from __future__ import annotations
-
 import importlib
 import inspect
 import os

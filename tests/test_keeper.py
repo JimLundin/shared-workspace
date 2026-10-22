@@ -1,9 +1,9 @@
 """The keeper: runs the toolkit, installs changes, and undoes the ones that fail.
 Its logic runs on fake processes and a fake clock; its file handling on real folders."""
 
-from __future__ import annotations
-
+import os
 from pathlib import Path
+from unittest.mock import patch
 
 from keeper import PROTECTED, Keeper, Recovery, Stage, ask, install, prepare_candidate, restore, snapshot, source_files, take_requests
 
@@ -279,9 +279,27 @@ def test_source_files_leave_out_caches_and_history(tmp_path: Path) -> None:
     assert source_files(tmp_path) == ["README.md", "a.py", "pkg/b.py"]
 
 
+def test_source_listing_does_not_visit_excluded_runtime_or_cache_directories(tmp_path: Path) -> None:
+    write(tmp_path, {
+        "app.py": "", ".runtime/dependency.py": "", ".python/Lib/tkinter/__init__.py": "",
+        "pkg/__pycache__/module.pyc": "", ".git/objects/object": "",
+    })
+    scan = os.scandir
+
+    def source_only(path: str | Path) -> object:
+        assert not any(part.startswith(".") or part == "__pycache__" for part in Path(path).relative_to(tmp_path).parts)
+        return scan(path)
+
+    with patch("os.scandir", side_effect=source_only):
+        assert source_files(tmp_path) == ["app.py"]
+
+
 def test_snapshot_restore_and_install(tmp_path: Path) -> None:
     live, versions, workspace = tmp_path / "live", tmp_path / "versions", tmp_path / "workspace"
-    write(live, {"config.py": "OLD", "gone.py": "x", "keeper.py": "KEEPER"})
+    write(live, {
+        "config.py": "OLD", "gone.py": "x", "keeper.py": "KEEPER",
+        ".python/pythonw.exe": "PYTHON", ".runtime/dependency.pyd": "SDK",
+    })
     version = snapshot(live, versions)
     write(workspace, {"config.py": "NEW", "added.py": "y", "keeper.py": "HACKED"})
     install(workspace, live)
@@ -289,10 +307,13 @@ def test_snapshot_restore_and_install(tmp_path: Path) -> None:
     assert (live / "added.py").exists()
     assert not (live / "gone.py").exists()
     assert (live / "keeper.py").read_text() == "KEEPER"  # protected: never replaced
+    assert (live / ".python/pythonw.exe").read_text() == "PYTHON"
+    assert (live / ".runtime/dependency.pyd").read_text() == "SDK"
     restore(versions / version, live)
     assert (live / "config.py").read_text() == "OLD"
     assert (live / "gone.py").exists()
     assert not (live / "added.py").exists()
+    assert (live / ".python/pythonw.exe").read_text() == "PYTHON"
 
 
 def test_snapshots_keep_the_last_twenty(tmp_path: Path) -> None:
@@ -396,6 +417,16 @@ def test_candidate_review_does_not_execute_code_and_is_frozen(tmp_path: Path) ->
     assert not marker.exists()
     write(workspace, {"candidate.py": "NEW"})
     assert "Path(" in (candidate / "candidate.py").read_text(encoding="utf-8")
+
+
+def test_candidate_is_prepared_without_review_by_default(tmp_path: Path) -> None:
+    live, workspace, candidate = (tmp_path / name for name in ("live", "workspace", "candidate"))
+    protected = dict.fromkeys(PROTECTED, "# protected\n")
+    write(live, {**protected, "config.py": "OLD"})
+    write(workspace, {**protected, "config.py": "NEW"})
+    assert prepare_candidate(workspace, live, candidate)
+    assert (candidate / "config.py").read_text(encoding="utf-8") == "NEW"
+    assert (live / "config.py").read_text(encoding="utf-8") == "OLD"
 
 
 def test_changed_candidate_during_review_is_refused(tmp_path: Path) -> None:

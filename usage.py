@@ -4,8 +4,6 @@ was used (and how long it took, whether it failed), never what was typed or said
 Plain Python: importable anywhere.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import tempfile
@@ -13,13 +11,13 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Final, TypeAlias, cast
+from typing import Final, cast
 
 DIRECTORY: Final = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / "toolkit"
 """Where the toolkit keeps its logs."""
 USAGE_LOG: Final = DIRECTORY / "usage.jsonl"
 
-Detail: TypeAlias = "str | int | float | bool"
+type Detail = str | int | float | bool
 
 
 def _append(entry: Mapping[str, object], path: Path) -> None:

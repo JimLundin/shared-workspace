@@ -5,11 +5,16 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "toolkit"
 version = "0.1.0"
-requires-python = ">=3.10"
-dependencies = ["openai-agents==0.24.0"]
+requires-python = ">=3.15"
+dependencies = [
+    "openai-agents==0.24.0",
+    "markdown-it-py==4.0.0",
+    "httpx==0.28.1",
+    "websockets==16.1.1",
+]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.15"
 platform = "win32"  # the toolkit targets Windows; check it as Windows code
 strict = true
 # No Any, anywhere: not written, not inferred, not hidden behind a decorator or import.
@@ -20,19 +25,19 @@ disallow_any_unimported = true
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-# The ctypes, Tk, SDK and inspection boundaries: values inside may be Any
+# The ctypes, GUI, SDK and inspection boundaries: values inside may be Any
 # until converted; every public signature is concrete, so nothing untyped leaves.
-module = ["winapi", "winapi.*", "assistant.ui", "assistant.sdk", "selfcheck"]
+module = ["winapi", "winapi.*", "assistant.ui", "assistant.agent_panel", "assistant.agent_toasts", "assistant.tk_text", "assistant.sdk", "selfcheck"]
 disallow_any_expr = false
 disallow_any_explicit = false
 
 [tool.pyright]
-pythonVersion = "3.10"
+pythonVersion = "3.15"
 pythonPlatform = "Windows"
 typeCheckingMode = "strict"
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py315"
 line-length = 150
 
 [tool.ruff.lint]
@@ -50,3 +55,6 @@ py-modules = ["config", "keeper", "protocol", "runtime", "selfcheck", "usage"]
 
 [tool.setuptools.packages.find]
 include = ["assistant*", "miryoku*", "winapi*"]
+
+[tool.setuptools.package-data]
+assistant = ["*.ps1"]

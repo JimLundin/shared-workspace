@@ -1,7 +1,5 @@
 """The tray icon: a coloured dot whose colour says what the assistant is doing."""
 
-from __future__ import annotations
-
 import math
 from enum import Enum
 
@@ -14,9 +12,13 @@ class State(Enum):
     LAYOUT_OFF = (140, 140, 140)
     """The layout is switched off or not running; tools still work from the tray."""
     LISTENING = (220, 50, 50)
+    RECORDING = (230, 64, 85)
+    """A meeting is being recorded, including while the agent does other work."""
     WORKING = (235, 160, 30)
     AGENT = (60, 120, 230)
     """The agent is working on a task."""
+    NEEDS_INPUT = (230, 185, 75)
+    """An approval or question is waiting in the agent panel."""
 
 
 def dot(size: int, rgb: tuple[int, int, int]) -> bytes:

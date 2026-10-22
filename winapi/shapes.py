@@ -1,7 +1,5 @@
 """Plain value types the bindings return. No ctypes: importable anywhere."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 

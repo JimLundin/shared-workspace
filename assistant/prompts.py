@@ -1,7 +1,5 @@
 """What the assistant asks the model, per tool. Edit to taste."""
 
-from __future__ import annotations
-
 from typing import Final
 
 CLEAN_DICTATION: Final = (

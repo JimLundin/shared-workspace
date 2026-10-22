@@ -4,8 +4,6 @@ It presses physical keys with SendInput, so it takes over the keyboard for a few
 seconds; that's why it only runs when asked: `TOOLKIT_E2E=1 pytest tests/test_windows_e2e.py`.
 """
 
-from __future__ import annotations
-
 import os
 import subprocess
 import sys
@@ -56,7 +54,7 @@ def layout_running() -> bool:
 
 
 @contextmanager
-def layout() -> Generator[None, None, None]:
+def layout() -> Generator[None]:
     assert wait_for(lambda: not layout_running(), lambda: None), "a layout from before is still running"
     process = subprocess.Popen([sys.executable, "-m", "miryoku"], cwd=ROOT)
     assert wait_for(lambda: windows.find(LAYOUT_WINDOW) is not None, lambda: None), "the layout didn't start"
@@ -70,7 +68,7 @@ def layout() -> Generator[None, None, None]:
 
 
 @contextmanager
-def text_box() -> Generator[tuple[tk.Tk, tk.Entry], None, None]:
+def text_box() -> Generator[tuple[tk.Tk, tk.Entry]]:
     root = tk.Tk()
     entry = tk.Entry(root, width=40)
     entry.pack()

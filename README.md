@@ -1,9 +1,9 @@
 # Toolkit
 
-A personal toolkit for a locked-down Windows laptop: no admin rights, nothing to
-install but Python. It changes itself: ask its agent for a new feature or a fix,
-approve the diff, and it installs and reloads the change, and undoes it by itself
-if it fails. Three programs:
+A personal toolkit for a Windows laptop: extract and run, with its own Python
+and no admin installation. It changes itself: ask its agent for a new feature or a fix,
+and it edits, tests, installs and reloads the change without another approval.
+It undoes the update by itself if it fails. Three programs:
 
 - **the layout** (`miryoku/`): Colemak Mod-DH in the Miryoku style on the
   laptop's own ISO keyboard: home row mods, layers, caps word, snippets;
@@ -13,16 +13,17 @@ if it fails. Three programs:
 - **the keeper** (`keeper.py`): runs the other two, restarts them if they crash,
   and installs the agent's changes to them (see *Changing the toolkit*).
 
-The agent uses **OpenAI Agents SDK 0.24.0**. The layout, keeper and quick AI
-features use the standard library and our typed Win32 bindings (`winapi/`).
+The agent uses **OpenAI Agents SDK 0.24.0**. Every Toolkit window uses **Tkinter**,
+included with its bundled Python, on one shared UI thread. The layout, keeper and
+quick AI features use the standard library and our typed Win32 bindings (`winapi/`).
 
 ## Start
 
-1. Extract the Windows bundle into a folder you can write to. It requires your
-   existing **Windows x64 Python 3.12** (including Tk). SDK dependencies are
-   included in `.runtime`: Python modules, `.pyd` native extensions and DLLs.
-   There are no new EXEs, installer, or target-side dependency downloads. Keep
-   `.runtime` beside `toolkit.pyw`; use your permitted Python/Pythonw to launch it.
+1. Extract **`toolkit-sdk-python315-win64.zip`** into a folder you can write to.
+   It includes **Windows x64 Python 3.15.1 and Tk 9.0.4** in `.python`, with
+   matching agent dependencies in `.runtime`. Keep both folders beside
+   `StartToolkit.cmd` and `toolkit.pyw`. Python, Tk and the dependencies require
+   no installer or separate downloads on the laptop.
    Set the Windows keyboard layout to **English (US)**.
 2. Set these environment variables (Start → "Edit environment variables for your
    account"; no admin needed):
@@ -32,7 +33,12 @@ features use the standard library and our typed Win32 bindings (`winapi/`).
    | `OPENAI_BASE_URL` | your endpoint, ending in `/v1` |
    | `OPENAI_API_KEY` | its key |
    | `TOOLKIT_CHAT_MODEL` | optional; default `gpt-5.4-mini` (quick jobs) |
-   | `TOOLKIT_AGENT_MODEL` | optional; default: the chat model |
+   | `TOOLKIT_AGENT_MODEL` | optional; default `gpt-6.1-sol` (agent tasks and self-modification) |
+   | `TOOLKIT_AGENT_REASONING_EFFORT` | optional; default `low` for quicker replies; use an effort supported by your selected model |
+   | `TOOLKIT_AGENT_APPROVALS` | optional; default `never`; set `ask` to opt in to action and update approvals |
+   | `TOOLKIT_AGENT_CONTEXT` | optional; default `recent`; set `off` to disable idle activity tracking and automatic request context |
+   | `TOOLKIT_GRAPH_CLIENT_ID` | optional; approved Entra app ID for Teams; can also be saved through the agent |
+   | `TOOLKIT_GRAPH_TENANT_ID` | optional; the matching Entra tenant ID |
    | `TOOLKIT_TRANSCRIBE_MODEL` | optional; default `gpt-4o-transcribe` |
    | `TOOLKIT_VOCABULARY` | optional; names and jargon to expect in dictation |
    | `TOOLKIT_LANGUAGE` | optional; `sv` or `en`, default detected |
@@ -41,16 +47,34 @@ features use the standard library and our typed Win32 bindings (`winapi/`).
    the AI keys tell you what's missing.
 3. Turn on Settings → Privacy & security → Microphone → **Let desktop apps access
    your microphone**.
-4. Double-click **`toolkit.pyw`**. A dot appears in the tray. To start it at login,
+4. Double-click **`StartToolkit.cmd`**. A dot appears in the tray. To start it at login,
    put a shortcut to it in `shell:startup` (Win+R).
 
-`miryoku.pyw` runs the layout alone, without the assistant or the keeper.
+Existing `toolkit.pyw` shortcuts still work when Windows has a Python file
+association: the launcher hands off to the bundled interpreter. The bundle
+does not change the system Python installation or file associations.
+`.python\pythonw.exe miryoku.pyw` runs the layout alone, without the assistant
+or keeper.
 
 ## What you see
 
 - **The tray dot**: green: running, layout on · grey: layout off or not running ·
-  red: listening · amber: working · blue: the agent is on a task. Hover for words;
-  click for the menu. (Windows 11 may tuck it behind the ^ at first: drag it out.)
+  red: listening · amber: working or waiting for your reply · blue: the agent is on a task. Hover for words;
+  click for the menu. Actions with hotkeys show them alongside their names, using
+  physical keycaps: **Hold V + P** means hold V (Tools), then tap P to ask.
+  (Windows 11 may tuck it behind the ^ at first: drag it out.)
+- **Layout: on/off** (tray menu): the status is also a toggle. Click it or tap
+  **§** to switch; a checkmark means the layout is on. If the layout has quit,
+  choose **Start layout** first.
+- **Keyboard overlay**: a faded, click-through key map near the bottom of the
+  main screen. It stays visible while the layout is on and follows held or
+  locked layers. Small labels identify the printed keycaps; large labels show
+  their new outputs, with hold actions below. Keys glow gold while you press them,
+  including every key held in a chord; quick taps leave a brief flash.
+  Hide or show it with **Keyboard
+  overlay** in the tray menu. Use the **Drag to move** handle above it to place it
+  on any monitor; the keys remain click-through. Your position and visibility
+  choice are remembered across restarts.
 - **The layer indicator**, at the bottom of the screen: the layer you're holding or
   have locked (`NAV`, `NUM · locked`), and `CAPS WORD`. It flashes *Layout on/off*
   when you tap §. It can't be clicked and never takes the keyboard.
@@ -67,8 +91,15 @@ Physical keys are named by their Nordic keycaps.
 |---|---|
 | **§** | tap: layout on/off · hold 2 s: quit the layout |
 | **B** | hold and speak: dictation, typed where the cursor is |
+| **N** (next to B) | hold and speak an agent task; release to send it |
 | thumbs **X C V** | Esc · Space/**Nav** · Tab/**Tools** |
-| thumbs **, . -** | Enter/**Sym** · Backspace/**Num** · Delete/**Apps** |
+| thumbs **M , .** | Enter/**Sym** · Backspace/**Num** · Delete/**Apps** |
+
+The dictation microphone is opened when Toolkit starts and kept ready between
+captures, so you can speak as soon as you press a talk key. Dictation records only
+while the key is held, and the microphone is released when Toolkit quits. On release,
+Toolkit waits for Windows to return the complete recording before transcribing
+it. A failed or incomplete buffer is reported instead of sending partial audio.
 
 **Tools** (hold the Tab thumb, then the right hand):
 
@@ -77,7 +108,7 @@ Physical keys are named by their Nordic keycaps.
 | top **8 9 0 + ´** | rewrite by voice (hold, say how) | fix spelling | translate sv↔en | shorter | more formal |
 | home **I O P Å ¨** | dictate, tidied (hold) | dictate a command (hold) | ask… | copy text on screen | ask about the screen |
 | bottom **K L Ö** | agent, by voice (hold) | agent, typed | stop the agent | | |
-| thumb **,** | dictate (hold), as on B | | | | |
+| thumb **M** | dictate (hold), as on B | | | | |
 
 Rewrites replace the selected text. In terminals they don't press Ctrl+C (it
 would stop the running program), so they don't work there.
@@ -97,34 +128,191 @@ again goes through its windows. Change the apps in `config.py`.
 `,,week` `,,shrug` `,,thx` `,,mvh` `,,br`. Add your own in `config.py`. Physical navigation, window changes, pointer movement
 and injected toolkit text reset a partially typed trigger.
 
+## Meeting transcripts
+
+Choose **Record a meeting** from the tray or the agent timeline's **⋯** menu,
+or tell the agent to start a meeting transcript. Recording continues until you
+choose **Stop**, tell the agent to stop recording, or quit Toolkit. A red tray
+dot and a small elapsed-time bar show when capture is active. Other agent tasks
+and the B/N voice keys keep working during a meeting.
+
+The default records the **Windows default microphone and default playback
+device** together, so it includes remote participants heard through that playback
+device. For a room-only recording, choose **Record microphone only** in **⋯**.
+An app using a different output device needs to use the Windows default output
+to be included. Headphones prevent computer playback from also echoing through
+the microphone. Speaker names are not inferred.
+
+Timestamped text appears in the existing timeline in roughly 20–30 second
+chunks, as requests finish. The timeline keeps a short recent preview; click the
+recording bar or **Open** for the complete Markdown transcript. **Transcripts**
+opens `%LOCALAPPDATA%\toolkit\meetings`; each meeting has its own dated folder.
+There is no five-minute limit or fixed meeting duration.
+Brief microphone dropouts leave a gap at their original time; recording and
+computer-audio capture continue from the next valid packet.
+
+Only audio awaiting transcription is kept locally, in a recovery journal.
+Successful chunks are replaced by text and their audio storage is erased and
+reclaimed. Audio capture and network requests run independently. A connection
+failure retries while capture continues; **Retry** resumes a paused transcript.
+The pending-audio limit is 256 MiB (about 2 hours 20 minutes of untranscribed
+speech). Reaching it stops capture visibly and retains the saved part instead of
+using unlimited memory or disk space. Device errors also stop capture visibly.
+
+Stop saves the final partial chunk and lets transcription finish. On quit, saved
+pending audio is retained for transcription after the next launch. A restart
+never starts the microphone or playback recording automatically. A crash can
+lose the most recent audio still in memory; committed text and
+audio recover from the journal, including if a transcript-file write was interrupted.
+
+This uses Windows WASAPI and the existing configured transcription endpoint;
+there are no new dependencies. Chunk sizing and previous-chunk context follow
+the [official OpenAI speech-to-text documentation](https://developers.openai.com/api/docs/guides/speech-to-text).
+
 ## The agent
 
-Give it a task by voice or typed. It works step by step in a window of its own,
-with a Stop button (and Stop on the Tools layer). What it may do is decided by
-the toolkit, not the model:
+Hold **N**, beside B, to speak a task and release it to send. This works on every
+layer. The agent appears as up to five narrow smoked-glass notification bubbles at the
+bottom-right of the screen. New bubbles move earlier ones upward; the desktop
+between them remains visible and clickable. There is no standing toolbar or
+message field, and notifications never take keyboard focus.
+Windows supplies the background blur and rounded edges; text remains opaque.
+Accents distinguish your messages (blue), work (violet), actions (cyan), replies (mint), questions
+(amber), errors (coral), and recording (pink). Labels also identify each kind.
+Disabling Windows transparency uses solid surfaces; high-contrast mode uses the
+system's foreground and background colors.
 
-- **Reading** files, folders, the clipboard, windows and the screen: free.
-- **Writing a file, opening something, running a command**: asks every time,
-  except commands on `ALLOWED_COMMANDS` in `config.py` that can't chain another.
-- **Mouse and keyboard**: asks once per task.
+The current conversation stays visible while the task runs, with a compact
+spinner and an **×** stop button below it. Meeting recording has its own control.
+Replies stream with Markdown, a brief reveal for new text, and smooth bubble
+growth: short text expands sideways up to the width limit, then wraps downward.
+Text and glass move together. Long replies retain all their text and scroll
+upward automatically at a reading pace after a short pause. Overflowing replies
+take turns; each stays until its ending has been shown. Hover to pause scrolling
+and expiry; the mouse wheel lets you move through the text, including over the
+glass background. Leaving resumes after a short pause. Short replies, and the
+end of long replies, stay for another 12–30 seconds after the task finishes,
+then fade upward and disappear. Reduced motion advances overlapping pages.
+The stack disappears completely when idle. **Hold V + Ö** also stops the agent and
+clears queued follow-ups. The recording bubble's **×** ends only the recording.
 
-It stops after 80 steps (`AGENT_MAX_STEPS`). Everything it does goes to its journal.
+Your requests, agent replies, questions, voice answers, and tool activities keep
+separate entries as the conversation grows. Thinking appears as a small spinner,
+without a stream of reasoning text; reduced motion keeps the indicator static. Public reasoning
+summaries remain available in the full history; private reasoning is not shown.
+Questions stay visible until answered or cancelled: hold **N** to speak your
+reply. If you opt in to approval mode, say exactly **approve** or **decline**
+with the same hotkey. Other speech does not decide an approval. When it is
+working without a pending question, another voice request queues a follow-up.
+
+**Hold V + L** or **Agent session** in the tray opens the complete, selectable
+timeline, including expired bubbles, tool results and interrupted replies.
+Its **⋯** menu contains **Write a message…**, **Show activity**, **New chat**,
+and recording controls. **Enter** sends a typed message; **Shift+Enter** adds a
+line. Closing history returns to any active notifications. Voice and typed
+requests share the same conversation until **New chat** or Toolkit exits.
+
+The history window can still be moved, resized, snapped to either screen edge,
+or given a transparent background from its menu. Notifications use its remembered
+monitor and always stack in the right corner. Each bubble fits its content up to
+280 logical pixels wide, keeping its right edge anchored as it grows. Longer
+entries share the available height, with space reserved for the
+voice-reply hint. A small scroll marker shows progress through overflowing text.
+
+The SDK loads in the background and the notification view is prepared on the
+existing UI thread after Toolkit starts. History widgets are created when you
+open it. The source workspace is prepared only when a source tool is used.
+Failed requests show the reason in a bubble and the timeline;
+they also notify you and are recorded in
+`assistant.log`. Agent tasks use **GPT-6.1 Sol with low reasoning effort** for
+quicker replies, independently of the fast model used for dictation and quick questions. The
+endpoint must support the selected model through the Responses API.
+
+By default, file writes, commands, opening files, desktop control and self-updates
+run without approval prompts. Requests to change Toolkit authorize the agent to
+edit its source and model settings, test the result, install it and reload.
+The agent is instructed to publish or send messages only when you request that.
+The **×** stop button remains available throughout the task.
+
+The agent can work across desktop applications: inspect accessible controls,
+read their text, fill fields, invoke buttons, select list items, toggle options,
+expand menus and set sliders. It can also hover, click, drag with modifiers,
+scroll in either direction, paste text, use keyboard shortcuts, and move,
+resize, snap, minimize, maximize or close windows. Screenshots can cover a
+window, monitor, region or the whole desktop. PowerShell supports working
+directories and timeouts; Stop terminates its running command and child
+processes. The agent can use installed applications' APIs and COM interfaces
+through PowerShell when those suit the task.
+
+For web tasks, it defaults to **your running, signed-in Edge**, and can attach to
+Chrome on request. Enable **Allow remote debugging for this browser instance** at
+`edge://inspect/#remote-debugging` (or `chrome://inspect/#remote-debugging`), then
+approve the browser's connection dialog. Toolkit keeps that connection for
+subsequent work; the browser may ask again after a disconnect or restart.
+It opens background tabs, reads page text and controls, fills forms, handles
+frames and open shadow roots, and captures browser screenshots. Existing tabs
+can be selected by their IDs when the task needs their current state. Stop and
+Toolkit exit disconnect, leaving your browser and its tabs open.
+
+This reuses the running browser's session; it is not a second headless process
+sharing an open profile. Normal background tabs remain in the tab strip. The
+separate headless Edge profile is still available when explicitly selected.
+See [browser session reuse](docs/browser-session-reuse.md) for supported setup
+and the browser's consent requirements.
+
+The **Teams API adapter is ready to configure later**. Once an approved Microsoft
+Entra public application's client and tenant IDs are available, ask the agent to
+configure Teams and sign in. It can then find recipients, list chats, get or
+create a one-to-one chat and send a requested plain-text message. Sign-in uses
+Microsoft's device flow, and saved tokens are encrypted for your Windows account.
+See [background automation and Teams setup](docs/background-automation.md) for
+permissions, tool details and current limitations.
+
+While idle, Toolkit keeps recent app and window-title changes in memory: up to
+128 changes over the last 30 minutes. Each request receives recent activity and
+a screenshot of the last work window when the request starts. This helps it
+understand "this window" and "what I was just doing". Opening Toolkit's timeline
+does not replace that work window. Queued requests retain their own invocation
+context; their screenshot is taken when they start running. Activity while the
+agent is working is marked so it can distinguish its own actions.
+
+The idle tracker collects no screenshots, keystrokes or clipboard history, and
+makes no model calls. Request context goes to your configured endpoint and stays
+in the conversation until **New chat** or exit; only the latest two screenshots
+are retained. The idle activity buffer expires separately. Set
+`TOOLKIT_AGENT_CONTEXT=off` and restart to turn off this automatic context.
+
+Desktop automation uses the permissions of your Windows account. A locked
+desktop or an elevated application can block screen capture and input. Some
+applications expose few accessibility controls; the agent can use screenshots,
+input or an application API instead. It checks results and reports an actual
+blocker when Windows refuses access.
+
+With `TOOLKIT_AGENT_APPROVALS=ask`, writes and opens ask each time, commands ask
+unless they match `ALLOWED_COMMANDS` in `config.py`, and desktop control asks once
+per task. The keeper also reviews self-updates in that optional mode.
+
+It stops after 80 steps (`AGENT_MAX_STEPS`). The journal records tool names and
+success status. Browser and Teams arguments and results stay out of persistent
+journals and activity details, including form values and sign-in codes.
 
 ## Changing the toolkit
 
 Ask the agent, by voice or typed: "add a snippet for my email address", "make
 the indicator smaller", "add a key that opens my timesheet". It works on a copy
-of the source (`%LOCALAPPDATA%\toolkit\workspace`), never the running files, then:
+of the source (`%LOCALAPPDATA%\toolkit\workspace`), never the running files. Draft
+edits stay available for follow-up requests in the same conversation, then:
 
-1. **Syntax checks**: every Python file, including the `.pyw` launchers, compiles.
-   This step does not import or run proposed code.
-2. **You review** the complete diff in a window owned by the protected keeper.
-   Choose **Run checks and install** or Cancel. Approval allows this code and its
-   tests to run with your Windows account: review only changes you trust. The
-   updater provides recovery, not a sandbox for approved Python code.
-3. **Runtime checks**: the keeper checks its own copy of the reviewed source:
-   every module imports and every test passes. Cancelled or failing changes are
-   not installed. A candidate changed during review or checks is refused.
+1. **Check and fix**: every Python file, including the `.pyw` launchers, compiles.
+   The agent runs imports and tests on a fresh copy of its draft and sees the
+   results, so it can fix runtime failures and check again before applying.
+2. **Submit**: the agent sends the checked change to the keeper. There is no
+   approval step by default. With `TOOLKIT_AGENT_APPROVALS=ask`, the agent runs
+   syntax checks first and the keeper shows the complete diff before running
+   the proposed code and tests.
+3. **Verify**: the keeper checks its own frozen copy of the source: every module
+   imports and every test passes. Failed checks or changes to the candidate
+   during checks prevent installation.
 4. **Install and restart**: the keeper saves the current version and durable
    recovery state, installs the checked copy, clears old bytecode, and restarts
    the layout and assistant. File-write failures restore the previous version.
@@ -137,17 +325,20 @@ of the source (`%LOCALAPPDATA%\toolkit\workspace`), never the running files, the
 
 The last 20 versions are kept in `%LOCALAPPDATA%\toolkit\versions`. The agent
 can't change `keeper.py`, `selfcheck.py`, `runtime.py` or `toolkit.pyw`, and the keeper uses
-nothing but Python's standard library, so the normal source-edit tools cannot replace the updater. Approved code still
-runs with your account permissions.
+nothing but Python's standard library, so the normal source-edit tools cannot
+replace the updater. The private `.python` and `.runtime` directories are also
+protected and stay outside source snapshots and updates. Code and tests run with
+your account permissions.
 
 ## Publishing the agent's changes to GitHub
 
 Ask the agent to "make the change and publish it to GitHub". It has a
-`publish_changes` tool: it freezes its workspace, shows the diff and destination
-for approval, runs the runtime checks, commits, and pushes a new
+`publish_changes` tool: it freezes its workspace, runs the runtime checks,
+commits, and pushes a new
 `toolkit/agent-*` branch. It never force-pushes or updates `main`. Publishing does
 not install the change; ask it to publish before applying, since installation
-restarts the agent. Merge the branch on GitHub after review.
+restarts the agent. In optional approval mode it asks you to approve the diff
+and destination first. Merge the branch on GitHub after review.
 
 Publishing requires **Git for Windows on PATH** and credentials already set up
 for the repository (for example through Git Credential Manager). The Windows bundle includes the SDK dependencies for the other features. A missing Git installation,
@@ -172,15 +363,58 @@ change, either select its published branch as the base or merge it first.
 Toolkit uses the [OpenAI Agents SDK](https://developers.openai.com/api/docs/guides/agents/quickstart)
 through `assistant/sdk.py`. Its `Runner` owns model turns and tool execution;
 `assistant/agent.py` retains Toolkit's tools, permissions and journal. The SDK
-uses your configured OpenAI-compatible **Chat Completions** endpoint. Tools run
-one at a time, screenshots keep the latest two images, and tracing is disabled
-so no traces are sent to OpenAI. Quick chat and transcription still use
-`assistant/llm.py`.
+uses your configured OpenAI-compatible
+[Responses API](https://platform.openai.com/docs/api-reference/responses) endpoint
+for agent tasks and tool calling, with streaming enabled.
+The configured reasoning effort and `summary: "auto"` are sent on every agent request. Encrypted
+reasoning and completed tool results stay in the conversation across turns.
+Only public summary and response-text events reach the view. The SDK adapter
+assembles content parts; immutable timeline entries replace each live row.
+Publishers belong to one request, so late events cannot enter another turn.
+Tools run
+one at a time, enforced locally so endpoints that reject `parallel_tool_calls`
+still work. Automatic request images and screenshot tool results share a limit
+of two retained images.
+Response storage and tracing are disabled. Quick chat and transcription still
+use `assistant/llm.py` and their existing endpoints.
 
-The bundled dependency versions and wheel hashes are pinned in
-`requirements/windows-py312.lock`; `.runtime/manifest.json` lists the included
-wheels. Updating dependencies requires rebuilding the bundle. The agent edits
-source code, while the protected bootstrap keeps dependencies outside updates.
+The native notifications in `assistant/agent_toasts.py` and conversation history
+in `assistant/agent_panel.py` share the Tk
+thread in `assistant/ui.py` with prompts, answers, reviews, the key map and
+overlays. `assistant/agent_window.py` owns the session controller and queues
+immutable snapshots for painting. The model and inline questions stay on worker
+threads. `assistant/notifications.py` projects bounded notifications with pure
+lifetime transitions; expiry never removes session messages. Background updates
+preserve keyboard focus; history preserves selection and scroll position.
+`winapi/appearance.py` applies native glass to the Tk notifications, with no
+desktop capture or new UI dependency. A shared timer rotates existing spinner
+shapes only while needed; it does not rebuild the text. Reading timers also
+observe hover over the glass's transparent pixels.
+Markdown is measured in an unshown widget before each final card layout, so live
+updates never expand visible windows just to measure their text.
+Agent messages render
+Markdown headings, nested emphasis, lists and checklists, quotes, code blocks,
+strikethrough and links. Tables use compact labelled rows to fit the narrow
+timeline. Text stays selectable, code stays literal, and questions stay inline.
+There is no browser runtime, local UI server or separate agent UI process.
+
+`assistant/activity.py` samples foreground app/title changes once a second.
+`assistant/commands.py` runs cancellable commands with bounded output.
+`assistant/uia.py` and `assistant/uia.ps1` bridge the installed Windows UI
+Automation API through PowerShell/.NET, scoped to a window with stable runtime
+control identifiers. This adds no Python packages or browser dependencies.
+
+The full Python distribution and its SHA-256 are pinned in
+`requirements/python-win64.json`; matching dependency artifacts are pinned in
+`requirements/windows-py315.lock`. `.runtime/manifest.json` records both the
+Python version and included wheels. The bundle uses the official full Python
+distribution, including Tk; the smaller embeddable distribution omits Tk.
+The runtime contains the Agents SDK, the small `markdown-it-py` parser and their
+dependencies. Updating either pin requires rebuilding the bundle. The protected
+bootstrap selects the bundled interpreter and checks the dependency ABI before
+loading native modules. Child commands use the same private Python.
+Workspace checks reuse that installed bundle, including
+its Windows import hooks, so a source copy can run the same checks as the live app.
 
 ## Logs
 
@@ -188,13 +422,16 @@ All in `%LOCALAPPDATA%\toolkit` (tray menu → Open logs folder):
 
 | File | |
 |---|---|
-| `usage.jsonl` | which features were used, how long they took, whether they failed. Never what you typed or said. Tray menu → **Usage report** lists every feature by use, and the ones never used, so they can go. |
+| `usage.jsonl` | which features were used, how long they took, whether they failed. Voice uses include held/audio durations, transcription/submission timing, and transcript/requested/submitted character counts; agent uses include preparation, first response and first tool timings. Never what you typed or said. Tray menu → **Usage report** lists every feature by use, and the ones never used, so they can go. |
 | `agent.jsonl` | every action the agent took, with its arguments |
 | `assistant.log`, `layout.log` | problems and crashes |
+| `agent-ui.log` | desktop view startup timing and errors |
 | `keeper.log` | starts, installs, trials, undos |
 
-What leaves the laptop: recordings (for transcription), and the text, selection
-or screen area you used a tool on, sent to your endpoint and nowhere else.
+What leaves the laptop: recordings (for transcription), the text, selection
+or screen area you used a tool on, and the recent app/window context and request
+screenshot when automatic context is enabled. These go to your configured
+endpoint. The idle activity buffer is not written to disk.
 
 ## How it's built
 
@@ -208,25 +445,34 @@ winapi/         typed Win32 bindings: the only ctypes code
 miryoku/        the layout: layout.py (the tables), engine.py (the logic), win.py
 assistant/      llm.py (the endpoint), features.py (what each key does), agent.py,
                 workspace.py (the agent's copy of the source), keymap.py;
-                desktop.py, ui.py (Tk) and app.py on Windows
+                agent_session.py, agent_window.py (conversation and UI scheduling),
+                agent_panel.py, ui.py, theme.py, rich_text.py (the shared Tk UI);
+                desktop.py and app.py on Windows
 ```
 
 The logic never calls Windows directly: the layout's engine goes through a
 `Host`, the assistant's features through a `Desktop`, the agent through a
 `Machine`, so all of it is tested with fakes. The code is strictly typed, with no
 `Any` outside the boundaries to untyped code (`winapi` for ctypes,
-`assistant/ui.py` for Tk, `assistant/sdk.py` for SDK integration, and
+`assistant/ui.py` and `assistant/agent_panel.py` for Tk,
+`assistant/sdk.py` for SDK integration, and
 `selfcheck.py` for looking inside modules). Our classes use `__slots__`; SDK
 lifecycle subclasses inherit the SDK’s storage. Behaviour changes come with tests.
 
 ## Development
 
 The canonical source is the private repository `JimLundin/toolkit`. Clone it and
-run checks with Python 3.10 or later. Install source dependencies first:
+run checks with Python 3.15 or later. Install source dependencies first:
 `python -m pip install -e .`. The prebuilt Windows bundle needs no pip step.
 Development tools are optional locally and required by CI.
+The [functional design notes](docs/functional-design.md) explain the domain
+models, effect owners, and keyboard performance measurements.
+The source uses deferred annotations directly, `type` aliases and scoped generic
+type parameters. It does not need `from __future__ import annotations`. The small
+launcher bootstrap remains readable by older Python associations so they can
+hand off to the bundled 3.15 interpreter before importing the application.
 
-GitHub Actions checks Python 3.10 and 3.12 on Windows and Linux, plus Mypy,
+GitHub Actions checks Python 3.15 on Windows and Linux, plus Mypy,
 Pyright and Ruff. Desktop end-to-end tests are available through the manual
 **Windows desktop tests** workflow on a dedicated self-hosted Windows runner
 labelled `toolkit-desktop`; they take control of its keyboard and mouse.
@@ -242,10 +488,17 @@ python selfcheck.py                      # with installed or bundled SDK depende
 pytest                                   # the same tests, if you have pytest
 mypy . && pyright && ruff check .        # if you have them
 TOOLKIT_E2E=1 pytest tests/test_windows_*e2e.py
-python scripts/bundle.py dist/toolkit-sdk-python312-win64.zip
+python scripts/bundle.py dist/toolkit-sdk-python315-win64.zip
 ```
 
-The last line runs on Windows only: it starts the real toolkit, presses real
+Inside an extracted Windows bundle, use `.python\python.exe selfcheck.py` to run
+checks with its matching interpreter. The bundle builder can run on Windows or
+Linux and accepts `--cache FOLDER` to reuse a verified Python download.
+
+The `TOOLKIT_E2E=1` command runs on Windows only: it starts the real toolkit, presses real
 keys and drags the real mouse, and has the keeper install, undo and refuse
 changes on a copy of the toolkit (a few minutes, against a fake endpoint), so
 leave the keyboard alone while it runs.
+
+`tests/test_windows_agent_panel.py` exercises the actual Tk panel, including
+queued input, inline responses, cancellation and updates while hidden.

@@ -1,8 +1,6 @@
 """What each physical key does, per layer, as the key map window draws it; and the
 words the layer indicator shows. Plain Python, read from the layout's own tables."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Final
@@ -14,8 +12,8 @@ from miryoku.layout import (
     ESCAPE,
     PASTE,
     REDO,
-    TALK,
     UNDO,
+    VOICE_KEYS,
     Action,
     Chord,
     Command,
@@ -43,6 +41,8 @@ ROWS: Final = (
     ((Scancode(0x56), "<"), *_row(0x2C, "Z X C V B N M , . -")),
 )
 """The keyboard's letter block, row by row: scancode and the Nordic keycap's name."""
+
+PHYSICAL_NAMES: Final = {scancode: name for row in ROWS for scancode, name in row}
 
 
 class Kind(Enum):
@@ -147,8 +147,9 @@ def keymap(layer: Layer | None) -> list[list[Cap]]:
         for scancode, name in row:
             if scancode == ESCAPE:
                 caps.append(Cap(name, "On/off", "hold: quit", Kind.SPECIAL))
-            elif scancode == TALK:
-                caps.append(Cap(name, "Talk", "hold", Kind.TOOL))
+            elif (tool := VOICE_KEYS.get(scancode)) is not None:
+                label = "Agent" if tool is Tool.AGENT_VOICE else TOOL_NAMES[tool]
+                caps.append(Cap(name, label, "hold", Kind.TOOL))
             else:
                 match slot(scancode):
                     case Unmapped():

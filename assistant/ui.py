@@ -1,8 +1,8 @@
-"""The assistant's windows, drawn with Tk (part of Python on Windows): a text box,
-a screen-area picker, an answer window and the agent's window.
+"""All Toolkit windows share one Tk UI thread.
 
 Tk runs on a thread of its own. Every method here may be called from any other
-thread; the ones that ask the user something block until they've answered.
+thread; the ones that ask the user something block until answered or cancelled.
+Agent work and inline questions remain on worker threads and never wait for painting.
 
 Like `winapi` for ctypes, this module is the boundary to Tk, whose type stubs
 leave some values untyped: what it exports is fully typed; inside, some Tk values
@@ -10,30 +10,30 @@ aren't, so the "no Any" checks are relaxed here only.
 """
 # pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false
 
-from __future__ import annotations
-
 import queue
 import threading
+import time
 import tkinter as tk
 import traceback
 from collections.abc import Callable
 from tkinter import ttk
-from typing import Final, TypeVar, cast
+from typing import Final, cast
 
-from miryoku.layout import Layer
-from winapi import windows
+from miryoku.layout import Layer, Scancode
+from winapi import screen, windows
 from winapi.shapes import Rect
 
+from .agent_toasts import AgentToasts
+from .agent_window import AgentWindow
 from .geometry import region
-from .keymap import Cap, Kind, keymap
+from .keymap import PHYSICAL_NAMES, Cap, Kind, keymap
+from .overlay import KeyHighlights, fit_position, load_position, nearest_work_area, save_position
+from .recording_state import RecordingAction
+from .theme import ACCENT, BACKGROUND, ERROR, FONT, FOREGROUND, MONO, MUTED
 
-T = TypeVar("T")
-Job = Callable[[tk.Tk], None]
+__all__ = ["AgentWindow", "Ui"]
 
-FONT: Final = ("Segoe UI", 11)
-MONO: Final = ("Cascadia Mono", 10)
-BACKGROUND, FOREGROUND, MUTED, ACCENT, ERROR = "#1f2124", "#e8e6e3", "#9a9893", "#6aa9ff", "#ff7b72"
-
+type Job = Callable[[tk.Tk], None]
 
 def _bring_forward(window: tk.Toplevel, focus: tk.Widget) -> None:
     """Puts a window in front and gives it the keyboard. Windows only lets the program
@@ -57,12 +57,21 @@ def _near_pointer(window: tk.Toplevel, width: int, height: int) -> None:
 
 
 class Ui:
-    __slots__ = ("_indicator", "_jobs", "_keymap", "_ready", "_thread")
+    __slots__ = (
+        "_agent", "_agent_lock", "_agent_waiting", "_indicator", "_jobs", "_keyboard_overlay", "_keymap", "_ready", "_recording", "_root", "_thread",
+    )
 
-    def __init__(self) -> None:
+    def __init__(
+        self, *, on_agent_waiting: Callable[[bool], None] | None = None, on_recording: Callable[[RecordingAction], None] | None = None,
+    ) -> None:
+        self._agent: AgentWindow | None = None
+        self._agent_lock = threading.Lock()
+        self._agent_waiting = on_agent_waiting
+        self._recording = on_recording
         self._indicator: Indicator | None = None
         """Made on first use, on the Tk thread."""
         self._keymap: KeymapWindow | None = None
+        self._keyboard_overlay: KeymapOverlay | None = None
         self._jobs: queue.Queue[Job] = queue.Queue()
         self._ready = threading.Event()
         self._thread = threading.Thread(target=self._run, name="ui", daemon=True)
@@ -70,7 +79,7 @@ class Ui:
         self._ready.wait()
 
     def _run(self) -> None:
-        root = tk.Tk()
+        root = self._root = tk.Tk()
         root.withdraw()
         style = ttk.Style(root)
         if "vista" in style.theme_names():
@@ -95,7 +104,7 @@ class Ui:
         """Runs a job on the Tk thread, soon; doesn't wait."""
         self._jobs.put(job)
 
-    def _ask(self, build: Callable[[tk.Tk, Callable[[T], None]], None]) -> T:
+    def _ask[T](self, build: Callable[[tk.Tk, Callable[[T], None]], None]) -> T:
         """Builds a window on the Tk thread and waits for the answer it gives."""
         answers: queue.Queue[tuple[T | None, Exception | None]] = queue.Queue()
         def job(root: tk.Tk) -> None:
@@ -201,6 +210,27 @@ class Ui:
 
         self.post(job)
 
+    def show_keyboard_overlay(
+        self, layer: Layer | None, title: str, work: Rect, *, visible: bool, pressed: frozenset[Scancode] = frozenset(),
+    ) -> None:
+        """A faded key map that follows the current layer without taking keyboard focus."""
+        def job(root: tk.Tk) -> None:
+            if self._keyboard_overlay is None:
+                if not visible:
+                    return
+                self._keyboard_overlay = KeymapOverlay(root)
+            self._keyboard_overlay.show(layer, title, work, visible=visible, pressed=pressed)
+
+        self.post(job)
+
+    def show_pressed_keys(self, pressed: frozenset[Scancode], *, reset: bool = False) -> None:
+        """Update feedback on the Tk thread without opening a hidden overlay."""
+        def job(root: tk.Tk) -> None:
+            if self._keyboard_overlay is not None:
+                self._keyboard_overlay.set_pressed(pressed, reset=reset)
+
+        self.post(job)
+
     def _overlay(self, root: tk.Tk) -> Indicator:
         if self._indicator is None:
             self._indicator = Indicator(root)
@@ -222,11 +252,37 @@ class Ui:
 
         return self._ask(build)
 
-    def agent(self, task: str, stop: Callable[[], None]) -> AgentWindow:
-        def build(root: tk.Tk, done: Callable[[AgentWindow], None]) -> None:
-            done(AgentWindow(self, root, task, stop))
+    def agent(
+        self, task: str | None, stop: Callable[[], None], *, on_problem: Callable[[str], None] | None = None,
+        on_reset: Callable[[], bool] | None = None, on_submit: Callable[[str], None] | None = None,
+        focus: bool = False, reveal: bool = True, queued: bool = False,
+    ) -> AgentWindow:
+        with self._agent_lock:
+            if self._agent is None:
+                self._agent = AgentWindow(
+                    stop, post=lambda job: self.post(lambda root: job()), create_view=lambda agent: AgentToasts(self._root, agent),
+                    on_problem=on_problem, on_reset=on_reset, on_submit=on_submit, on_waiting=self._agent_waiting, on_recording=self._recording,
+                )
+            panel = self._agent
+        if task is not None:
+            panel.begin(task, stop, queued=queued)
+        if reveal:
+            panel.show(focus=focus)
+        return panel
 
-        return self._ask(build)
+    def agent_input(
+        self, title: str, detail: str = "", *, question: bool = False, cancel: threading.Event | None = None,
+    ) -> str | None:
+        """Wait on the agent's inline request, without displaying or focusing a window."""
+        if self._agent is None:
+            return None
+        return self._agent.input(title, detail, question=question, cancel=cancel)
+
+    def close_agent(self) -> None:
+        if self._agent is not None:
+            self._agent.close()
+            if threading.current_thread() is not self._thread:
+                self._agent.closed_ready.wait(timeout=3)
 
 
 class _TextWindow:
@@ -304,7 +360,7 @@ class AnswerWindow(_TextWindow):
         ttk.Button(bottom, text="Copy answer", command=self.copy_all).pack(side="right", padx=(8, 0))
         _bring_forward(self.window, self.text)
 
-    def _ask(self, _: tk.Event[tk.Entry]) -> None:
+    def _ask[T](self, _: tk.Event[tk.Entry]) -> None:
         question = self.entry.get().strip()
         if question:
             self.entry.delete(0, "end")
@@ -327,45 +383,6 @@ class AnswerWindow(_TextWindow):
         self.add(f"\n{message}\n", "error")
         self.finish()
 
-
-class AgentWindow(_TextWindow):
-    """What the agent is doing, step by step, with a Stop button."""
-
-    __slots__ = ("button",)
-
-    def __init__(self, ui: Ui, root: tk.Tk, task: str, stop: Callable[[], None]) -> None:
-        super().__init__(ui, root, f"Agent: {task}", 820, 600)
-        self.add(f"{task}\n\n", "accent")
-        bottom = tk.Frame(self.window, background=BACKGROUND)
-        bottom.pack(fill="x", padx=12, pady=(0, 12))
-        self.button = ttk.Button(bottom, text="Stop", command=stop)
-        self.button.pack(side="right")
-        ttk.Button(bottom, text="Copy", command=self.copy_all).pack(side="right", padx=(0, 8))
-
-        def close() -> None:
-            stop()
-            self.window.destroy()
-
-        self.window.protocol("WM_DELETE_WINDOW", close)
-        _bring_forward(self.window, self.text)
-
-    def step(self, text: str) -> None:
-        self.add(f"{text}\n", "muted")
-
-    def say(self, text: str) -> None:
-        self.add(f"{text}\n\n")
-
-    def problem(self, text: str) -> None:
-        self.add(f"{text}\n", "error")
-
-    def done(self, text: str) -> None:
-        self.add(f"\n{text}\n", "accent")
-
-        def job(_: tk.Tk) -> None:
-            if self.window.winfo_exists():
-                self.button.configure(text="Close", command=self.window.destroy)
-
-        self.ui.post(job)
 
 
 class Indicator:
@@ -436,6 +453,205 @@ _ROW_START: Final = (0.0, 1.5, 0.0, 1.25)
 _UNIT, _GAP, _HEIGHT = 64, 5, 56
 
 
+def _draw_keymap(canvas: tk.Canvas, layer: Layer | None, scale: float = 1.0) -> dict[str, Cap]:
+    """Shared drawing for the reference window and the live overlay."""
+    canvas.delete("all")
+    caps: dict[str, Cap] = {}
+    for row_number, (row, start) in enumerate(zip(keymap(layer), _ROW_START, strict=True)):
+        x = start * _UNIT * scale
+        y = row_number * (_HEIGHT + _GAP) * scale
+        for cap in row:
+            size = 1.75 if cap.physical == "Caps" else 1.0
+            _draw_key(canvas, cap, x, y, (size * _UNIT - _GAP) * scale, scale=scale)
+            caps[cap.physical] = cap
+            x += size * _UNIT * scale
+    return caps
+
+
+def _draw_key(canvas: tk.Canvas, cap: Cap, x: float, y: float, width: float, *, scale: float) -> None:
+    tag = f"key:{cap.physical}"
+    height = _HEIGHT * scale
+    small = -max(8, round(10 * scale))  # negative font sizes are pixels, like the key geometry
+    canvas.create_rectangle(x, y, x + width, y + height, tags=(f"{tag}:background",))
+    canvas.create_text(
+        x + 5 * scale, y + 4 * scale, text=cap.physical, anchor="nw", font=("Segoe UI", small), tags=(f"{tag}:physical",),
+    )
+    if cap.label:
+        size = 15 if len(cap.label) <= 5 else 12 if len(cap.label) <= 8 else 11 if len(cap.label) <= 10 else 10
+        canvas.create_text(
+            x + width / 2, y + height / 2 + scale, text=cap.label,
+            font=("Segoe UI Semibold", -max(8, round(size * scale))), width=width - 6 * scale, tags=(f"{tag}:label",),
+        )
+    if cap.hold:
+        canvas.create_text(
+            x + width / 2, y + height - 9 * scale, text=cap.hold,
+            font=("Segoe UI", small), tags=(f"{tag}:hold",),
+        )
+    _colour_key(canvas, cap, pressed=False)
+
+
+def _colour_key(canvas: tk.Canvas, cap: Cap, *, pressed: bool) -> None:
+    """Recolour existing items, keeping keypresses out of the layout/geometry path."""
+    tag = f"key:{cap.physical}"
+    fill, ink = ("#ffcf7a", BACKGROUND) if pressed else _COLOURS[cap.kind]
+    outline = "#fff0cc" if pressed else "#3a3d42" if cap.kind is Kind.BLANK else fill
+    canvas.itemconfigure(f"{tag}:background", fill=fill, outline=outline, width=2 if pressed else 1)
+    canvas.itemconfigure(f"{tag}:physical", fill=ink if pressed else MUTED)
+    canvas.itemconfigure(f"{tag}:label", fill=ink)
+    canvas.itemconfigure(f"{tag}:hold", fill=ink if pressed or cap.kind is Kind.HELD else MUTED)
+
+
+class KeymapOverlay:
+    """A click-through keyboard with a separate, nonactivating drag handle."""
+
+    __slots__ = (
+        "_canvas", "_caps", "_drag", "_frame", "_handle", "_handle_frame", "_heading", "_highlight_timer", "_highlighted", "_highlights",
+        "_position", "_view", "_window",
+    )
+
+    def __init__(self, root: tk.Tk) -> None:
+        self._window = tk.Toplevel(root, background=BACKGROUND, padx=8, pady=8)
+        self._window.withdraw()
+        self._window.title("Toolkit keyboard overlay")
+        self._window.overrideredirect(True)
+        self._window.attributes("-alpha", 0.45)
+        self._heading = tk.Label(self._window, background=BACKGROUND, foreground=FOREGROUND, font=("Segoe UI Semibold", 10))
+        self._heading.pack(anchor="w", pady=(0, 6))
+        self._canvas = tk.Canvas(self._window, background=BACKGROUND, highlightthickness=0)
+        self._canvas.pack()
+        self._window.update_idletasks()
+        self._frame = int(self._window.wm_frame(), 16)
+        windows.make_overlay(self._frame)
+
+        # A click-through window cannot receive mouse events, even on its children.
+        self._handle = tk.Toplevel(root, background="#3a3d42", padx=1, pady=1)
+        self._handle.withdraw()
+        self._handle.title("Toolkit keyboard overlay handle")
+        self._handle.overrideredirect(True)
+        self._handle.attributes("-alpha", 0.75)
+        tk.Label(
+            self._handle, text="≡  Drag to move", font=("Segoe UI", 9), cursor="fleur",
+            background="#2b2e33", foreground=FOREGROUND, padx=10, pady=4,
+        ).pack()
+        self._handle.bind("<ButtonPress-1>", self._start_drag)
+        self._handle.bind("<B1-Motion>", self._drag_to)
+        self._handle.bind("<ButtonRelease-1>", self._end_drag)
+        self._handle.update_idletasks()
+        self._handle_frame = int(self._handle.wm_frame(), 16)
+        windows.make_overlay(self._handle_frame, click_through=False)
+        self._position = load_position()
+        self._drag: tuple[int, int] | None = None
+        self._view: tuple[Layer | None, str, tuple[Rect, ...]] | None = None
+        self._caps: dict[str, Cap] = {}
+        self._highlights = KeyHighlights()
+        self._highlighted: frozenset[str] = frozenset()
+        self._highlight_timer: str | None = None
+
+    def show(
+        self, layer: Layer | None, title: str, work: Rect, *, visible: bool, pressed: frozenset[Scancode] = frozenset(),
+    ) -> None:
+        if not visible:
+            self._finish_drag()
+            self.set_pressed(frozenset(), reset=True)
+            windows.show_quietly(self._handle_frame, visible=False)
+            windows.show_quietly(self._frame, visible=False)
+            self._view = None
+            return
+        areas = tuple(m.work for m in screen.monitors()) or (work,)
+        view = (layer, title, areas)
+        if view == self._view:
+            self.set_pressed(pressed)
+            return
+        if self._position is not None:
+            work = nearest_work_area(self._position, areas)
+        density = max(1.0, self._window.winfo_fpixels("1i") / 96)
+        margin = round(84 * density)
+        handle_height = self._handle.winfo_reqheight() + 4
+        scale = max(
+            0.2, min(0.85 * density, (work.width - 32) / (14 * _UNIT), (work.height - margin - handle_height - 64) / (4 * (_HEIGHT + _GAP))),
+        )
+        self._heading.configure(text=f"Toolkit keyboard · {title}")
+        self._canvas.configure(width=round(14 * _UNIT * scale), height=round(4 * (_HEIGHT + _GAP) * scale))
+        self._caps = _draw_keymap(self._canvas, layer, scale)
+        self._highlighted = frozenset()
+        self._view = view
+        self.set_pressed(pressed)
+        self._window.update_idletasks()
+        width, height = self._window.winfo_reqwidth(), self._window.winfo_reqheight()
+        if self._position is None:
+            self._position = (work.left + work.width // 2, work.bottom - height - handle_height - margin)
+        self._window.geometry(f"{width}x{height}")
+        self._handle.geometry(f"{self._handle.winfo_reqwidth()}x{self._handle.winfo_reqheight()}")
+        self._window.update_idletasks()
+        self._move(fit_position(self._position, width, height + handle_height, work))
+        windows.show_quietly(self._frame, visible=True)
+        windows.show_quietly(self._handle_frame, visible=True)
+
+    def set_pressed(self, pressed: frozenset[Scancode], *, reset: bool = False) -> None:
+        if reset:
+            self._highlights.clear()
+        if self._view is None:
+            return
+        self._highlights.update(pressed, time.monotonic())
+        self._paint_highlights()
+
+    def _paint_highlights(self) -> None:
+        if self._highlight_timer is not None:
+            self._window.after_cancel(self._highlight_timer)
+            self._highlight_timer = None
+        now = time.monotonic()
+        highlighted = frozenset(PHYSICAL_NAMES[key] for key in self._highlights.visible(now))
+        for name in highlighted ^ self._highlighted:
+            _colour_key(self._canvas, self._caps[name], pressed=name in highlighted)
+        self._highlighted = highlighted
+        if (delay := self._highlights.delay(now)) is not None:
+            self._highlight_timer = self._window.after(delay, self._expire_highlights)
+
+    def _expire_highlights(self) -> None:
+        self._highlight_timer = None
+        self._paint_highlights()
+
+    def _move(self, position: tuple[int, int]) -> None:
+        self._position = position
+        x, y = position
+        width, height = self._window.winfo_reqwidth(), self._window.winfo_reqheight()
+        handle_width, handle_height = self._handle.winfo_reqwidth(), self._handle.winfo_reqheight()
+        left, top = x - width // 2, y + handle_height + 4
+        windows.move(self._frame, Rect(left, top, left + width, top + height))
+        left = x - handle_width // 2
+        windows.move(self._handle_frame, Rect(left, y, left + handle_width, y + handle_height))
+
+    def _start_drag(self, event: tk.Event[tk.Misc]) -> None:
+        if self._position is not None and self._view is not None:
+            x, y = self._position
+            self._drag = (event.x_root - x, event.y_root - y)
+            self._handle.grab_set()
+
+    def _drag_to(self, event: tk.Event[tk.Misc]) -> None:
+        if self._drag is not None:
+            x, y = self._drag
+            self._move((event.x_root - x, event.y_root - y))
+
+    def _end_drag(self, _event: tk.Event[tk.Misc]) -> None:
+        self._finish_drag()
+
+    def _finish_drag(self) -> None:
+        if self._drag is None:
+            return
+        self._drag = None
+        self._handle.grab_release()
+        if self._position is not None:
+            areas = tuple(m.work for m in screen.monitors())
+            if areas:
+                work = nearest_work_area(self._position, areas)
+                height = self._window.winfo_reqheight() + self._handle.winfo_reqheight() + 4
+                self._move(fit_position(self._position, self._window.winfo_reqwidth(), height, work))
+            try:
+                save_position(self._position)
+            except OSError:
+                traceback.print_exc()
+
+
 class KeymapWindow:
     """The keyboard as each layer has it. Buttons (or keys 1-6) switch layer."""
 
@@ -457,8 +673,8 @@ class KeymapWindow:
         self.canvas = tk.Canvas(self.window, width=width, height=4 * (_HEIGHT + _GAP), background=BACKGROUND, highlightthickness=0)
         self.canvas.pack()
         legend = (
-            "Hold a thumb for its layer (it's shown highlighted).  \u00a7 tap: layout on/off, hold: quit.  "
-            "B: hold to talk.  Keys 1\u20136 switch layer."
+            "Hold a thumb for its layer.  \u00a7: tap on/off, hold to quit.  "
+            "Hold B to dictate or N for an agent task.  Keys 1\u20136 switch layer."
         )
         tk.Label(self.window, text=legend, font=("Segoe UI", 9), background=BACKGROUND, foreground=MUTED).pack(anchor="w", pady=(10, 0))
         self.window.bind("<Escape>", lambda _: self.window.destroy())
@@ -478,23 +694,7 @@ class KeymapWindow:
         for button, (_, shown) in zip(self.buttons, _LAYERS, strict=True):
             selected = shown is layer
             button.configure(background=ACCENT if selected else "#2b2e33", foreground=BACKGROUND if selected else FOREGROUND, activebackground=ACCENT)
-        self.canvas.delete("all")
-        for y, (row, start) in enumerate(zip(keymap(layer), _ROW_START, strict=True)):
-            x = start * _UNIT
-            for cap in row:
-                size = 1.75 if cap.physical == "Caps" else 1.0
-                self._key(cap, x, y * (_HEIGHT + _GAP), size * _UNIT - _GAP)
-                x += size * _UNIT
-
-    def _key(self, cap: Cap, x: float, y: float, width: float) -> None:
-        fill, ink = _COLOURS[cap.kind]
-        self.canvas.create_rectangle(x, y, x + width, y + _HEIGHT, fill=fill, outline="#3a3d42" if cap.kind is Kind.BLANK else fill, width=1)
-        self.canvas.create_text(x + 5, y + 4, text=cap.physical, anchor="nw", fill=MUTED, font=("Segoe UI", 7))
-        if cap.label:
-            size = 11 if len(cap.label) <= 5 else 9 if len(cap.label) <= 8 else 8 if len(cap.label) <= 10 else 7
-            self.canvas.create_text(x + width / 2, y + _HEIGHT / 2 + 1, text=cap.label, fill=ink, font=("Segoe UI Semibold", size), width=width - 6)
-        if cap.hold:
-            self.canvas.create_text(x + width / 2, y + _HEIGHT - 9, text=cap.hold, fill=ink if cap.kind is Kind.HELD else MUTED, font=("Segoe UI", 7))
+        _draw_keymap(self.canvas, layer)
 
 
 class ReviewWindow:

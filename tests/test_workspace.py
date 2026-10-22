@@ -1,7 +1,5 @@
 """The agent's workspace: a copy of the source it edits, checks, and asks to install."""
 
-from __future__ import annotations
-
 import shutil
 from pathlib import Path
 
@@ -73,6 +71,7 @@ def test_protected_files_and_paths_outside_are_refused(tmp_path: Path) -> None:
     assert "protected" in refused(lambda: w.write("selfcheck.py", "hacked"))
     assert "protected" in refused(lambda: w.write("runtime.py", "hacked"))
     assert "protected" in refused(lambda: w.write(".runtime/agents/__init__.py", "hacked"))
+    assert "protected" in refused(lambda: w.write(".python/pythonw.exe", "hacked"))
     assert "outside" in refused(lambda: w.write("../escape.py", "x"))
     assert "outside" in refused(lambda: w.read("C:/Windows/win.ini"))
 
@@ -92,6 +91,15 @@ def test_check_runs_selfcheck_on_the_workspace(tmp_path: Path) -> None:
     ok, report = w.check()
     assert not ok
     assert "FAILED tests.test_config.test_greeting" in report
+
+
+def test_runtime_checks_cannot_change_the_source_that_was_checked(tmp_path: Path) -> None:
+    w = workspace(tmp_path)
+    content = "from pathlib import Path\nPath(__file__).write_text('CHANGED = True\\n', encoding='utf-8')\n"
+    w.write("candidate.py", content)
+    ok, report = w.check()
+    assert not ok and "changed the candidate source" in report
+    assert w.read("candidate.py") == content
 
 
 

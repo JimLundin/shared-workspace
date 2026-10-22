@@ -3,8 +3,6 @@ and images), against any OpenAI-style API. Uses only the standard library, so
 there is nothing to install. Every call returns its result or a `Failure`; none
 raise for network or server problems."""
 
-from __future__ import annotations
-
 import base64
 import io
 import json
@@ -14,8 +12,8 @@ import uuid
 import wave
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from http.client import HTTPResponse
-from typing import Final, Literal, TypeAlias, cast
+from http.client import HTTPException, HTTPResponse
+from typing import Final, assert_never, cast
 
 RATE: Final = 16_000
 """Samples per second. Speech models work at 16 kHz; more only makes uploads bigger."""
@@ -24,7 +22,7 @@ MAX_SECONDS: Final = 300
 MIN_SECONDS: Final = 0.3
 """Shorter recordings are accidental taps, and aren't sent."""
 
-Json: TypeAlias = "str | int | float | bool | list[Json] | dict[str, Json] | None"
+type Json = str | int | float | bool | list[Json] | dict[str, Json] | None
 
 
 # ---- Settings --------------------------------------------------------------------------
@@ -43,6 +41,10 @@ class Settings:
     """Names and terms to expect when transcribing; helps with jargon. Empty: none."""
     language: str
     """An ISO code such as `sv` or `en` for transcription. Empty: detected."""
+    agent_reasoning_effort: str = "low"
+    """Reasoning effort for agent tasks; independent of quick chat."""
+    agent_approvals: bool = False
+    """Opt in to tool and self-update approval prompts."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,9 +65,11 @@ def settings_from(env: Mapping[str, str]) -> Settings | Missing:
         api_key=env["OPENAI_API_KEY"],
         transcribe_model=env.get("TOOLKIT_TRANSCRIBE_MODEL", "gpt-4o-transcribe"),
         chat_model=chat_model,
-        agent_model=env.get("TOOLKIT_AGENT_MODEL", chat_model),
+        agent_model=env.get("TOOLKIT_AGENT_MODEL", "gpt-6.1-sol"),
         vocabulary=env.get("TOOLKIT_VOCABULARY", ""),
         language=env.get("TOOLKIT_LANGUAGE", ""),
+        agent_reasoning_effort=env.get("TOOLKIT_AGENT_REASONING_EFFORT", "low"),
+        agent_approvals=env.get("TOOLKIT_AGENT_APPROVALS", "never").lower() == "ask",
     )
 
 
@@ -101,7 +105,7 @@ class Image:
     png: bytes
 
 
-Part: TypeAlias = Text | Image
+type Part = Text | Image
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,27 +117,44 @@ class ToolCall:
 
 
 @dataclass(frozen=True, slots=True)
-class Message:
-    role: Literal["system", "user", "assistant", "tool"]
+class SystemMessage:
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class UserMessage:
     content: str | tuple[Part, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class AssistantMessage:
+    text: str
     tool_calls: tuple[ToolCall, ...] = ()
-    tool_call_id: str = ""
 
 
-def system_message(text: str) -> Message:
-    return Message("system", text)
+@dataclass(frozen=True, slots=True)
+class ToolResult:
+    call_id: str
+    text: str
 
 
-def user_message(content: str | Sequence[Part]) -> Message:
-    return Message("user", content if isinstance(content, str) else tuple(content))
+type Message = SystemMessage | UserMessage | AssistantMessage | ToolResult
 
 
-def assistant_message(text: str, tool_calls: tuple[ToolCall, ...] = ()) -> Message:
-    return Message("assistant", text, tool_calls)
+def system_message(text: str) -> SystemMessage:
+    return SystemMessage(text)
 
 
-def tool_result(call_id: str, text: str) -> Message:
-    return Message("tool", text, tool_call_id=call_id)
+def user_message(content: str | Sequence[Part]) -> UserMessage:
+    return UserMessage(content if isinstance(content, str) else tuple(content))
+
+
+def assistant_message(text: str, tool_calls: tuple[ToolCall, ...] = ()) -> AssistantMessage:
+    return AssistantMessage(text, tool_calls)
+
+
+def tool_result(call_id: str, text: str) -> ToolResult:
+    return ToolResult(call_id, text)
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,19 +184,27 @@ def _part(part: Part) -> Json:
             return {"type": "text", "text": text}
         case Image(png):
             return {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64.b64encode(png).decode()}"}}
+        case _:
+            assert_never(part)
 
 
-def _message(m: Message) -> Json:
-    content: Json = m.content if isinstance(m.content, str) else [_part(p) for p in m.content]
-    out: dict[str, Json] = {"role": m.role}
-    if m.role == "tool":
-        out["tool_call_id"] = m.tool_call_id
-    if m.tool_calls:
-        out["content"] = content or None
-        out["tool_calls"] = [{"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.arguments}} for c in m.tool_calls]
-    else:
-        out["content"] = content
-    return out
+def _message(message: Message) -> Json:
+    match message:
+        case SystemMessage(text):
+            return {"role": "system", "content": text}
+        case UserMessage(content):
+            return {"role": "user", "content": content if isinstance(content, str) else [_part(part) for part in content]}
+        case AssistantMessage(text, calls):
+            out: dict[str, Json] = {"role": "assistant", "content": text}
+            if calls:
+                out["content"] = text or None
+                out["tool_calls"] = [{"id": call.id, "type": "function", "function": {"name": call.name, "arguments": call.arguments}}
+                                     for call in calls]
+            return out
+        case ToolResult(call_id, text):
+            return {"role": "tool", "tool_call_id": call_id, "content": text}
+        case _:
+            assert_never(message)
 
 
 def _tool(spec: ToolSpec) -> Json:
@@ -236,11 +265,15 @@ def _open(request: urllib.request.Request, timeout_s: float) -> HTTPResponse | F
     try:
         response: HTTPResponse = urllib.request.urlopen(request, timeout=timeout_s)
     except urllib.error.HTTPError as error:
-        detail = _get(_json(error.read()), "error", "message")
+        try:
+            with error:
+                detail = _get(_json(error.read()), "error", "message")
+        except (OSError, HTTPException):
+            detail = None
         return Failure(f"HTTP {error.code}: {detail if isinstance(detail, str) else error.reason}")
     except urllib.error.URLError as error:
         return Failure(f"can't reach {request.host}: {error.reason}")
-    except OSError as error:  # timeouts and dropped connections
+    except (OSError, HTTPException) as error:  # timeouts, truncated replies and dropped connections
         return Failure(f"can't reach {request.host}: {error}")
     return response
 
@@ -252,7 +285,7 @@ def _post(request: urllib.request.Request, timeout_s: float) -> bytes | Failure:
     try:
         with response:
             return response.read()
-    except OSError as error:
+    except (OSError, HTTPException) as error:
         return Failure(f"connection dropped: {error}")
 
 
@@ -265,11 +298,12 @@ def _multipart(fields: Mapping[str, str], audio: bytes) -> tuple[bytes, str]:
     return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
-def transcribe(settings: Settings, audio: bytes, *, timeout_s: float = 60) -> str | Failure:
+def transcribe(settings: Settings, audio: bytes, *, timeout_s: float = 60, context: str = "") -> str | Failure:
     """The text spoken in a WAV file."""
     fields = {"model": settings.transcribe_model, "response_format": "json"}
-    if settings.vocabulary:
-        fields["prompt"] = settings.vocabulary
+    prompt = "\n".join(part for part in (settings.vocabulary, context[-600:]) if part)
+    if prompt:
+        fields["prompt"] = prompt
     if settings.language:
         fields["language"] = settings.language
     body, content_type = _multipart(fields, audio)
@@ -341,7 +375,7 @@ def stream(
                 if piece := _str(event, "choices", 0, "delta", "content"):
                     pieces.append(piece)
                     on_text(piece)
-    except OSError as error:
+    except (OSError, HTTPException) as error:
         return Failure(f"connection dropped: {error}")
     return "".join(pieces)
 

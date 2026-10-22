@@ -1,7 +1,5 @@
 """Publish through real local Git repositories; never contact GitHub in tests."""
 
-from __future__ import annotations
-
 import shutil
 from pathlib import Path
 

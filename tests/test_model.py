@@ -1,7 +1,5 @@
 """The vocabulary the layout is written in: what it can and can't express."""
 
-from __future__ import annotations
-
 from miryoku.layout import Chord, Command, Key, Layer, Mod, TapHold
 
 

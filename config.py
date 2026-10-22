@@ -1,10 +1,8 @@
 """Your settings: the apps on the Apps layer, text snippets, what each rewrite key
-asks for, and which commands the agent may run without asking. Edit freely; it's
+asks for, and which commands skip prompts in optional approval mode. Edit freely; it's
 checked when the toolkit starts. (Secrets and the AI endpoint are environment
 variables instead; see the README.)
 """
-
-from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
@@ -67,8 +65,8 @@ TERMINALS: Final = frozenset({
 })  # fmt: skip
 
 # ---- Agent -----------------------------------------------------------------------------
-# Commands the agent may run without asking. A command is allowed only if it starts
-# with one of these and contains nothing that could chain another command after it.
+# With TOOLKIT_AGENT_APPROVALS=ask, these commands skip the prompt only when
+# nothing can chain another command after them. Default mode allows requested commands directly.
 
 ALLOWED_COMMANDS: Final[tuple[str, ...]] = (
     "Get-ChildItem",

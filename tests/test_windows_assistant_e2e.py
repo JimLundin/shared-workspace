@@ -6,8 +6,6 @@ asked: `TOOLKIT_E2E=1 pytest tests/test_windows_assistant_e2e.py`. The microphon
 isn't tested (test machines rarely have one).
 """
 
-from __future__ import annotations
-
 import json
 import os
 import subprocess
@@ -22,6 +20,7 @@ from pathlib import Path
 from assistant.llm import Json
 
 from .fake_endpoint import FakeEndpoint, Reply, fake_endpoint, sse
+from .test_agent import calls, says
 
 if sys.platform != "win32" or os.environ.get("TOOLKIT_E2E") != "1":
     raise unittest.SkipTest("end-to-end tests run on Windows, with TOOLKIT_E2E=1")
@@ -33,7 +32,7 @@ from winapi import clipboard, inputs, screen, system, windows
 from winapi.shapes import Rect
 
 ROOT = Path(__file__).resolve().parent.parent
-TAB, DELETE, SPACE = 0x2F, 0x35, 0x2E  # the Tools, Apps and Nav thumbs (physical V, - and C)
+TAB, DELETE, SPACE = 0x2F, 0x34, 0x2E  # the Tools, Apps and Nav thumbs (physical V, . and C)
 FIX, ASK, SCREEN_TEXT, AGENT_TYPED, SNAP_LEFT = 0x0A, 0x19, 0x1A, 0x26, 0x3A  # physical 9, P, \u00c5, L, Caps Lock
 
 
@@ -81,10 +80,13 @@ def type_ascii(text: str) -> None:
 
 
 @contextmanager
-def toolkit(endpoint: FakeEndpoint, home: Path, live: Path = ROOT) -> Generator[None, None, None]:
+def toolkit(endpoint: FakeEndpoint, home: Path, live: Path = ROOT) -> Generator[None]:
     """The toolkit as the user starts it: the keeper, running the layout and the assistant
     from `live`. Logs and state go under `home` (it's LOCALAPPDATA)."""
-    env = {**os.environ, "OPENAI_BASE_URL": endpoint.url, "OPENAI_API_KEY": "k", "TOOLKIT_CHAT_MODEL": "chat", "LOCALAPPDATA": str(home)}
+    env = {
+        **os.environ, "OPENAI_BASE_URL": endpoint.url, "OPENAI_API_KEY": "k", "TOOLKIT_CHAT_MODEL": "chat",
+        "TOOLKIT_AGENT_APPROVALS": "never", "LOCALAPPDATA": str(home),
+    }
     process = subprocess.Popen([sys.executable, str(live / "keeper.py")], cwd=live, env=env)
     try:
         assert wait_for(lambda: both_ready(home), lambda: None, 30), "the toolkit didn't start"
@@ -106,7 +108,7 @@ def both_ready(home: Path) -> bool:
 
 
 @contextmanager
-def text_box(text: str) -> Generator[tuple[tk.Tk, tk.Entry], None, None]:
+def text_box(text: str) -> Generator[tuple[tk.Tk, tk.Entry]]:
     root = tk.Tk()
     root.geometry("500x80+300+300")
     entry = tk.Entry(root, width=40)
@@ -206,11 +208,11 @@ def ask(endpoint: FakeEndpoint, pump: Callable[[], None]) -> None:
 
 def agent(endpoint: FakeEndpoint, home: Path, pump: Callable[[], None]) -> None:
     """A typed task, a tool call, a final answer, all in the journal."""
-    call: Json = {"id": "c1", "type": "function", "function": {"name": "list_directory", "arguments": dumps({"path": "C:\\"}).decode()}}
-    endpoint.replies = [answered("Looking.", [call]), answered("C: has folders.")]
+    endpoint.replies = [calls(("list_directory", {"path": "C:\\"})), says("C: has folders.")]
     chord(TAB, AGENT_TYPED)
-    wait_for(lambda: False, pump, 1.5)
+    assert wait_for(lambda: any(w.title == "Toolkit · Agent" for w in windows.windows()), pump)
+    wait_for(lambda: False, pump, 0.3)
     type_ascii("look at c")
     journal = home / "toolkit" / "agent.jsonl"
     assert wait_for(lambda: journal.exists() and "list_directory" in journal.read_text(encoding="utf-8"), pump), "no journal"
-    assert any(w.title.startswith("Agent: look at c") for w in windows.windows())
+    assert any(w.title == "Toolkit · Agent" for w in windows.windows())

@@ -1,7 +1,5 @@
 """PNG files from screen pixels, with only the standard library."""
 
-from __future__ import annotations
-
 import struct
 import zlib
 

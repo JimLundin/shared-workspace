@@ -1,7 +1,5 @@
 """Window placement and screenshot coordinates: plain arithmetic on rectangles."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Literal
 

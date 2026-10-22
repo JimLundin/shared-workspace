@@ -1,7 +1,5 @@
 """Making model output safe and tidy before it's typed or pasted."""
 
-from __future__ import annotations
-
 import re
 from typing import Final
 

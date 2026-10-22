@@ -1,8 +1,6 @@
 """A window of our own with a window procedure, its notification-area (tray) icon,
 popup menus, and icons drawn from pixels."""
 
-from __future__ import annotations
-
 import ctypes
 from collections.abc import Callable, Sequence
 from ctypes import wintypes

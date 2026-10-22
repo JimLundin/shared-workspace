@@ -1,5 +1,9 @@
-"""Double-click launcher: runs the `miryoku` package next to this file."""
+"""Double-click launcher: runs the `miryoku` package with the bundled Python."""
 
-from miryoku.__main__ import main
+from runtime import bootstrap
+
+bootstrap()
+
+from miryoku.__main__ import main  # noqa: E402
 
 main()

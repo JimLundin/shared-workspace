@@ -1,7 +1,5 @@
 """What the assistant types or pastes, made safe and tidy."""
 
-from __future__ import annotations
-
 from assistant.text import one_line_command, typed_text, unwrap
 from winapi.shapes import utf16_units
 

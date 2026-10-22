@@ -1,15 +1,13 @@
 """Other programs' windows: listing, focusing, moving; and hidden windows of our own
 that other processes can find and post messages to."""
 
-from __future__ import annotations
-
 import ctypes
 import threading
 from ctypes import wintypes
 from pathlib import PureWindowsPath
 from typing import Final
 
-from ._core import dwmapi, fn, kernel32, rect, user32
+from ._core import LRESULT, ULONG_PTR, comctl32, dwmapi, fn, kernel32, rect, user32
 from .shapes import Rect, Window
 
 WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
@@ -25,6 +23,8 @@ _GetWindowLongW = fn(user32, "GetWindowLongW", wintypes.LONG, wintypes.HWND, cty
 _SetWindowLongW = fn(user32, "SetWindowLongW", wintypes.LONG, wintypes.HWND, ctypes.c_int, wintypes.LONG)
 _GetWindow = fn(user32, "GetWindow", wintypes.HWND, wintypes.HWND, wintypes.UINT)
 _GetWindowRect = fn(user32, "GetWindowRect", wintypes.BOOL, wintypes.HWND, ctypes.POINTER(wintypes.RECT))
+_GetClientRect = fn(user32, "GetClientRect", wintypes.BOOL, wintypes.HWND, ctypes.POINTER(wintypes.RECT))
+_GetDpiForWindow = fn(user32, "GetDpiForWindow", wintypes.UINT, wintypes.HWND)
 _GetForegroundWindow = fn(user32, "GetForegroundWindow", wintypes.HWND)
 _SetForegroundWindow = fn(user32, "SetForegroundWindow", wintypes.BOOL, wintypes.HWND)
 _BringWindowToTop = fn(user32, "BringWindowToTop", wintypes.BOOL, wintypes.HWND)
@@ -60,6 +60,11 @@ _QueryFullProcessImageNameW = fn(
 )
 _CloseHandle = fn(kernel32, "CloseHandle", wintypes.BOOL, wintypes.HANDLE)
 _DwmGetWindowAttribute = fn(dwmapi, "DwmGetWindowAttribute", ctypes.c_long, wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD)
+_DwmSetWindowAttribute = fn(dwmapi, "DwmSetWindowAttribute", ctypes.c_long, wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD)
+_SUBCLASSPROC = ctypes.WINFUNCTYPE(LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM, ULONG_PTR, ULONG_PTR)
+_SetWindowSubclass = fn(comctl32, "SetWindowSubclass", wintypes.BOOL, wintypes.HWND, _SUBCLASSPROC, ULONG_PTR, ULONG_PTR)
+_RemoveWindowSubclass = fn(comctl32, "RemoveWindowSubclass", wintypes.BOOL, wintypes.HWND, _SUBCLASSPROC, ULONG_PTR)
+_DefSubclassProc = fn(comctl32, "DefSubclassProc", LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
 
 SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE = 3, 6, 9
 _GWL_EXSTYLE: Final = -20
@@ -72,6 +77,20 @@ _DWMWA_EXTENDED_FRAME_BOUNDS, _DWMWA_CLOAKED = 9, 14
 _SWP_NOSIZE, _SWP_NOMOVE, _SWP_NOZORDER, _SWP_NOACTIVATE = 0x0001, 0x0002, 0x0004, 0x0010
 _SW_HIDE, _SW_SHOWNOACTIVATE = 0, 4
 _HWND_TOPMOST: Final = -1
+_WM_MOUSEACTIVATE, _WM_NCDESTROY = 0x0021, 0x0082
+_MA_NOACTIVATE: Final = 3
+
+
+def overlay_message(hwnd: int, message: int, wparam: int, lparam: int, subclass: int, _data: int) -> int:
+    """Keep an interactive overlay from activating, even if its toolkit (Tk) asks to."""
+    if message == _WM_MOUSEACTIVATE:
+        return _MA_NOACTIVATE
+    if message == _WM_NCDESTROY:
+        _RemoveWindowSubclass(hwnd, _OVERLAY_PROC, subclass)
+    return int(_DefSubclassProc(hwnd, message, wparam, lparam))
+
+
+_OVERLAY_PROC = _SUBCLASSPROC(overlay_message)  # keep the native callback alive until every overlay is destroyed
 
 
 def _title(hwnd: int) -> str:
@@ -130,6 +149,12 @@ def foreground() -> int:
     return int(_GetForegroundWindow() or 0)
 
 
+def process_id(hwnd: int) -> int:
+    pid = wintypes.DWORD()
+    _GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return int(pid.value)
+
+
 def focus(hwnd: int, timeout_s: float = 1.0) -> bool:
     """Brings a window to the front and gives it the keyboard; True if it worked.
 
@@ -179,6 +204,24 @@ def is_maximized(hwnd: int) -> bool:
     return bool(_IsZoomed(hwnd))
 
 
+def is_minimized(hwnd: int) -> bool:
+    return bool(_IsIconic(hwnd))
+
+
+def is_visible(hwnd: int) -> bool:
+    return bool(_IsWindowVisible(hwnd))
+
+
+def client_size(hwnd: int) -> tuple[int, int]:
+    r = wintypes.RECT()
+    _GetClientRect(hwnd, ctypes.byref(r))
+    return int(r.right - r.left), int(r.bottom - r.top)
+
+
+def scale(hwnd: int) -> float:
+    return float(_GetDpiForWindow(hwnd) or 96) / 96
+
+
 def outer_rect(hwnd: int) -> Rect:
     """The rectangle Windows positions the window by (it includes invisible borders)."""
     r = wintypes.RECT()
@@ -199,20 +242,37 @@ def move(hwnd: int, to: Rect) -> None:
     _SetWindowPos(hwnd, None, to.left, to.top, to.width, to.height, _SWP_NOZORDER | _SWP_NOACTIVATE)
 
 
-def make_overlay(hwnd: int) -> None:
-    """Makes a window something to look at only: clicks go through it to what's
-    underneath, it never takes the keyboard, and it isn't on the taskbar or Alt+Tab."""
-    style = int(_GetWindowLongW(hwnd, _GWL_EXSTYLE)) | _WS_EX_TRANSPARENT | _WS_EX_LAYERED | _WS_EX_NOACTIVATE | _WS_EX_TOOLWINDOW
+def make_overlay(hwnd: int, *, click_through: bool = True) -> None:
+    """An overlay that never takes the keyboard or appears on the taskbar/Alt+Tab.
+    Clicks pass through by default; a drag handle can opt into mouse input."""
+    style = int(_GetWindowLongW(hwnd, _GWL_EXSTYLE)) | _WS_EX_LAYERED | _WS_EX_NOACTIVATE | _WS_EX_TOOLWINDOW
+    style = style | _WS_EX_TRANSPARENT if click_through else style & ~_WS_EX_TRANSPARENT
+    _SetWindowLongW(hwnd, _GWL_EXSTYLE, ctypes.c_long(style & 0xFFFF_FFFF).value)
+    if not click_through and not _SetWindowSubclass(hwnd, _OVERLAY_PROC, 0, 0):
+        raise OSError("Could not keep the overlay handle from taking keyboard focus.")
+
+
+def show_quietly(hwnd: int, visible: bool, *, topmost: bool = True) -> None:
+    """Shows or hides without activating. Overlays stay on top by default."""
+    if visible:
+        _ShowWindow(hwnd, _SW_SHOWNOACTIVATE)
+        _SetWindowPos(hwnd, _HWND_TOPMOST if topmost else -2, 0, 0, 0, 0, _SWP_NOMOVE | _SWP_NOSIZE | _SWP_NOACTIVATE)
+    else:
+        _ShowWindow(hwnd, _SW_HIDE)
+
+
+def allow_activation(hwnd: int, allowed: bool) -> None:
+    """Temporarily prevent a GUI toolkit's Show call from taking the keyboard."""
+    style = int(_GetWindowLongW(hwnd, _GWL_EXSTYLE))
+    style = style & ~_WS_EX_NOACTIVATE if allowed else style | _WS_EX_NOACTIVATE
     _SetWindowLongW(hwnd, _GWL_EXSTYLE, ctypes.c_long(style & 0xFFFF_FFFF).value)
 
 
-def show_quietly(hwnd: int, visible: bool) -> None:
-    """Shows (on top of everything) or hides a window without ever activating it."""
-    if visible:
-        _ShowWindow(hwnd, _SW_SHOWNOACTIVATE)
-        _SetWindowPos(hwnd, _HWND_TOPMOST, 0, 0, 0, 0, _SWP_NOMOVE | _SWP_NOSIZE | _SWP_NOACTIVATE)
-    else:
-        _ShowWindow(hwnd, _SW_HIDE)
+def dark_titlebar(hwnd: int) -> None:
+    """Match a dark client area on Windows 10/11; older versions keep their default."""
+    enabled = wintypes.BOOL(True)
+    if _DwmSetWindowAttribute(hwnd, 20, ctypes.byref(enabled), ctypes.sizeof(enabled)) != 0:
+        _DwmSetWindowAttribute(hwnd, 19, ctypes.byref(enabled), ctypes.sizeof(enabled))
 
 
 def find(title: str) -> int | None:

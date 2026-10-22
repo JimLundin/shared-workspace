@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.15'
       - run: python -m pip install -e . pytest
       - run: python -m pytest -q tests/test_windows_e2e.py tests/test_windows_assistant_e2e.py tests/test_windows_self_change_e2e.py
         env:

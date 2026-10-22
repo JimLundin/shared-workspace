@@ -1,7 +1,5 @@
 """Monitors, DPI awareness, and capturing the screen."""
 
-from __future__ import annotations
-
 import ctypes
 from ctypes import wintypes
 from dataclasses import dataclass

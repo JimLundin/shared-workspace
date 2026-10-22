@@ -1,10 +1,9 @@
 """What each tool and app key does, against a fake desktop and a fake endpoint."""
 
-from __future__ import annotations
-
 import json
 from collections.abc import Callable, Mapping
 from typing import cast
+from unittest.mock import patch
 
 from assistant.features import Assistant, pick_window
 from assistant.geometry import Shot
@@ -141,6 +140,7 @@ class Rig:
             record=lambda feature, details: self.used.append((feature, details)),
             submit=lambda job: job(),
             run_agent=self.agent.append,
+            show_agent=lambda: self.agent.append("SHOW"),
             stop_agent=lambda: self.agent.append("STOP"),
             missing=missing,
         )
@@ -178,6 +178,71 @@ def test_dictate_types_what_was_said() -> None:
         rig.hold(Tool.DICTATE)
         assert rig.take() == ["listen", "stop listening", "type 'hej på dig '"]
         assert rig.ok("dictate")
+
+
+def test_voice_diagnostics_keep_the_full_ending_and_record_only_lengths() -> None:
+    transcript = "It gets neatly cut off after like the first sentence.\nEverything afterwards just kind of disappears."
+    for tool in (Tool.DICTATE, Tool.AGENT_VOICE):
+        with fake_endpoint() as endpoint:
+            endpoint.replies = [said(transcript)]
+            rig = Rig(endpoint)
+            rig.hold(tool)
+            details = dict(rig.used)[tool.name.lower()]
+            expected = transcript.replace("\n", " ") + " " if tool is Tool.DICTATE else transcript
+            assert details["transcript_characters"] == len(transcript)
+            assert details["requested_characters"] == details["submitted_characters"] == len(expected)
+            for name in ("transcribe_seconds", "submit_seconds"):
+                duration = details[name]
+                assert isinstance(duration, float) and duration >= 0
+            assert "Everything afterwards" not in str(rig.used)
+            assert len(endpoint.received) == 1  # B and N do not send a cleanup request.
+            if tool is Tool.DICTATE:
+                assert rig.take()[-1] == f"type {expected!r}"
+            else:
+                assert rig.agent == [expected]
+
+
+def test_voice_diagnostics_distinguish_a_failed_request_from_failed_input() -> None:
+    with fake_endpoint() as endpoint:
+        endpoint.replies = [Reply(b'{"error":{"message":"Unavailable"}}', status=503)]
+        rig = Rig(endpoint)
+        rig.hold(Tool.DICTATE)
+        details = dict(rig.used)["dictate"]
+        assert "transcribe_seconds" in details and "transcript_characters" not in details
+        assert "requested_characters" not in details and not details["ok"]
+
+        transcript = "The first sentence. The missing ending."
+        endpoint.replies = [said(transcript)]
+        with patch.object(FakeDesktop, "type_text", side_effect=OSError("Input was not accepted")):
+            try:
+                rig.hold(Tool.DICTATE)
+            except OSError:
+                pass
+            else:
+                raise AssertionError("A failed input operation must not report success.")
+        details = dict(rig.used)["dictate"]
+        assert details["transcript_characters"] == len(transcript)
+        assert details["requested_characters"] == len(transcript) + 1
+        assert "submit_seconds" in details and "submitted_characters" not in details and not details["ok"]
+
+
+def test_queued_voice_diagnostics_belong_to_their_own_recording() -> None:
+    with fake_endpoint() as endpoint:
+        transcripts = ("The first recording. Its ending.", "The second recording is longer. It also keeps its last sentence.")
+        endpoint.replies = [said(text) for text in transcripts]
+        rig = Rig(endpoint)
+        jobs: list[Callable[[], None]] = []
+        rig.assistant.submit = jobs.append
+        rig.hold(Tool.DICTATE)
+        rig.desktop.speech = SPEECH * 2
+        rig.hold(Tool.DICTATE)
+        assert rig.used == []
+        for job in jobs:
+            job()
+        for index, (_, details) in enumerate(rig.used):
+            assert details["audio_seconds"] == index + 1
+            assert details["transcript_characters"] == len(transcripts[index])
+            assert details["submitted_characters"] == len(transcripts[index]) + 1
 
 
 def test_dictate_clean_types_the_tidied_text() -> None:
@@ -226,6 +291,19 @@ def test_endpoint_failures_are_reported_and_logged() -> None:
         rig.hold(Tool.DICTATE)
         assert rig.take()[-1] == "problem HTTP 401: Invalid session key"
         assert dict(rig.used)["dictate"]["ok"] is False
+
+
+def test_an_incomplete_recording_is_reported_without_sending_a_partial_prompt() -> None:
+    for tool in (Tool.DICTATE, Tool.AGENT_VOICE):
+        with fake_endpoint() as endpoint:
+            rig = Rig(endpoint)
+            with patch.object(FakeDesktop, "stop_listening", side_effect=OSError("The microphone did not finish returning audio.")):
+                rig.hold(tool)
+            assert endpoint.received == []
+            assert rig.agent == []
+            assert rig.take()[-1] == "problem The microphone did not finish returning audio."
+            assert not rig.ok(tool.name.lower())
+            assert rig.assistant.listening is None
 
 
 def test_the_tray_shows_listening_then_working_then_ready() -> None:
@@ -340,15 +418,15 @@ def test_screen_tools_do_nothing_when_no_area_is_chosen() -> None:
 # ---- the agent -------------------------------------------------------------------------
 
 
-def test_agent_tasks_by_voice_and_typed() -> None:
+def test_voice_sends_a_task_and_typed_opens_the_agent_session() -> None:
     with fake_endpoint() as endpoint:
         endpoint.replies = [said("tidy my downloads")]
         rig = Rig(endpoint)
         rig.hold(Tool.AGENT_VOICE)
-        rig.desktop.prompts = ["summarise today's mail"]
         rig.press(Tool.AGENT_TYPED)
         rig.press(Tool.STOP)
-        assert rig.agent == ["tidy my downloads", "summarise today's mail", "STOP"]
+        assert rig.agent == ["tidy my downloads", "SHOW", "STOP"]
+        assert not any(action.startswith("prompt ") for action in rig.desktop.log)
 
 
 # ---- apps and windows ------------------------------------------------------------------

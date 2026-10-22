@@ -1,7 +1,5 @@
 """The `Desktop` the assistant's features use, done with Windows calls and Tk."""
 
-from __future__ import annotations
-
 import os
 import subprocess
 import time

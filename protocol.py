@@ -4,12 +4,10 @@ requests, as window messages: they are queued, ordered, cost the layout nothing
 to send, and need no admin rights. Plain Python: importable anywhere.
 """
 
-from __future__ import annotations
-
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Final, TypeAlias
+from typing import Final
 
 # The keeper owns these (it stops the programs); re-exported here for the programs.
 from keeper import ASSISTANT_WINDOW as ASSISTANT_WINDOW  # noqa: PLC0414 (an explicit re-export)
@@ -30,11 +28,18 @@ WM_LAYOUT_STATE: Final = _WM_APP + 2
 """Layout -> assistant: wparam is a `LayoutState` value."""
 WM_INDICATOR: Final = _WM_APP + 4
 """Layout -> assistant: what the layer indicator shows; wparam is `encode_indicator(...)`."""
+WM_TOGGLE_LAYOUT: Final = _WM_APP + 5
+"""Assistant -> layout: toggle on/off, as if the escape key was tapped."""
+WM_QUERY_LAYOUT_STATE: Final = _WM_APP + 6
+"""Assistant -> layout: reply with the layout, layer and physically held keys."""
+WM_KEY_STATE: Final = _WM_APP + 7
+"""Layout -> assistant: physical scancode in wparam, down/up in lparam (1/0).
+Scancode 0 clears the held keys, before a state replay or when the layout stops."""
 
 
 class LayoutState(Enum):
     OFF = 0
-    """Switched off with the escape key: the keyboard is plain."""
+    """Switched off with the escape key or tray toggle: the keyboard is plain."""
     ON = 1
     QUIT = 2
 
@@ -94,7 +99,7 @@ class App:
     """Only windows whose title contains this (for programs that host several apps)."""
 
 
-Request: TypeAlias = Tool | App
+type Request = Tool | App
 
 _APP_BASE: Final = 1000
 

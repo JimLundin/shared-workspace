@@ -1,7 +1,5 @@
 """Publish reviewed source to a new Git branch, independently of local installation."""
 
-from __future__ import annotations
-
 import os
 import subprocess
 import sys

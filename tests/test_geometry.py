@@ -1,7 +1,5 @@
 """Window placement and screenshot coordinates."""
 
-from __future__ import annotations
-
 from assistant.geometry import Shot, fit, half, region, to_monitor
 from winapi.shapes import Rect
 

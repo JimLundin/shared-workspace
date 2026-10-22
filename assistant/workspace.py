@@ -2,14 +2,13 @@
 it does here touches the running toolkit; the keeper installs the workspace, after
 checking it, when asked (see keeper.py)."""
 
-from __future__ import annotations
-
 import difflib
 import subprocess
 import sys
+import tempfile
 from pathlib import Path, PurePosixPath
 
-from keeper import LIVE, PROTECTED, WORKSPACE, copy_source, source_files
+from keeper import LIVE, PROTECTED, WORKSPACE, copy_source, source_digest, source_files
 from selfcheck import compile_all
 
 
@@ -18,15 +17,23 @@ class SourceError(Exception):
 
 
 class Workspace:
-    __slots__ = ("live", "root")
+    __slots__ = ("live", "prepared", "root")
 
     def __init__(self, live: Path = LIVE, root: Path = WORKSPACE) -> None:
         self.live = live
         self.root = root
+        self.prepared = False
+
+    def ensure(self) -> None:
+        """Copy source on the first source tool, then keep edits for follow-up requests."""
+        if not self.prepared:
+            self.reset()
 
     def reset(self) -> None:
         """Starts over from the running version."""
+        self.prepared = False
         copy_source(self.live, self.root)
+        self.prepared = True
 
     def files(self) -> list[str]:
         return source_files(self.root)
@@ -43,7 +50,7 @@ class Workspace:
     def _writable(self, name: str) -> Path:
         path = self._path(name)
         if PurePosixPath(name.replace("\\", "/")).as_posix().lower() in PROTECTED or any(
-            part.lower() == ".runtime" for part in PurePosixPath(name.replace("\\", "/")).parts
+            part.lower() in (".runtime", ".python") for part in PurePosixPath(name.replace("\\", "/")).parts
         ):
             raise SourceError(f"{name} is protected: the keeper and its checks can only be changed by a person")
         return path
@@ -94,17 +101,23 @@ class Workspace:
         return "\n".join(parts)
 
     def validate(self) -> tuple[bool, str]:
-        """Compile without importing or executing unapproved source."""
+        """Check syntax before spending time on runtime checks."""
         problems: list[str] = []
         compile_all(self.root, problems)
-        return not problems, "\n".join(problems) or "Syntax checks pass; runtime checks require review."
+        return not problems, "\n".join(problems) or "Syntax checks pass."
 
     def check(self, timeout_s: float = 300) -> tuple[bool, str]:
-        """The running version's selfcheck (which the agent can't change) run on the workspace."""
-        try:
-            done = subprocess.run(
-                [sys.executable, str(self.live / "selfcheck.py"), str(self.root)], capture_output=True, timeout=timeout_s, check=False
-            )
-        except subprocess.TimeoutExpired:
-            return False, f"the checks took more than {timeout_s:.0f} seconds"
-        return done.returncode == 0, (done.stdout + done.stderr).decode("utf-8", errors="replace")
+        """Run the stable selfcheck on a fresh copy so tests cannot leave stale bytecode in the draft."""
+        with tempfile.TemporaryDirectory(prefix="toolkit-check-") as scratch:
+            candidate = Path(scratch) / "source"
+            copy_source(self.root, candidate)
+            digest = source_digest(candidate)
+            try:
+                done = subprocess.run(
+                    [sys.executable, str(self.live / "selfcheck.py"), str(candidate)], capture_output=True, timeout=timeout_s, check=False
+                )
+            except subprocess.TimeoutExpired:
+                return False, f"the checks took more than {timeout_s:.0f} seconds"
+            if source_digest(candidate) != digest:
+                return False, "Runtime checks changed the candidate source; fix the tests and check again."
+            return done.returncode == 0, (done.stdout + done.stderr).decode("utf-8", errors="replace")

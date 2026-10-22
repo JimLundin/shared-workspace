@@ -1,7 +1,5 @@
 """Audio and images the assistant makes: WAV recordings, PNG screenshots, tray icons."""
 
-from __future__ import annotations
-
 import io
 import wave
 import zlib

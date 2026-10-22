@@ -1,7 +1,5 @@
 """The usage report: every feature, how often it was used, and which never were."""
 
-from __future__ import annotations
-
 from collections.abc import Iterator
 from datetime import datetime, timedelta
 from pathlib import Path

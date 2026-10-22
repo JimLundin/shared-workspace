@@ -1,8 +1,6 @@
 """The AI endpoint client: settings, transcription, chat (plain, streamed, with
 tools and images). Against a local fake endpoint; runs anywhere."""
 
-from __future__ import annotations
-
 import json
 from typing import cast
 
@@ -52,7 +50,11 @@ def test_settings_need_the_endpoint_and_key() -> None:
 
 
 def test_settings_defaults() -> None:
-    assert settings_from(ENV) == Settings("https://ai.example/v1", "k", "gpt-4o-transcribe", "gpt-5.4-mini", "gpt-5.4-mini", "", "")
+    result = settings_from(ENV)
+    assert isinstance(result, Settings)
+    assert result == Settings("https://ai.example/v1", "k", "gpt-4o-transcribe", "gpt-5.4-mini", "gpt-6.1-sol", "", "")
+    assert result.agent_reasoning_effort == "low"
+    assert result.agent_approvals is False
 
 
 def test_settings_overrides() -> None:
@@ -61,19 +63,30 @@ def test_settings_overrides() -> None:
         "TOOLKIT_TRANSCRIBE_MODEL": "whisper-1",
         "TOOLKIT_CHAT_MODEL": "fast",
         "TOOLKIT_AGENT_MODEL": "smart",
+        "TOOLKIT_AGENT_REASONING_EFFORT": "high",
+        "TOOLKIT_AGENT_APPROVALS": "ask",
         "TOOLKIT_VOCABULARY": "Miryoku, Colemak",
         "TOOLKIT_LANGUAGE": "sv",
     }
-    assert settings_from(env) == Settings("https://ai.example/v1", "k", "whisper-1", "fast", "smart", "Miryoku, Colemak", "sv")
+    assert settings_from(env) == Settings("https://ai.example/v1", "k", "whisper-1", "fast", "smart", "Miryoku, Colemak", "sv", "high", True)
 
 
-def test_agent_model_follows_chat_model() -> None:
+def test_agent_model_is_independent_of_the_quick_chat_model() -> None:
     result = settings_from({**ENV, "TOOLKIT_CHAT_MODEL": "fast"})
     assert isinstance(result, Settings)
-    assert result.agent_model == "fast"
+    assert result.agent_model == "gpt-6.1-sol"
 
 
 # ---- transcription ---------------------------------------------------------------------
+
+
+def test_truncated_success_and_error_responses_are_retriable_failures() -> None:
+    with fake_endpoint() as endpoint:
+        for status in (200, 503):
+            endpoint.replies = [Canned(b'{"text":"incomplete', status=status, content_length=1000)]
+            result = transcribe(settings(endpoint.url), wav(bytes(RATE * 2), RATE))
+            assert isinstance(result, Failure)
+            assert "connection dropped" in result.message if status == 200 else "HTTP 503" in result.message
 
 
 def test_transcribe_posts_the_audio_and_returns_the_text() -> None:

@@ -1,7 +1,5 @@
 """The usage report knows every feature, so it can list the ones never used."""
 
-from __future__ import annotations
-
 from assistant.report import known_features
 
 

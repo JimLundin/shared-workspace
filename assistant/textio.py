@@ -1,7 +1,5 @@
 """Clipboard replacement: do not send Paste until the replacement is available."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from typing import Protocol
 

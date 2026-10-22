@@ -2,11 +2,9 @@
 
 Set the Windows keyboard to English (US). The key left of 1 (§) is the escape
 key: tap it to switch between this layout and your plain keyboard, hold it for
-2 seconds to quit. B, between the thumb keys, is push-to-talk for the
-assistant, if it's running (it usually starts the layout itself).
+2 seconds to quit. Between the thumb keys, hold B to dictate or N to speak a
+task for the agent. Both need the assistant, started by `toolkit.pyw`.
 """
-
-from __future__ import annotations
 
 import sys
 

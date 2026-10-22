@@ -1,7 +1,5 @@
 """Keyboard and mouse: the low-level keyboard hook, and sending input as if typed."""
 
-from __future__ import annotations
-
 import ctypes
 from collections.abc import Callable, Sequence
 from ctypes import wintypes
@@ -72,7 +70,9 @@ _MAPVK_VK_TO_VSC: Final = 0
 _VK_RETURN: Final = 0x0D
 _MOUSEEVENTF_MOVE, _MOUSEEVENTF_ABSOLUTE, _MOUSEEVENTF_VIRTUALDESK = 0x0001, 0x8000, 0x4000
 _MOUSEEVENTF_WHEEL: Final = 0x0800
-_BUTTON_FLAGS: Final = {"left": (0x0002, 0x0004), "right": (0x0008, 0x0010), "middle": (0x0020, 0x0040)}
+_MOUSEEVENTF_HWHEEL: Final = 0x1000
+_BUTTON_FLAGS: Final = {"left": (0x0002, 0x0004), "right": (0x0008, 0x0010), "middle": (0x0020, 0x0040), "x1": (0x0080, 0x0100), "x2": (0x0080, 0x0100)}
+_BUTTON_DATA: Final = {"x1": 1, "x2": 2}
 
 HookProc = Callable[[int, int, int], int]
 """(code, wparam, lparam) -> result, as Windows calls a low-level hook."""
@@ -189,19 +189,19 @@ def move_mouse(x: int, y: int, screen: Rect, extra: int) -> None:
 
 
 def click(x: int, y: int, button: str, count: int, screen: Rect, extra: int) -> None:
-    """Moves to (x, y) and clicks `count` times. `button`: left, right or middle."""
+    """Moves to (x, y) and clicks `count` times, including auxiliary buttons."""
     down, up = _BUTTON_FLAGS[button]
     dx, dy = _absolute(x, y, screen)
     move = _mouse(dx, dy, 0, _MOUSEEVENTF_MOVE | _MOUSEEVENTF_ABSOLUTE | _MOUSEEVENTF_VIRTUALDESK, extra)
-    _send([move, *(_mouse(0, 0, 0, flag, extra) for _ in range(count) for flag in (down, up))])
+    _send([move, *(_mouse(0, 0, _BUTTON_DATA.get(button, 0), flag, extra) for _ in range(count) for flag in (down, up))])
 
 
 def mouse_button(button: str, down: bool, extra: int) -> None:
     """Presses or releases a button where the mouse is (for dragging)."""
     pressed, released = _BUTTON_FLAGS[button]
-    _send([_mouse(0, 0, 0, pressed if down else released, extra)])
+    _send([_mouse(0, 0, _BUTTON_DATA.get(button, 0), pressed if down else released, extra)])
 
 
-def scroll(clicks: int, extra: int) -> None:
-    """Scrolls the wheel where the mouse is; positive is up."""
-    _send([_mouse(0, 0, (clicks * 120) & 0xFFFF_FFFF, _MOUSEEVENTF_WHEEL, extra)])
+def scroll(clicks: int, extra: int, *, horizontal: bool = False) -> None:
+    """Positive is up, or right for a horizontal wheel."""
+    _send([_mouse(0, 0, (clicks * 120) & 0xFFFF_FFFF, _MOUSEEVENTF_HWHEEL if horizontal else _MOUSEEVENTF_WHEEL, extra)])

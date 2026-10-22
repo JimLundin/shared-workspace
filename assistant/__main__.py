@@ -3,8 +3,6 @@ the layout too, puts an icon in the notification area, and runs until you choose
 Quit there. See the README for the keys and the settings.
 """
 
-from __future__ import annotations
-
 import os
 import sys
 

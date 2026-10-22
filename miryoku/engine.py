@@ -3,11 +3,9 @@ into, in Windows terms (virtual keys, modifiers). It makes no Win32 calls itself
 those go through a `Host`, so the logic can be tested without Windows.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Final, NamedTuple, NoReturn, Protocol
+from typing import Final, Protocol, assert_never
 
 from config import SNIPPETS
 from protocol import App, Request, Tool
@@ -19,7 +17,7 @@ from .layout import (
     QUIT_HOLD_MS,
     SHIFT_ONLY,
     STREAK_MS,
-    TALK,
+    VOICE_KEYS,
     Action,
     Chord,
     Command,
@@ -80,6 +78,13 @@ class Signal(Enum):
     CAPS_WORD = auto()
 
 
+class Decision(Enum):
+    """How an undecided tap-hold key is resolved."""
+
+    TAP = auto()
+    HOLD = auto()
+
+
 MAX_LAYERS = 5
 """Layers held at once: the layout has five layer keys."""
 MAX_TRIGGER = max((len(trigger) for trigger in SNIPPETS), default=0)
@@ -114,9 +119,25 @@ class Pending:
     pressed_at: int
 
 
-class Event(NamedTuple):
+@dataclass(frozen=True, slots=True)
+class KeyDown:
     cell: int
-    down: bool
+    at: int
+
+
+@dataclass(frozen=True, slots=True)
+class KeyUp:
+    cell: int
+    at: int
+
+
+type Event = KeyDown | KeyUp
+"""A mapped physical key event, including repeats and buffered events."""
+
+
+@dataclass(frozen=True, slots=True)
+class LastTap:
+    cell: int
     at: int
 
 
@@ -132,10 +153,6 @@ def no_keys() -> list[Action | None]:
 def is_typing(a: Action) -> bool:
     """A typed character (for the typing streak): a key, maybe shifted, but not a shortcut."""
     return isinstance(a, Key) or (isinstance(a, Chord) and a.mods <= SHIFT_ONLY)
-
-
-def assert_never(value: NoReturn) -> NoReturn:
-    raise AssertionError(f"unhandled: {value!r}")
 
 
 @dataclass(slots=True)
@@ -197,9 +214,9 @@ class Engine:
     capitalised until something that isn't part of a word: a space, punctuation,
     Enter, an arrow... Digits, `_`, Backspace and Delete keep it going.
 
-    Push-to-talk: holding the talk key asks the assistant to listen; releasing
-    it (or switching the layout off) asks it to stop. Tool and app keys on the
-    Tools and Apps layers are passed on the same way.
+    Voice keys: hold B to dictate or N to speak an agent task; releasing the key
+    (or switching the layout off) asks the assistant to stop listening. Tool and
+    app keys on the Tools and Apps layers are passed on the same way.
 
     Snippets: the last characters typed are remembered; once they end in a
     snippet's trigger, the trigger is erased and the snippet typed instead.
@@ -211,7 +228,7 @@ class Engine:
     escape_down_at: int | None = None
     """When the escape key went down, if it is down."""
     enabled: bool = True
-    """False while switched off with the escape key."""
+    """False while switched off with the escape key or tray toggle."""
     pressed: list[Action | None] = field(default_factory=no_keys)
     """What each held layout key turned into, by cell."""
     active_layers: list[Layer] = field(default_factory=list[Layer])
@@ -220,13 +237,13 @@ class Engine:
     """Events that arrived while a tap-hold key was undecided."""
     last_typed_at: int | None = None
     """When the last character was typed (for the typing streak)."""
-    last_tap: tuple[int, int] | None = None
+    last_tap: LastTap | None = None
     """The last tap-hold key tapped, and when (for quick tap)."""
     caps_word: bool = False
     locked: Layer | None = None
     mods: Modifiers = field(default_factory=Modifiers)
-    talking: bool = False
-    """The push-to-talk key is held."""
+    voice_held: set[Scancode] = field(default_factory=set[Scancode])
+    """Dedicated voice keys currently held, independent of the layout's layers."""
     typed: str = ""
     """The last characters typed, for snippets. Anything that moves the cursor, or a
     shortcut, clears it."""
@@ -234,8 +251,8 @@ class Engine:
     """What the indicator was last told."""
 
     def on_key(self, host: Host, scancode: Scancode, down: bool, now: int) -> Verdict:
-        """Entry point for every physical key event. `now` is the event's
-        timestamp in ms (it may wrap around)."""
+        """Decode native key fields; mapped keys become KeyDown or KeyUp once.
+        `now` is the event's timestamp in ms (it may wrap around)."""
         verdict = self.key(host, scancode, down, now)
         self.refresh(host)
         return verdict
@@ -247,6 +264,16 @@ class Engine:
             self.shown = now
             host.indicate(now)
 
+    def toggle(self, host: Host) -> None:
+        """Switch the layout on/off, releasing held input and clearing its indicator."""
+        self.escape_down_at = None
+        self.release_all(host)
+        self.enabled = not self.enabled
+        if not self.enabled:
+            host.used("switch_off")
+        host.signal(Signal.ON if self.enabled else Signal.OFF)
+        self.refresh(host)
+
     def key(self, host: Host, scancode: Scancode, down: bool, now: int) -> Verdict:
         # Escape key: tap = on/off, hold = quit. Checked first, works in both states.
         if scancode == ESCAPE:
@@ -255,21 +282,21 @@ class Engine:
                     self.escape_down_at = now
             elif self.escape_down_at is not None:
                 pressed_at, self.escape_down_at = self.escape_down_at, None
-                self.release_all(host)
                 if elapsed(now, pressed_at) >= QUIT_HOLD_MS:
+                    self.release_all(host)
                     return Verdict.QUIT
-                self.enabled = not self.enabled
-                if not self.enabled:
-                    host.used("switch_off")
-                host.signal(Signal.ON if self.enabled else Signal.OFF)
+                self.toggle(host)
             return Verdict.SWALLOW
         if not self.enabled:
             return Verdict.PASS
-        # Push-to-talk: outside the layout, so it never decides a tap-hold key.
-        if scancode == TALK:
-            if down != self.talking:
-                self.talking = down
-                host.request(Tool.DICTATE, down)
+        # Voice buttons act immediately and never decide a pending tap-hold key.
+        if (tool := VOICE_KEYS.get(scancode)) is not None:
+            if down != (scancode in self.voice_held):
+                if down:
+                    self.voice_held.add(scancode)
+                else:
+                    self.voice_held.remove(scancode)
+                host.request(tool, down)
             return Verdict.SWALLOW
         match slot(scancode):
             case Unmapped.FREE:
@@ -278,14 +305,14 @@ class Engine:
             case Unmapped.BLOCKED:
                 return Verdict.SWALLOW
             case int(cell):
-                self.event(host, Event(cell, down, now))
+                self.event(host, KeyDown(cell, now) if down else KeyUp(cell, now))
                 return Verdict.SWALLOW
 
     def in_streak(self, now: int) -> bool:
         return STREAK_MS > 0 and self.last_typed_at is not None and elapsed(now, self.last_typed_at) < STREAK_MS
 
     def quick_tap(self, cell: int, now: int) -> bool:
-        return self.last_tap is not None and self.last_tap[0] == cell and elapsed(now, self.last_tap[1]) < QUICK_TAP_MS
+        return self.last_tap is not None and self.last_tap.cell == cell and elapsed(now, self.last_tap.at) < QUICK_TAP_MS
 
     def layer(self) -> Layer | None:
         """The layer keys are read from: the top held layer, else a locked one, else
@@ -293,90 +320,106 @@ class Engine:
         return self.active_layers[-1] if self.active_layers else self.locked
 
     def event(self, host: Host, e: Event) -> None:
-        cell, down, now = e
         if (p := self.pending) is not None:
             self.event_while_pending(host, p, e)
             return
 
-        current = self.pressed[cell]
-        if not down:
-            if current is not None:
-                self.pressed[cell] = None
-                self.release(host, current)
-            return
-        if current is not None:
-            # Auto-repeat: repeat whatever was sent (letters, arrows, symbols, undo...).
-            if isinstance(current, (Key, Chord)):
-                self.press(host, current, now)
-            return
-        layer = self.layer()
-        match action(layer, cell):
-            case TapHold(tap) if self.quick_tap(cell, now):
-                a: Action = tap
-            case TapHold(tap, Mod() as mod) if mod != Mod.SHIFT and self.in_streak(now):
-                a = tap
-            case TapHold(tap, hold):
-                self.pending = Pending(cell, tap, hold, host.start_timer(), now)
-                self.buffer = []
-                return
-            case other:
-                a = other
-        if layer is not None and a is not Command.NOTHING:
-            host.used(f"{layer.name.lower()}:{describe(a)}")
-        self.pressed[cell] = a
-        self.press(host, a, now)
+        match e:
+            case KeyUp(cell):
+                if (current := self.pressed[cell]) is not None:
+                    self.pressed[cell] = None
+                    self.release(host, current)
+            case KeyDown(cell, now):
+                if (current := self.pressed[cell]) is not None:
+                    # Auto-repeat: repeat the output already chosen on the first press.
+                    if isinstance(current, (Key, Chord)):
+                        self.press(host, current, now)
+                    return
+                layer = self.layer()
+                match action(layer, cell):
+                    case TapHold(tap) if self.quick_tap(cell, now):
+                        a: Action = tap
+                    case TapHold(tap, Mod() as mod) if mod != Mod.SHIFT and self.in_streak(now):
+                        a = tap
+                    case TapHold(tap, hold):
+                        self.pending = Pending(cell, tap, hold, host.start_timer(), now)
+                        self.buffer = []
+                        return
+                    case other:
+                        a = other
+                if layer is not None and a is not Command.NOTHING:
+                    host.used(f"{layer.name.lower()}:{describe(a)}")
+                self.pressed[cell] = a
+                self.press(host, a, now)
+            case _:
+                assert_never(e)
 
     def event_while_pending(self, host: Host, p: Pending, e: Event) -> None:
-        cell, down, now = e
-        if cell == p.cell:
-            if not down:
-                self.resolve(host, hold=False, now=now)
+        if e.cell == p.cell:
+            match e:
+                case KeyUp(_, now):
+                    self.resolve(host, Decision.TAP, now=now)
+                case KeyDown():
+                    pass
+                case _:
+                    assert_never(e)
             return  # auto-repeat of the undecided key is ignored
-        released_meanwhile = any(c == cell and not d for c, d, _ in self.buffer)
-        if down and not released_meanwhile:
-            # Auto-repeat of a key held since before: repeat it now, it's already decided.
-            if (current := self.pressed[cell]) is not None:
-                if isinstance(current, (Key, Chord)):
-                    self.press(host, current, now)
-                return
-            # Auto-repeat of a key already waiting in the buffer adds nothing.
-            mine = [d for c, d, _ in self.buffer if c == cell]
-            if mine and mine[-1]:
-                return
-        # Chordal hold: the first key pressed is on the modifier's own hand, so it's a roll.
-        first_press = down and not any(d for _, d, _ in self.buffer)
-        if first_press and isinstance(p.hold, Mod) and is_left_hand(cell) == is_left_hand(p.cell):
-            self.resolve(host, hold=False, now=now)
-            self.event(host, e)
-            return
+        match e:
+            case KeyDown(cell, now):
+                released_meanwhile = any(isinstance(waiting, KeyUp) and waiting.cell == cell for waiting in self.buffer)
+                if not released_meanwhile:
+                    # A key held since before is already decided: repeat it now.
+                    if (current := self.pressed[cell]) is not None:
+                        if isinstance(current, (Key, Chord)):
+                            self.press(host, current, now)
+                        return
+                    # A buffered key's repeated down adds nothing; reuse the queued event.
+                    for waiting in reversed(self.buffer):
+                        if waiting.cell == cell:
+                            if isinstance(waiting, KeyDown):
+                                return
+                            break
+                # The first press on the modifier's own hand is a roll.
+                first_press = not any(isinstance(waiting, KeyDown) for waiting in self.buffer)
+                if first_press and isinstance(p.hold, Mod) and is_left_hand(cell) == is_left_hand(p.cell):
+                    self.resolve(host, Decision.TAP, now=now)
+                    self.event(host, e)
+                    return
+            case KeyUp():
+                pass
+            case _:
+                assert_never(e)
         if len(self.buffer) >= MAX_BUFFERED:
             # Too many keys waiting: decide it as a hold, then handle this one.
-            self.resolve(host, hold=True, now=now)
+            self.resolve(host, Decision.HOLD, now=e.at)
             self.event(host, e)
             return
         self.buffer.append(e)
-        if not down and any(c == cell and d for c, d, _ in self.buffer):
-            self.resolve(host, hold=True, now=now)
+        if isinstance(e, KeyUp) and any(isinstance(waiting, KeyDown) and waiting.cell == e.cell for waiting in self.buffer):
+            self.resolve(host, Decision.HOLD, now=e.at)
 
     def timeout(self, host: Host, timer: int) -> None:
         if self.pending is not None and self.pending.timer == timer:
-            self.resolve(host, hold=True, now=self.pending.pressed_at)
+            self.resolve(host, Decision.HOLD, now=self.pending.pressed_at)
             self.refresh(host)
 
-    def resolve(self, host: Host, *, hold: bool, now: int) -> None:
+    def resolve(self, host: Host, decision: Decision, *, now: int) -> None:
         """Decide the undecided key. `now` is when the decision happened."""
         p, self.pending = self.pending, None
         if p is None:
             return
         host.stop_timer(p.timer)
-        if hold:
-            host.used(f"hold:{p.hold.name.lower()}" if isinstance(p.hold, Mod) else f"layer:{p.hold.name.lower()}")
-            self.pressed[p.cell] = p.hold
-            self.press(host, p.hold, p.pressed_at)
-        else:
-            self.press(host, p.tap, p.pressed_at)
-            self.release(host, p.tap)
-            self.last_tap = (p.cell, now)
+        match decision:
+            case Decision.HOLD:
+                host.used(f"hold:{p.hold.name.lower()}" if isinstance(p.hold, Mod) else f"layer:{p.hold.name.lower()}")
+                self.pressed[p.cell] = p.hold
+                self.press(host, p.hold, p.pressed_at)
+            case Decision.TAP:
+                self.press(host, p.tap, p.pressed_at)
+                self.release(host, p.tap)
+                self.last_tap = LastTap(p.cell, now)
+            case _:
+                assert_never(decision)
         waiting, self.buffer = self.buffer, []
         for e in waiting:
             self.event(host, e)
@@ -398,9 +441,9 @@ class Engine:
         self.locked = None
         self.mods.release_all(host)  # nothing should be left, but never leave one stuck
         self.typed = ""
-        if self.talking:
-            self.talking = False
-            host.request(Tool.DICTATE, False)
+        held_voice, self.voice_held = self.voice_held, set()
+        for scancode in sorted(held_voice):
+            host.request(VOICE_KEYS[scancode], False)
 
     def apply_caps_word(self, a: Action) -> Action:
         """Caps word: capitalise letters, let word characters through, end on anything else."""

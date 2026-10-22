@@ -8,8 +8,6 @@ even while an earlier dictation is still being transcribed. Anything slow is
 handed to the worker thread (`submit`), which does one job at a time, in order.
 """
 
-from __future__ import annotations
-
 import time
 from collections.abc import Callable, Mapping, Sequence
 from enum import Enum, auto
@@ -58,10 +56,10 @@ class Desktop(Protocol):
     """What the assistant needs from Windows and its windows."""
 
     def start_listening(self) -> str | None:
-        """Opens the microphone; a problem's description, or None."""
+        """Starts recording; a problem's description, or None."""
 
     def stop_listening(self) -> bytes:
-        """Closes it; 16-bit mono PCM at `RATE`."""
+        """Stops recording; 16-bit mono PCM at `RATE`."""
         ...
 
     def copy_selection(self) -> str | None:
@@ -125,6 +123,17 @@ def pick_window(windows: Sequence[Window], app: App, foreground: int) -> int | N
     return mine[-1] if foreground in mine else mine[0]
 
 
+def submit_voice_text(text: str, send: Callable[[str], None], details: dict[str, Detail]) -> None:
+    """Measure submission, without retaining content or claiming the app displayed it."""
+    details["requested_characters"] = len(text)
+    started = time.monotonic()
+    try:
+        send(text)
+        details["submitted_characters"] = len(text)
+    finally:
+        details["submit_seconds"] = round(time.monotonic() - started, 3)
+
+
 class Conversation:
     """A question and its follow-ups, answered in one window."""
 
@@ -132,7 +141,7 @@ class Conversation:
 
     def __init__(self, settings: Settings, first: Sequence[Part], title: str, desktop: Desktop, submit: Callable[[Callable[[], None]], None]) -> None:
         self.settings = settings
-        self.messages: list[Message] = [system_message(prompts.ASK), user_message(first)]
+        self.messages: tuple[Message, ...] = (system_message(prompts.ASK), user_message(first))
         self.window = desktop.answer(title, lambda question: submit(lambda: self.follow_up(question)))
 
     def run(self) -> Failure | Outcome:
@@ -140,19 +149,21 @@ class Conversation:
         if isinstance(result, Failure):
             self.window.fail(result.message)
             return result
-        self.messages.append(assistant_message(result))
+        self.messages = (*self.messages, assistant_message(result))
         self.window.finish()
         return Outcome.DONE
 
     def follow_up(self, question: str) -> None:
-        self.messages.append(user_message(question))
+        self.messages = (*self.messages, user_message(question))
         self.run()
 
 
 class Assistant:
     """Turns requests from the layout's tool and app keys into actions."""
 
-    __slots__ = ("desktop", "layout_on", "listening", "missing", "record", "run_agent", "settings", "stop_agent", "submit")
+    __slots__ = (
+        "desktop", "layout_on", "listening", "listening_started", "missing", "record", "run_agent", "settings", "show_agent", "stop_agent", "submit",
+    )
 
     def __init__(
         self,
@@ -162,6 +173,7 @@ class Assistant:
         record: Recorder,
         submit: Callable[[Callable[[], None]], None],
         run_agent: Callable[[str], None],
+        show_agent: Callable[[], None],
         stop_agent: Callable[[], None],
         missing: Missing | None = None,
     ) -> None:
@@ -171,9 +183,11 @@ class Assistant:
         self.submit = submit
         """Runs a job on the worker thread, after whatever is already queued."""
         self.run_agent = run_agent
+        self.show_agent = show_agent
         self.stop_agent = stop_agent
         self.listening: Tool | None = None
         """The talk key being held, if any."""
+        self.listening_started = 0.0
         self.layout_on = True
         self.missing = missing
         """Settings the AI tools need but don't have; the other keys work without them."""
@@ -205,14 +219,14 @@ class Assistant:
     def idle(self) -> None:
         self.desktop.show_state(State.READY if self.layout_on else State.LAYOUT_OFF)
 
-    def timed(self, feature: str, job: Callable[[], Failure | Outcome]) -> None:
+    def timed(self, feature: str, job: Callable[[], Failure | Outcome], *, extra: Mapping[str, Detail] | None = None) -> None:
         """Runs a job, reports a failure, and logs the use (never the content)."""
         started = time.monotonic()
         outcome: Failure | Outcome = Failure("crashed")
         try:
             outcome = job()
         finally:
-            details: dict[str, Detail] = {"ok": not isinstance(outcome, Failure), "seconds": round(time.monotonic() - started, 2)}
+            details: dict[str, Detail] = {**(extra or {}), "ok": not isinstance(outcome, Failure), "seconds": round(time.monotonic() - started, 2)}
             if isinstance(outcome, Failure):
                 details["error"] = outcome.message[:120]
                 self.desktop.problem(outcome.message)
@@ -231,37 +245,51 @@ class Assistant:
                 self.record(tool.name.lower(), {"ok": False, "error": problem[:120]})
                 return
             self.listening = tool
+            self.listening_started = time.monotonic()
             self.desktop.show_state(State.LISTENING)
         elif tool is self.listening:
+            held_seconds = time.monotonic() - self.listening_started
             self.listening = None
-            pcm = self.desktop.stop_listening()
+            try:
+                pcm = self.desktop.stop_listening()
+            except OSError as error:
+                self.desktop.problem(str(error))
+                self.record(tool.name.lower(), {"ok": False, "error": str(error)[:120]})
+                self.idle()
+                return
             if not long_enough(pcm):
                 self.idle()
                 return
             self.desktop.show_state(State.WORKING)
-            self.submit(lambda: self.timed(tool.name.lower(), lambda: self.heard(tool, pcm)))
+            lengths: dict[str, Detail] = {"held_seconds": round(held_seconds, 2), "audio_seconds": round(len(pcm) / (RATE * 2), 2)}
+            self.submit(lambda: self.timed(tool.name.lower(), lambda: self.heard(tool, pcm, lengths), extra=lengths))
 
     # ---- the tools ---------------------------------------------------------------------
 
-    def heard(self, tool: Tool, pcm: bytes) -> Failure | Outcome:
-        transcript = transcribe(self.settings, wav(pcm, RATE))
+    def heard(self, tool: Tool, pcm: bytes, details: dict[str, Detail]) -> Failure | Outcome:
+        started = time.monotonic()
+        try:
+            transcript = transcribe(self.settings, wav(pcm, RATE))
+        finally:
+            details["transcribe_seconds"] = round(time.monotonic() - started, 3)
         if isinstance(transcript, Failure):
             return transcript
+        details["transcript_characters"] = len(transcript)
         match tool:
             case Tool.DICTATE:
-                self.desktop.type_text(typed_text(transcript))
+                submit_voice_text(typed_text(transcript), self.desktop.type_text, details)
             case Tool.DICTATE_CLEAN:
                 if isinstance(cleaned := ask(self.settings, prompts.CLEAN_DICTATION, transcript), Failure):
                     return cleaned
-                self.desktop.type_text(typed_text(cleaned))
+                submit_voice_text(typed_text(cleaned), self.desktop.type_text, details)
             case Tool.DICTATE_COMMAND:
                 if isinstance(command := ask(self.settings, prompts.COMMAND, transcript), Failure):
                     return command
-                self.desktop.type_text(one_line_command(command))
+                submit_voice_text(one_line_command(command), self.desktop.type_text, details)
             case Tool.REWRITE_VOICE:
                 return self.rewrite(transcript)
             case Tool.AGENT_VOICE:
-                self.run_agent(transcript)
+                submit_voice_text(transcript, self.run_agent, details)
             case _:
                 raise AssertionError(f"{tool} doesn't listen")
         return Outcome.DONE
@@ -281,9 +309,7 @@ class Assistant:
             case Tool.SCREEN_ASK:
                 return self.screen_ask()
             case Tool.AGENT_TYPED:
-                if not (task := self.desktop.prompt("Task for the agent")):
-                    return Outcome.CANCELLED
-                self.run_agent(task)
+                self.show_agent()
                 return Outcome.DONE
             case _:
                 raise AssertionError(f"{tool} isn't a tool that acts on press")

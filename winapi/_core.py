@@ -1,7 +1,5 @@
 """The DLLs, and how a function prototype is declared. Internal to `winapi`."""
 
-from __future__ import annotations
-
 import ctypes
 from ctypes import wintypes
 from typing import Any
@@ -18,6 +16,7 @@ gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
 winmm = ctypes.WinDLL("winmm", use_last_error=True)
 shell32 = ctypes.WinDLL("shell32", use_last_error=True)
 dwmapi = ctypes.WinDLL("dwmapi", use_last_error=True)
+comctl32 = ctypes.WinDLL("comctl32", use_last_error=True)
 
 
 def fn(dll: ctypes.WinDLL, name: str, restype: Any, *argtypes: Any) -> Any:

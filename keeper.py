@@ -15,8 +15,6 @@ folder, and a "ready" file each program writes once it's up.
     pythonw keeper.py        (toolkit.pyw does this)
 """
 
-from __future__ import annotations
-
 import contextlib
 import ctypes
 import difflib
@@ -110,17 +108,23 @@ def ready() -> None:
 def source_files(root: Path) -> list[str]:
     """The toolkit's own files under `root`, as relative paths: not caches or history."""
     found: list[str] = []
-    for path in root.rglob("*"):
-        relative = path.relative_to(root)
-        if path.is_symlink():
-            raise OSError(f"Source links are not supported: {relative}")
-        if path.is_file() and not any(p.startswith(".") or p == "__pycache__" for p in relative.parts) and path.suffix != ".pyc":
-            found.append(relative.as_posix())
+    for folder, directories, files in os.walk(root):
+        # Prune before descending: the bundled runtime contains thousands of non-source files.
+        directories[:] = [name for name in directories if not name.startswith(".") and name != "__pycache__"]
+        for name in (*directories, *files):
+            if name.startswith(".") or name == "__pycache__":
+                continue
+            path = Path(folder) / name
+            relative = path.relative_to(root)
+            if path.is_symlink():
+                raise OSError(f"Source links are not supported: {relative}")
+            if path.suffix != ".pyc" and path.is_file():
+                found.append(relative.as_posix())
     return sorted(found)
 
 
 def source_digest(root: Path) -> str:
-    """Identify exactly which source bytes were approved and checked."""
+    """Identify exactly which source bytes were frozen and checked."""
     digest = hashlib.sha256()
     for name in source_files(root):
         digest.update(name.encode("utf-8") + b"\0")
@@ -137,14 +141,14 @@ def source_diff(before: Path, after: Path) -> str:
     return "".join(parts)
 
 
-def prepare_candidate(workspace: Path, live: Path, candidate: Path, approve: Callable[[Path], bool]) -> bool:
-    """Freeze and review source without importing it. Return False on cancellation."""
+def prepare_candidate(workspace: Path, live: Path, candidate: Path, approve: Callable[[Path], bool] | None = None) -> bool:
+    """Freeze source for checks, with an optional review when approval mode is enabled."""
     copy_source(workspace, candidate)
     for name in PROTECTED:
         if (candidate / name).read_bytes() != (live / name).read_bytes():
             raise OSError(f"The protected file {name} was changed")
     digest = source_digest(candidate)
-    accepted = approve(candidate)
+    accepted = approve(candidate) if approve is not None else True
     if source_digest(candidate) != digest:
         raise OSError("The candidate changed during review; review it again")
     return accepted
@@ -529,7 +533,7 @@ class _Check:
                 return False, "Runtime checks timed out."
             return None
         if source_digest(self.candidate) != self.digest:
-            return False, "The candidate changed during its checks; review it again."
+            return False, "The candidate changed during its checks; prepare and check it again."
         return code == 0, self.output.read_text(encoding="utf-8", errors="replace")
 
 
@@ -608,7 +612,8 @@ def main() -> None:  # noqa: PLR0915 (the protected keeper owns its Windows UI)
 
         def start_check(self) -> Check:
             _log("checking the workspace")
-            if not prepare_candidate(WORKSPACE, LIVE, self.candidate, approve):
+            review = approve if os.environ.get("TOOLKIT_AGENT_APPROVALS", "never").lower() == "ask" else None
+            if not prepare_candidate(WORKSPACE, LIVE, self.candidate, review):
                 return RefusedCheck()
             return _Check(self.candidate)
 
