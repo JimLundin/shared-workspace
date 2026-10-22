@@ -1,10 +1,10 @@
 """Engine tests: scripted key presses in, Windows key events out. Run anywhere
 with `pytest`."""
 
-from unittest.mock import patch
+from dataclasses import replace
 
-from miryoku.engine import MAX_BUFFERED, Engine, Indicator, Signal, Verdict
-from miryoku.layout import AGENT, ESCAPE, QUICK_TAP_MS, QUIT_HOLD_MS, STREAK_MS, TALK, Chord, Key, Layer, Mod, Scancode, TapHold
+from miryoku.engine import DEFAULT_CONFIGURATION, MAX_BUFFERED, Configuration, Engine, Indicator, Signal, Verdict
+from miryoku.layout import AGENT, ESCAPE, QUICK_TAP_MS, QUIT_HOLD_MS, STREAK_MS, TALK, Chord, Key, Layer, Mod, Scancode, TapHold, slot
 from protocol import Request, Tool
 
 NAMES = {0xA0: "SFT", 0xA2: "CTL", 0xA4: "ALT", 0x20: "spc", 0x25: "left", 0x08: "bksp", 0xDB: "[", 0xC0: "`", 0xBE: "."}
@@ -75,8 +75,8 @@ class FakeHost:
 class Harness:
     __slots__ = ("e", "h", "now")
 
-    def __init__(self) -> None:
-        self.e = Engine()
+    def __init__(self, configuration: Configuration = DEFAULT_CONFIGURATION) -> None:
+        self.e = Engine(configuration=configuration)
         self.h = FakeHost()
         self.now = 0
 
@@ -320,6 +320,30 @@ def test_streak_expires() -> None:
     t.tap("8")
     t.u("w")
     assert t.take() == "+ALT +j -j -ALT"
+
+
+def test_each_engine_uses_its_configured_timing_boundaries() -> None:
+    for milliseconds, elapsed, letter in ((0, 0, False), (1, 0, True), (1, 1, False)):
+        t = Harness(replace(DEFAULT_CONFIGURATION, streak_ms=milliseconds))
+        t.at(0).tap("t")
+        t.take()
+        t.at(elapsed).d("w")
+        assert t.take() == ("+r" if letter else "")
+        if not letter:
+            t.timeout_last()
+            assert t.take() == "+ALT"
+        t.u("w")
+        assert t.take() == ("-r" if letter else "-ALT")
+    t = Harness(replace(DEFAULT_CONFIGURATION, quick_tap_ms=0, quit_hold_ms=1))
+    t.tap("r")
+    t.take()
+    t.d("r")
+    assert t.take() == "", "Disabling quick tap must allow the repeated key to become a hold."
+    t.timeout_last()
+    t.u("r")
+    assert t.take() == "+SFT -SFT"
+    t.key(ESC, True, 0)
+    assert t.key(ESC, False, 1) is Verdict.QUIT
 
 
 def test_streak_never_blocks_shift() -> None:
@@ -591,12 +615,15 @@ def test_releasing_one_of_two_ctrl_keys_keeps_ctrl() -> None:
 
 
 def test_tap_hold_chords_release_only_the_modifiers_they_added() -> None:
-    t = Harness()
+    redo = TapHold(Chord(Key.Z, frozenset({Mod.CTRL, Mod.SHIFT})), Layer.SYM)
+    cell = slot(sc("2"))
+    assert isinstance(cell, int)
+    row = list(DEFAULT_CONFIGURATION.actions[None])
+    row[cell] = redo
+    t = Harness(replace(DEFAULT_CONFIGURATION, actions={**DEFAULT_CONFIGURATION.actions, None: tuple(row)}))
     t.e.press(t.h, Mod.CTRL, 0)
     assert t.take() == "+CTL"
-    redo = TapHold(Chord(Key.Z, frozenset({Mod.CTRL, Mod.SHIFT})), Layer.SYM)
-    with patch("miryoku.engine.action", return_value=redo):
-        t.tap("2")
+    t.tap("2")
     assert t.take() == "+SFT +z -SFT -z"
     t.e.release(t.h, Mod.CTRL)
     assert t.take() == "-CTL"
@@ -777,14 +804,22 @@ def test_snippet_replaces_its_trigger() -> None:
 
 
 def test_snippets_can_include_shifted_characters() -> None:
-    t = Harness()
-    snippets: dict[str, str] = {"ABC": "Expanded."}
-    with patch.dict("miryoku.engine.SNIPPETS", snippets, clear=True):
-        for key in (Key.A, Key.B, Key.C):
-            chord = Chord(key, frozenset({Mod.SHIFT}))
-            t.e.press(t.h, chord, 0)
-            t.e.release(t.h, chord)
+    t = Harness(replace(DEFAULT_CONFIGURATION, snippets=(("ABC", "Expanded."),)))
+    for key in (Key.A, Key.B, Key.C):
+        chord = Chord(key, frozenset({Mod.SHIFT}))
+        t.e.press(t.h, chord, 0)
+        t.e.release(t.h, chord)
     assert "~Expanded." in t.take() and "snippet:ABC" in t.h.used_features
+
+
+def test_disabled_snippets_do_not_accumulate_an_unbounded_typing_buffer() -> None:
+    t = Harness(replace(DEFAULT_CONFIGURATION, snippets=()))
+    for _ in range(100):
+        type_thx(t)
+    assert "~Thanks!" not in t.take() and not t.e.typed
+    ordinary = Harness()
+    type_thx(ordinary)
+    assert "~Thanks!" in ordinary.take(), "One engine's configuration must not change another engine."
 
 
 def test_snippet_survives_a_corrected_typo() -> None:

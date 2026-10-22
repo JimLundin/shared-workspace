@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import cast
 from unittest import TestCase
-from unittest.mock import patch
 
 if sys.platform != "win32":
     raise unittest.SkipTest("Native Edge browser automation")
@@ -17,6 +16,7 @@ if sys.platform != "win32":
 import msvcrt
 
 from assistant.browser import MAX_OUTPUT, Browser, BrowserError, InterruptedError, Product, edge_path, read_endpoint
+from assistant.browser_session import NativeSessions
 from assistant.llm import Json
 
 from .browser_fixture import fixture
@@ -162,9 +162,12 @@ def test_visible_sign_in_handoff_reuses_only_the_dedicated_profile(tmp_path: Pat
 def test_attached_browser_shares_fixture_session_without_reusing_or_closing_personal_tabs(tmp_path: Path) -> None:
     installed()
     personal = Browser(tmp_path / "fixture-personal")
-    attached = Browser(tmp_path / "unused", source=Product.EDGE)
+    attached = Browser(
+        tmp_path / "unused", source=Product.EDGE,
+        opener=NativeSessions(tmp_path / "unused", profiles=lambda _: personal.profile),
+    )
     try:
-        with fixture() as url, patch("assistant.browser.user_data_root", return_value=personal.profile):
+        with fixture() as url:
             original = request(personal, "open", url=url)
             personal.request("evaluate", {"target_id": original["target_id"],
                                           "expression": "localStorage.setItem('fixture-session', 'already-signed-in')"}, threading.Event())
@@ -197,19 +200,21 @@ def test_attached_browser_shares_fixture_session_without_reusing_or_closing_pers
 def test_stopping_an_attached_action_detaches_without_terminating_the_browser(tmp_path: Path) -> None:
     installed()
     personal = Browser(tmp_path / "fixture-personal")
-    attached = Browser(tmp_path / "unused", source=Product.EDGE)
+    attached = Browser(
+        tmp_path / "unused", source=Product.EDGE,
+        opener=NativeSessions(tmp_path / "unused", profiles=lambda _: personal.profile),
+    )
     cancel = threading.Event()
     try:
         page = request(personal, "open", url="about:blank")
-        with patch("assistant.browser.user_data_root", return_value=personal.profile):
-            request(attached, "attach")
-            with ThreadPoolExecutor(max_workers=1) as worker:
-                pending = worker.submit(attached.request, "evaluate",
-                                        {"target_id": page["target_id"], "expression": "new Promise(() => {})"}, cancel)
-                time.sleep(.15)
-                cancel.set()
-                with TestCase().assertRaises(InterruptedError):
-                    pending.result(timeout=3)
+        request(attached, "attach")
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            pending = worker.submit(attached.request, "evaluate",
+                                    {"target_id": page["target_id"], "expression": "new Promise(() => {})"}, cancel)
+            time.sleep(.15)
+            cancel.set()
+            with TestCase().assertRaises(InterruptedError):
+                pending.result(timeout=3)
         assert attached.connection is None and personal.process is not None and personal.process.poll() is None
         assert request(personal, "snapshot", target_id=page["target_id"])["url"] == "about:blank"
     finally:

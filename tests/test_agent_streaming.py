@@ -5,7 +5,6 @@ import queue
 import threading
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from unittest.mock import patch
 
 from assistant.agent import Agent
 from assistant.agent_session import Answer, LiveMessage, ReasoningSummary, StreamState, Succeeded, ToolActivity, ToolStatus
@@ -39,10 +38,10 @@ class ObservedWindow(RecordingWindow):
         return observe
 
 
-def make_agent(endpoint: FakeEndpoint, window: ObservedWindow, stop: threading.Event) -> Agent:
+def make_agent(endpoint: FakeEndpoint, window: ObservedWindow, stop: threading.Event, *, machine: FakeMachine | None = None) -> Agent:
     window.begin("Read the workbook", stop.set)
     settings = Settings(endpoint.url, "k", "transcribe", "chat", "gpt-6-astra", "", "")
-    return Agent(settings, FakeMachine(), window, stop, journal=lambda _: None)
+    return Agent(settings, machine if machine is not None else FakeMachine(), window, stop, journal=lambda _: None)
 
 
 @contextmanager
@@ -155,14 +154,15 @@ def test_a_tool_is_shown_running_before_it_returns_and_completes_the_same_row() 
     release, entered, stop = threading.Event(), threading.Event(), threading.Event()
     panel = ObservedWindow(stop.set)
 
-    def clipboard(_: FakeMachine) -> str:
-        entered.set()
-        release.wait(timeout=5)
-        return "Fixture workbook name"
+    class HeldClipboard(FakeMachine):
+        def get_clipboard(self) -> str:
+            entered.set()
+            assert release.wait(timeout=5)
+            return "Fixture workbook name"
 
-    with fake_endpoint() as endpoint, patch.object(FakeMachine, "get_clipboard", clipboard):
+    with fake_endpoint() as endpoint:
         endpoint.replies = [calls(("get_clipboard", {})), says("Found it.")]
-        agent = make_agent(endpoint, panel, stop)
+        agent = make_agent(endpoint, panel, stop, machine=HeldClipboard())
         with running(agent, panel) as worker:
             try:
                 assert entered.wait(timeout=3)

@@ -1,6 +1,8 @@
 """Recording values and decisions, independent of devices, storage, threads, and Tk."""
 
 from dataclasses import dataclass
+from enum import Enum, auto
+from math import isfinite
 from typing import Literal, assert_never
 
 from .llm import RATE
@@ -9,6 +11,32 @@ type AudioSource = Literal["both", "microphone"]
 type Phase = Literal["idle", "starting", "recording", "stopping", "finishing", "paused", "saved", "interrupted"]
 type RecordingAction = Literal["start", "start_microphone", "stop", "open", "folder", "retry"]
 type CompletionPhase = Literal["finishing", "interrupted", "saved"]
+
+
+class Exhausted(Enum):
+    PAUSED = auto()
+
+
+@dataclass(frozen=True, slots=True)
+class Retry:
+    failures: int
+    delay: float
+
+
+@dataclass(frozen=True, slots=True)
+class RetryPolicy:
+    delays: tuple[float, ...] = (2, 4, 8, 16, 30)
+    finished_attempts: int = 3
+
+    def __post_init__(self) -> None:
+        if not self.delays or any(not isfinite(delay) or delay < 0 for delay in self.delays) or self.finished_attempts < 1:
+            raise ValueError("Retries need finite, nonnegative delays and at least one attempt.")
+
+    def failed(self, failures: int, *, finished: bool) -> Retry | Exhausted:
+        failures += 1
+        if finished and failures >= self.finished_attempts:
+            return Exhausted.PAUSED
+        return Retry(failures, self.delays[min(failures - 1, len(self.delays) - 1)])
 
 
 @dataclass(frozen=True, slots=True)

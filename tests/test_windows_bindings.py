@@ -13,8 +13,9 @@ if sys.platform != "win32":
     raise unittest.SkipTest("Windows bindings")
 
 from assistant.activity import ActivityTracker
-from assistant.app import AgentRunner, AssistantApp
+from assistant.app import AssistantApp
 from assistant.llm import Settings
+from assistant.meeting_store import MeetingArchive
 from assistant.meetings import Meetings
 from assistant.overlay import OverlayState
 from assistant.ui import Ui
@@ -38,6 +39,8 @@ from protocol import (
 from tests.test_engine import Harness
 from winapi import inputs, recording, shell, windows
 from winapi.shapes import Rect
+
+from .test_agent_runner import RunnerRig
 
 
 @contextmanager
@@ -322,10 +325,11 @@ def menu_app(state: LayoutState | None) -> AssistantApp:
     app.overlay = OverlayState(layout_on=state is LayoutState.ON)
     app.window = shell.AppWindow.__new__(shell.AppWindow)
     app.window.handle = 1
-    app.agent = AgentRunner.__new__(AgentRunner)
-    app.agent.thread = None
-    app.agent.settings = Settings("", "", "", "", "", "", "")
-    app.meetings = Meetings(app.agent.settings, lambda source: recording.MeetingAudio(), root=Path(__file__).parent / "missing-meeting-fixture")
+    app.agent = RunnerRig().runner
+    app.settings = Settings("", "", "", "", "", "", "")
+    app.meetings = Meetings(
+        app.settings, lambda source: recording.MeetingAudio(), archive=MeetingArchive(Path(__file__).parent / "missing-meeting-fixture"),
+    )
     return app
 
 

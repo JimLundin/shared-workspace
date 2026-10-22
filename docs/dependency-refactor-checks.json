@@ -1,0 +1,1068 @@
+{
+  "date": "2026-10-22",
+  "scope": "Explicit dependencies and replacement tests; concurrent notification changes remain in this working tree.",
+  "patch_call_sites": {
+    "before_by_file": {
+      "test_agent.py": 2,
+      "test_agent_streaming.py": 1,
+      "test_browser.py": 2,
+      "test_browser_attachment.py": 11,
+      "test_browser_tabs.py": 1,
+      "test_computer_tools.py": 1,
+      "test_engine.py": 2,
+      "test_features.py": 2,
+      "test_graph_http.py": 1,
+      "test_keeper.py": 1,
+      "test_meetings.py": 9,
+      "test_runtime.py": 12,
+      "test_selfcheck.py": 1,
+      "test_teams.py": 3,
+      "test_windows_agent.py": 16,
+      "test_windows_agent_approvals.py": 4,
+      "test_windows_agent_panel.py": 5,
+      "test_windows_agent_toasts.py": 14,
+      "test_windows_audio.py": 14,
+      "test_windows_bindings.py": 45,
+      "test_windows_browser.py": 2,
+      "test_windows_browser_tabs.py": 3,
+      "test_windows_computer.py": 8,
+      "test_windows_overlay.py": 8,
+      "test_windows_recording.py": 13
+    },
+    "after_by_file": {
+      "test_browser.py": 1,
+      "test_browser_attachment.py": 1,
+      "test_keeper.py": 1,
+      "test_meetings.py": 1,
+      "test_selfcheck.py": 1,
+      "test_windows_agent_approvals.py": 4,
+      "test_windows_agent_panel.py": 5,
+      "test_windows_agent_toasts.py": 16,
+      "test_windows_audio.py": 14,
+      "test_windows_bindings.py": 45,
+      "test_windows_computer.py": 8,
+      "test_windows_overlay.py": 8,
+      "test_windows_recording.py": 13
+    },
+    "before_total": 181,
+    "after_total": 118,
+    "before_portable": 49,
+    "after_portable": 5,
+    "note": "65 sites removed in the refactored areas; concurrent notification tests added two sites."
+  },
+  "verification": {
+    "linux_selfcheck": {
+      "passed": 473,
+      "failed": 0,
+      "skipped_modules": 15
+    },
+    "windows_initial_selfcheck": {
+      "passed": 582,
+      "failed": 3,
+      "skipped_modules": 3
+    },
+    "windows_initial_failures": [
+      "test_reduced_motion_keeps_the_whole_reply_and_advances_by_pages",
+      "test_wheel_over_empty_glass_reaches_the_text_without_focusing_or_scrolling_other_apps",
+      "test_windowed_handoff_returns_while_the_child_is_still_running"
+    ],
+    "windows_focused_recheck": {
+      "passed": 3,
+      "failed": 0
+    },
+    "windows_recheck_notes": "The child handshake now sends exactly the one byte consumed. The two notification cases pass with the concurrent measurement-cache fix.",
+    "type_and_lint": [
+      "mypy: success (137 files)",
+      "pyright: 0 errors",
+      "ruff: success",
+      "git diff --check: success"
+    ],
+    "tools": {
+      "mypy": "2.4.0",
+      "pyright": "1.1.414",
+      "ruff": "0.17.1",
+      "pytest": "9.1.1"
+    },
+    "bootstrap_import": {
+      "python": "3.12.8",
+      "platform": "Linux",
+      "passed": true
+    },
+    "windows_final_selfcheck": {
+      "passed": 586,
+      "failed": 0,
+      "skipped_modules": 3,
+      "seconds": 132.8403915000381
+    },
+    "windows_desktop_e2e": "Not enabled; three opt-in modules remain skipped.",
+    "latest_notification_module": {
+      "passed": 37,
+      "failed": 0
+    },
+    "incomplete_windows_checks": "Two subsequent full-check launches ended without a final report and are not counted as successful checks.",
+    "windows_final_method": "Full selfcheck in a tracked Windows terminal. sys.monitoring recorded test-entry progress; no test or application implementation was replaced."
+  },
+  "keyboard": {
+    "notes": [
+      "Each process measures 100,000 events for five rounds with GC enabled; allocation tracing is separate.",
+      "Initial paired results use MappingProxyType. Later frozen and affinity runs use built-in frozendict.",
+      "The affinity run order is after-1, before-1, before-2, after-2 on the third eligible logical CPU, with no priority changes.",
+      "The only later engine edits are type-checker suppression comments; its parsed AST matches the measured frozendict source.",
+      "Timing distributions change under system load. Small increases and worst observations are retained; no latency improvement is claimed."
+    ],
+    "final_engine_sha256": "f9925efa382606ac07154e694a205dba28b851d5e6296a63921a4941fa5fa9a3",
+    "final_engine_ast_matches_measured": true,
+    "runs": {
+      "keyboard-affinity-after-1": {
+        "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+        "root": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-dependencies-rmgju7u4\\checked",
+        "events_per_round": 100000,
+        "rounds": 5,
+        "gc_enabled": true,
+        "assistant_imported": false,
+        "latency_rounds": [
+          {
+            "p50_us": 4.7,
+            "p95_us": 12.0,
+            "p99_us": 21.5,
+            "p999_us": 224.6,
+            "max_us": 16150.5
+          },
+          {
+            "p50_us": 4.5,
+            "p95_us": 11.4,
+            "p99_us": 18.0,
+            "p999_us": 101.3,
+            "max_us": 5431.3
+          },
+          {
+            "p50_us": 4.2,
+            "p95_us": 10.5,
+            "p99_us": 16.4,
+            "p999_us": 36.2,
+            "max_us": 13268.9
+          },
+          {
+            "p50_us": 4.3,
+            "p95_us": 11.0,
+            "p99_us": 17.4,
+            "p999_us": 33.1,
+            "max_us": 3533.3
+          },
+          {
+            "p50_us": 4.5,
+            "p95_us": 11.2,
+            "p99_us": 19.4,
+            "p999_us": 74.0,
+            "max_us": 29086.8
+          }
+        ],
+        "median": {
+          "p50_us": 4.5,
+          "p95_us": 11.2,
+          "p99_us": 18.0,
+          "p999_us": 74.0,
+          "max_us": 13268.9
+        },
+        "gc_collections_during_latency": 0,
+        "gc_generations": [],
+        "longest_observed_gc_us": 0.0,
+        "traced_peak_bytes": 1780,
+        "traced_retained_bytes": 855,
+        "source": {
+          "miryoku/engine.py": "ce38e81ba8bd909e2d32f748e314e6af07951c83d435e0a85c2e582aec08cfde",
+          "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+          "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+          "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+          "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+          "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+          "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+          "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+          "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+          "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+          "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+          "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+        },
+        "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+      },
+      "keyboard-affinity-after-2": {
+        "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+        "root": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-dependencies-rmgju7u4\\checked",
+        "events_per_round": 100000,
+        "rounds": 5,
+        "gc_enabled": true,
+        "assistant_imported": false,
+        "latency_rounds": [
+          {
+            "p50_us": 3.3,
+            "p95_us": 6.2,
+            "p99_us": 9.5,
+            "p999_us": 16.1,
+            "max_us": 1973.3
+          },
+          {
+            "p50_us": 3.3,
+            "p95_us": 6.4,
+            "p99_us": 9.5,
+            "p999_us": 15.5,
+            "max_us": 988.7
+          },
+          {
+            "p50_us": 3.5,
+            "p95_us": 7.7,
+            "p99_us": 10.1,
+            "p999_us": 17.8,
+            "max_us": 21152.8
+          },
+          {
+            "p50_us": 3.7,
+            "p95_us": 8.9,
+            "p99_us": 10.6,
+            "p999_us": 18.8,
+            "max_us": 2212.0
+          },
+          {
+            "p50_us": 3.5,
+            "p95_us": 8.3,
+            "p99_us": 10.4,
+            "p999_us": 18.8,
+            "max_us": 1450.0
+          }
+        ],
+        "median": {
+          "p50_us": 3.5,
+          "p95_us": 7.7,
+          "p99_us": 10.1,
+          "p999_us": 17.8,
+          "max_us": 1973.3
+        },
+        "gc_collections_during_latency": 0,
+        "gc_generations": [],
+        "longest_observed_gc_us": 0.0,
+        "traced_peak_bytes": 1780,
+        "traced_retained_bytes": 855,
+        "source": {
+          "miryoku/engine.py": "ce38e81ba8bd909e2d32f748e314e6af07951c83d435e0a85c2e582aec08cfde",
+          "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+          "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+          "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+          "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+          "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+          "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+          "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+          "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+          "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+          "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+          "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+        },
+        "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+      },
+      "keyboard-affinity-before-1": {
+        "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+        "root": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-dependencies-rmgju7u4\\before",
+        "events_per_round": 100000,
+        "rounds": 5,
+        "gc_enabled": true,
+        "assistant_imported": false,
+        "latency_rounds": [
+          {
+            "p50_us": 4.3,
+            "p95_us": 11.5,
+            "p99_us": 18.1,
+            "p999_us": 71.4,
+            "max_us": 4891.2
+          },
+          {
+            "p50_us": 4.4,
+            "p95_us": 11.8,
+            "p99_us": 18.5,
+            "p999_us": 68.7,
+            "max_us": 2867.5
+          },
+          {
+            "p50_us": 4.5,
+            "p95_us": 11.9,
+            "p99_us": 20.8,
+            "p999_us": 104.3,
+            "max_us": 5356.7
+          },
+          {
+            "p50_us": 4.4,
+            "p95_us": 11.7,
+            "p99_us": 19.4,
+            "p999_us": 90.7,
+            "max_us": 11496.5
+          },
+          {
+            "p50_us": 3.8,
+            "p95_us": 9.9,
+            "p99_us": 12.8,
+            "p999_us": 22.8,
+            "max_us": 1351.6
+          }
+        ],
+        "median": {
+          "p50_us": 4.4,
+          "p95_us": 11.7,
+          "p99_us": 18.5,
+          "p999_us": 71.4,
+          "max_us": 4891.2
+        },
+        "gc_collections_during_latency": 0,
+        "gc_generations": [],
+        "longest_observed_gc_us": 0.0,
+        "traced_peak_bytes": 1780,
+        "traced_retained_bytes": 855,
+        "source": {
+          "miryoku/engine.py": "057f7d4f802a73cc06c8906aebeaf80b78caf635ef6785db0c9df7bcc9e4262c",
+          "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+          "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+          "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+          "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+          "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+          "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+          "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+          "runtime.py": "78bb2378750cfa1621fff76af1a6559070eff0ba1b6f603e88d747126607ac88",
+          "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+          "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+          "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+        },
+        "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+      },
+      "keyboard-affinity-before-2": {
+        "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+        "root": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-dependencies-rmgju7u4\\before",
+        "events_per_round": 100000,
+        "rounds": 5,
+        "gc_enabled": true,
+        "assistant_imported": false,
+        "latency_rounds": [
+          {
+            "p50_us": 3.7,
+            "p95_us": 7.9,
+            "p99_us": 11.4,
+            "p999_us": 19.9,
+            "max_us": 1487.2
+          },
+          {
+            "p50_us": 3.4,
+            "p95_us": 5.8,
+            "p99_us": 10.5,
+            "p999_us": 16.5,
+            "max_us": 1206.2
+          },
+          {
+            "p50_us": 3.7,
+            "p95_us": 9.7,
+            "p99_us": 13.8,
+            "p999_us": 27.5,
+            "max_us": 11666.1
+          },
+          {
+            "p50_us": 3.5,
+            "p95_us": 6.7,
+            "p99_us": 10.8,
+            "p999_us": 18.0,
+            "max_us": 2306.7
+          },
+          {
+            "p50_us": 3.5,
+            "p95_us": 8.4,
+            "p99_us": 10.9,
+            "p999_us": 18.5,
+            "max_us": 1879.5
+          }
+        ],
+        "median": {
+          "p50_us": 3.5,
+          "p95_us": 7.9,
+          "p99_us": 10.9,
+          "p999_us": 18.5,
+          "max_us": 1879.5
+        },
+        "gc_collections_during_latency": 0,
+        "gc_generations": [],
+        "longest_observed_gc_us": 0.0,
+        "traced_peak_bytes": 1780,
+        "traced_retained_bytes": 855,
+        "source": {
+          "miryoku/engine.py": "057f7d4f802a73cc06c8906aebeaf80b78caf635ef6785db0c9df7bcc9e4262c",
+          "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+          "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+          "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+          "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+          "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+          "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+          "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+          "runtime.py": "78bb2378750cfa1621fff76af1a6559070eff0ba1b6f603e88d747126607ac88",
+          "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+          "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+          "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+        },
+        "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+      },
+      "keyboard-after-paired": {
+        "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+        "root": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-dependencies-rmgju7u4\\after",
+        "events_per_round": 100000,
+        "rounds": 5,
+        "gc_enabled": true,
+        "assistant_imported": false,
+        "latency_rounds": [
+          {
+            "p50_us": 5.2,
+            "p95_us": 13.4,
+            "p99_us": 20.3,
+            "p999_us": 73.4,
+            "max_us": 681.4
+          },
+          {
+            "p50_us": 4.8,
+            "p95_us": 11.9,
+            "p99_us": 14.8,
+            "p999_us": 41.2,
+            "max_us": 717.1
+          },
+          {
+            "p50_us": 4.6,
+            "p95_us": 12.2,
+            "p99_us": 20.9,
+            "p999_us": 77.6,
+            "max_us": 582.9
+          },
+          {
+            "p50_us": 6.0,
+            "p95_us": 15.8,
+            "p99_us": 28.9,
+            "p999_us": 108.4,
+            "max_us": 537.9
+          },
+          {
+            "p50_us": 5.3,
+            "p95_us": 13.8,
+            "p99_us": 23.0,
+            "p999_us": 72.4,
+            "max_us": 1216.6
+          }
+        ],
+        "median": {
+          "p50_us": 5.2,
+          "p95_us": 13.4,
+          "p99_us": 20.9,
+          "p999_us": 73.4,
+          "max_us": 681.4
+        },
+        "gc_collections_during_latency": 0,
+        "gc_generations": [],
+        "longest_observed_gc_us": 0.0,
+        "traced_peak_bytes": 1780,
+        "traced_retained_bytes": 855,
+        "source": {
+          "miryoku/engine.py": "b2680847d67182a7bbdc68674015b35986722f344eb88b16b8e1e04bbc4628eb",
+          "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+          "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+          "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+          "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+          "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+          "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+          "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+          "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+          "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+          "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+          "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+        },
+        "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+      },
+      "keyboard-before-paired": {
+        "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+        "root": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-dependencies-rmgju7u4\\before",
+        "events_per_round": 100000,
+        "rounds": 5,
+        "gc_enabled": true,
+        "assistant_imported": false,
+        "latency_rounds": [
+          {
+            "p50_us": 4.3,
+            "p95_us": 9.9,
+            "p99_us": 13.3,
+            "p999_us": 24.1,
+            "max_us": 162.6
+          },
+          {
+            "p50_us": 5.6,
+            "p95_us": 15.5,
+            "p99_us": 27.7,
+            "p999_us": 111.3,
+            "max_us": 9679.7
+          },
+          {
+            "p50_us": 5.6,
+            "p95_us": 15.4,
+            "p99_us": 27.1,
+            "p999_us": 83.2,
+            "max_us": 734.9
+          },
+          {
+            "p50_us": 4.8,
+            "p95_us": 11.8,
+            "p99_us": 15.3,
+            "p999_us": 37.4,
+            "max_us": 384.3
+          },
+          {
+            "p50_us": 4.7,
+            "p95_us": 12.5,
+            "p99_us": 17.2,
+            "p999_us": 42.3,
+            "max_us": 200.8
+          }
+        ],
+        "median": {
+          "p50_us": 4.8,
+          "p95_us": 12.5,
+          "p99_us": 17.2,
+          "p999_us": 42.3,
+          "max_us": 384.3
+        },
+        "gc_collections_during_latency": 0,
+        "gc_generations": [],
+        "longest_observed_gc_us": 0.0,
+        "traced_peak_bytes": 1780,
+        "traced_retained_bytes": 855,
+        "source": {
+          "miryoku/engine.py": "057f7d4f802a73cc06c8906aebeaf80b78caf635ef6785db0c9df7bcc9e4262c",
+          "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+          "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+          "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+          "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+          "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+          "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+          "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+          "runtime.py": "78bb2378750cfa1621fff76af1a6559070eff0ba1b6f603e88d747126607ac88",
+          "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+          "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+          "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+        },
+        "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+      },
+      "keyboard-before": {
+        "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+        "root": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-dependencies-rmgju7u4\\before",
+        "events_per_round": 100000,
+        "rounds": 5,
+        "gc_enabled": true,
+        "assistant_imported": false,
+        "latency_rounds": [
+          {
+            "p50_us": 10.9,
+            "p95_us": 30.9,
+            "p99_us": 69.1,
+            "p999_us": 288.3,
+            "max_us": 3220.0
+          },
+          {
+            "p50_us": 11.1,
+            "p95_us": 33.6,
+            "p99_us": 103.2,
+            "p999_us": 914.5,
+            "max_us": 23661.3
+          },
+          {
+            "p50_us": 11.8,
+            "p95_us": 35.5,
+            "p99_us": 123.0,
+            "p999_us": 685.2,
+            "max_us": 58363.4
+          },
+          {
+            "p50_us": 11.7,
+            "p95_us": 34.5,
+            "p99_us": 104.4,
+            "p999_us": 1379.1,
+            "max_us": 38958.6
+          },
+          {
+            "p50_us": 11.8,
+            "p95_us": 35.6,
+            "p99_us": 131.1,
+            "p999_us": 1885.4,
+            "max_us": 110439.8
+          }
+        ],
+        "median": {
+          "p50_us": 11.7,
+          "p95_us": 34.5,
+          "p99_us": 104.4,
+          "p999_us": 914.5,
+          "max_us": 38958.6
+        },
+        "gc_collections_during_latency": 0,
+        "gc_generations": [],
+        "longest_observed_gc_us": 0.0,
+        "traced_peak_bytes": 1780,
+        "traced_retained_bytes": 855,
+        "source": {
+          "miryoku/engine.py": "057f7d4f802a73cc06c8906aebeaf80b78caf635ef6785db0c9df7bcc9e4262c",
+          "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+          "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+          "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+          "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+          "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+          "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+          "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+          "runtime.py": "78bb2378750cfa1621fff76af1a6559070eff0ba1b6f603e88d747126607ac88",
+          "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+          "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+          "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+        },
+        "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+      },
+      "keyboard-frozen-after": {
+        "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+        "root": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-dependencies-rmgju7u4\\checked",
+        "events_per_round": 100000,
+        "rounds": 5,
+        "gc_enabled": true,
+        "assistant_imported": false,
+        "latency_rounds": [
+          {
+            "p50_us": 4.2,
+            "p95_us": 10.8,
+            "p99_us": 18.6,
+            "p999_us": 58.7,
+            "max_us": 31989.2
+          },
+          {
+            "p50_us": 3.3,
+            "p95_us": 8.6,
+            "p99_us": 11.7,
+            "p999_us": 32.7,
+            "max_us": 240.6
+          },
+          {
+            "p50_us": 3.5,
+            "p95_us": 8.8,
+            "p99_us": 14.2,
+            "p999_us": 28.6,
+            "max_us": 140.4
+          },
+          {
+            "p50_us": 3.5,
+            "p95_us": 8.8,
+            "p99_us": 13.0,
+            "p999_us": 24.7,
+            "max_us": 265.3
+          },
+          {
+            "p50_us": 3.1,
+            "p95_us": 7.4,
+            "p99_us": 9.5,
+            "p999_us": 19.6,
+            "max_us": 403.7
+          }
+        ],
+        "median": {
+          "p50_us": 3.5,
+          "p95_us": 8.8,
+          "p99_us": 13.0,
+          "p999_us": 28.6,
+          "max_us": 265.3
+        },
+        "gc_collections_during_latency": 0,
+        "gc_generations": [],
+        "longest_observed_gc_us": 0.0,
+        "traced_peak_bytes": 1780,
+        "traced_retained_bytes": 855,
+        "source": {
+          "miryoku/engine.py": "ce38e81ba8bd909e2d32f748e314e6af07951c83d435e0a85c2e582aec08cfde",
+          "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+          "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+          "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+          "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+          "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+          "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+          "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+          "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+          "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+          "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+          "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+        },
+        "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+      },
+      "keyboard-frozen-before": {
+        "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+        "root": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-dependencies-rmgju7u4\\before",
+        "events_per_round": 100000,
+        "rounds": 5,
+        "gc_enabled": true,
+        "assistant_imported": false,
+        "latency_rounds": [
+          {
+            "p50_us": 3.3,
+            "p95_us": 9.2,
+            "p99_us": 13.4,
+            "p999_us": 39.1,
+            "max_us": 8628.6
+          },
+          {
+            "p50_us": 3.1,
+            "p95_us": 7.7,
+            "p99_us": 11.1,
+            "p999_us": 25.1,
+            "max_us": 122.6
+          },
+          {
+            "p50_us": 3.1,
+            "p95_us": 8.0,
+            "p99_us": 11.1,
+            "p999_us": 29.1,
+            "max_us": 686.9
+          },
+          {
+            "p50_us": 3.2,
+            "p95_us": 7.7,
+            "p99_us": 10.5,
+            "p999_us": 23.3,
+            "max_us": 108.2
+          },
+          {
+            "p50_us": 3.2,
+            "p95_us": 8.5,
+            "p99_us": 11.4,
+            "p999_us": 25.4,
+            "max_us": 459.0
+          }
+        ],
+        "median": {
+          "p50_us": 3.2,
+          "p95_us": 8.0,
+          "p99_us": 11.1,
+          "p999_us": 25.4,
+          "max_us": 459.0
+        },
+        "gc_collections_during_latency": 0,
+        "gc_generations": [],
+        "longest_observed_gc_us": 0.0,
+        "traced_peak_bytes": 1780,
+        "traced_retained_bytes": 855,
+        "source": {
+          "miryoku/engine.py": "057f7d4f802a73cc06c8906aebeaf80b78caf635ef6785db0c9df7bcc9e4262c",
+          "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+          "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+          "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+          "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+          "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+          "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+          "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+          "runtime.py": "78bb2378750cfa1621fff76af1a6559070eff0ba1b6f603e88d747126607ac88",
+          "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+          "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+          "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+        },
+        "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+      }
+    }
+  },
+  "mutations": {
+    "mutations-agent_execution": {
+      "source": "assistant/agent_execution.py",
+      "tests": [
+        "tests/test_agent_runner.py::test_sdk_execution_keeps_history_until_a_new_conversation"
+      ],
+      "generated": 1,
+      "seed": 0,
+      "baseline_seconds": 23.349569110025186,
+      "baseline_tests": 1,
+      "results": [
+        {
+          "function": "seeded",
+          "line": 50,
+          "before": "self.history.clear()",
+          "after": "pass",
+          "start": 2004,
+          "end": 2024,
+          "status": "killed",
+          "seconds": 20.371,
+          "tests": 1,
+          "killed_by": [
+            "tests.test_agent_runner.test_sdk_execution_keeps_history_until_a_new_conversation"
+          ],
+          "detail": ""
+        }
+      ],
+      "source_sha256": "15aa1c5db15926d2773ad2491edbbf85e86461d6fb38c27b77600c0da785a28b",
+      "snapshot_sha256": "cc369b45967fb4a5ba36c9537661dab837bd24f0c489569b3b1a0e57382e100e"
+    },
+    "mutations-agent_runner": {
+      "source": "assistant/agent_runner.py",
+      "tests": [
+        "tests/test_agent_runner.py::test_task_transitions_preserve_context_and_stop_discards_the_queue",
+        "tests/test_agent_runner.py::test_queued_requests_keep_their_invocation_context_without_revealing_the_panel",
+        "tests/test_agent_runner.py::test_stop_during_window_creation_prevents_execution"
+      ],
+      "generated": 3,
+      "seed": 0,
+      "baseline_seconds": 4.426925937004853,
+      "baseline_tests": 3,
+      "results": [
+        {
+          "function": "seeded",
+          "line": 54,
+          "before": "return Active(pending[0], pending[1:]) if pending else Idle.READY",
+          "after": "return Idle.READY",
+          "start": 1268,
+          "end": 1333,
+          "status": "killed",
+          "seconds": 4.185,
+          "tests": 3,
+          "killed_by": [
+            "tests.test_agent_runner.test_task_transitions_preserve_context_and_stop_discards_the_queue",
+            "tests.test_agent_runner.test_queued_requests_keep_their_invocation_context_without_revealing_the_panel"
+          ],
+          "detail": ""
+        },
+        {
+          "function": "seeded",
+          "line": 128,
+          "before": "self.context() if self.context is not None else None",
+          "after": "None",
+          "start": 4233,
+          "end": 4285,
+          "status": "killed",
+          "seconds": 4.646,
+          "tests": 3,
+          "killed_by": [
+            "tests.test_agent_runner.test_queued_requests_keep_their_invocation_context_without_revealing_the_panel"
+          ],
+          "detail": ""
+        },
+        {
+          "function": "seeded",
+          "line": 156,
+          "before": "if not stop.is_set():",
+          "after": "if True:",
+          "start": 5395,
+          "end": 5416,
+          "status": "killed",
+          "seconds": 6.239,
+          "tests": 3,
+          "killed_by": [
+            "tests.test_agent_runner.test_stop_during_window_creation_prevents_execution"
+          ],
+          "detail": ""
+        }
+      ],
+      "source_sha256": "adadb99b4badeaa9e837d900691e2465502486121f398c5b4733cfced3bbf4fb",
+      "snapshot_sha256": "cc369b45967fb4a5ba36c9537661dab837bd24f0c489569b3b1a0e57382e100e"
+    },
+    "mutations-browser_session": {
+      "source": "assistant/browser_session.py",
+      "tests": [
+        "tests/test_browser_attachment.py::test_attach_reuses_one_connection_and_never_closes_the_personal_browser"
+      ],
+      "generated": 1,
+      "seed": 0,
+      "baseline_seconds": 1.8762183880317025,
+      "baseline_tests": 1,
+      "results": [
+        {
+          "function": "seeded",
+          "line": 266,
+          "before": "if isinstance(self.owner, Managed):\n            with contextlib.suppress(OSError):",
+          "after": "if True:\n            with contextlib.suppress(OSError):",
+          "start": 10199,
+          "end": 10281,
+          "status": "killed",
+          "seconds": 1.432,
+          "tests": 1,
+          "killed_by": [
+            "tests.test_browser_attachment.test_attach_reuses_one_connection_and_never_closes_the_personal_browser"
+          ],
+          "detail": ""
+        }
+      ],
+      "source_sha256": "99dc78475a1ef214c728ff21876bd23ce7404c4c3b3562ae5e653d9ef792285b",
+      "snapshot_sha256": "cc369b45967fb4a5ba36c9537661dab837bd24f0c489569b3b1a0e57382e100e"
+    },
+    "mutations-engine": {
+      "source": "miryoku/engine.py",
+      "tests": [
+        "tests/test_engine.py"
+      ],
+      "generated": 2,
+      "seed": 0,
+      "baseline_seconds": 2.131600497988984,
+      "baseline_tests": 74,
+      "results": [
+        {
+          "function": "seeded",
+          "line": 374,
+          "before": "match self.configuration.actions[layer][cell]:",
+          "after": "match DEFAULT_CONFIGURATION.actions[layer][cell]:",
+          "start": 13703,
+          "end": 13749,
+          "status": "killed",
+          "seconds": 1.414,
+          "tests": 74,
+          "killed_by": [
+            "tests.test_engine.test_tap_hold_chords_release_only_the_modifiers_they_added"
+          ],
+          "detail": ""
+        },
+        {
+          "function": "seeded",
+          "line": 515,
+          "before": "for trigger, text in self.configuration.snippets:",
+          "after": "for trigger, text in DEFAULT_CONFIGURATION.snippets:",
+          "start": 20082,
+          "end": 20131,
+          "status": "killed",
+          "seconds": 1.733,
+          "tests": 74,
+          "killed_by": [
+            "tests.test_engine.test_snippets_can_include_shifted_characters"
+          ],
+          "detail": ""
+        }
+      ],
+      "source_sha256": "f9925efa382606ac07154e694a205dba28b851d5e6296a63921a4941fa5fa9a3",
+      "snapshot_sha256": "cc369b45967fb4a5ba36c9537661dab837bd24f0c489569b3b1a0e57382e100e"
+    },
+    "mutations-meeting_store": {
+      "source": "assistant/meeting_store.py",
+      "tests": [
+        "tests/test_meetings.py::test_text_commit_survives_an_interrupted_markdown_export",
+        "tests/test_meetings.py::test_export_failure_can_be_retried_immediately_without_uploading_audio_again"
+      ],
+      "generated": 1,
+      "seed": 0,
+      "baseline_seconds": 1.8358093440183438,
+      "baseline_tests": 2,
+      "results": [
+        {
+          "function": "seeded",
+          "line": 221,
+          "before": "self.publish(temporary, self.transcript)",
+          "after": "_replace_transcript(temporary, self.transcript)",
+          "start": 11165,
+          "end": 11205,
+          "status": "killed",
+          "seconds": 4.017,
+          "tests": 2,
+          "killed_by": [
+            "tests.test_meetings.test_text_commit_survives_an_interrupted_markdown_export",
+            "tests.test_meetings.test_export_failure_can_be_retried_immediately_without_uploading_audio_again"
+          ],
+          "detail": ""
+        }
+      ],
+      "source_sha256": "2478fbdc9974f21a701de2239891405073b31ee0a5cf36fff85af17dbf0e08f1",
+      "snapshot_sha256": "cc369b45967fb4a5ba36c9537661dab837bd24f0c489569b3b1a0e57382e100e"
+    },
+    "mutations-recording_state": {
+      "source": "assistant/recording_state.py",
+      "tests": [
+        "tests/test_recording_state.py::test_transcription_retries_back_off_while_capturing_and_pause_after_capture"
+      ],
+      "generated": 1,
+      "seed": 0,
+      "baseline_seconds": 1.0856879790080711,
+      "baseline_tests": 1,
+      "results": [
+        {
+          "function": "seeded",
+          "line": 37,
+          "before": "failures >= self.finished_attempts",
+          "after": "failures > self.finished_attempts",
+          "start": 1220,
+          "end": 1254,
+          "status": "killed",
+          "seconds": 1.226,
+          "tests": 1,
+          "killed_by": [
+            "tests.test_recording_state.test_transcription_retries_back_off_while_capturing_and_pause_after_capture"
+          ],
+          "detail": ""
+        }
+      ],
+      "source_sha256": "7ce517e3d609b946cb4f28c62789ad1d133098fd6db473c8c192acaba29d9427",
+      "snapshot_sha256": "cc369b45967fb4a5ba36c9537661dab837bd24f0c489569b3b1a0e57382e100e"
+    },
+    "mutations-runtime": {
+      "source": "runtime.py",
+      "tests": [
+        "tests/test_runtime.py::test_old_file_association_hands_off_before_loading_dependencies"
+      ],
+      "generated": 1,
+      "seed": 0,
+      "baseline_seconds": 0.8097506599733606,
+      "baseline_tests": 1,
+      "results": [
+        {
+          "function": "seeded",
+          "line": 59,
+          "before": "if name not in (\"PYTHONHOME\", \"PYTHONPATH\")",
+          "after": "if True",
+          "start": 1652,
+          "end": 1695,
+          "status": "killed",
+          "seconds": 0.959,
+          "tests": 1,
+          "killed_by": [
+            "tests.test_runtime.test_old_file_association_hands_off_before_loading_dependencies"
+          ],
+          "detail": ""
+        }
+      ],
+      "source_sha256": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+      "snapshot_sha256": "cc369b45967fb4a5ba36c9537661dab837bd24f0c489569b3b1a0e57382e100e"
+    },
+    "mutations-teams": {
+      "source": "assistant/teams.py",
+      "tests": [
+        "tests/test_teams.py::test_device_flow_deadlines_and_poll_intervals_are_pure_observations",
+        "tests/test_teams.py::test_device_flow_polls_on_schedule_after_pending_and_slow_down"
+      ],
+      "generated": 2,
+      "seed": 0,
+      "baseline_seconds": 0.928135416994337,
+      "baseline_tests": 2,
+      "results": [
+        {
+          "function": "seeded",
+          "line": 143,
+          "before": "if now >= flow.expires:",
+          "after": "if now > flow.expires:",
+          "start": 4200,
+          "end": 4223,
+          "status": "killed",
+          "seconds": 1.337,
+          "tests": 2,
+          "killed_by": [
+            "tests.test_teams.test_device_flow_deadlines_and_poll_intervals_are_pure_observations"
+          ],
+          "detail": ""
+        },
+        {
+          "function": "seeded",
+          "line": 147,
+          "before": "if now < flow.next_poll:",
+          "after": "if False:",
+          "start": 4308,
+          "end": 4332,
+          "status": "killed",
+          "seconds": 0.922,
+          "tests": 2,
+          "killed_by": [
+            "tests.test_teams.test_device_flow_deadlines_and_poll_intervals_are_pure_observations",
+            "tests.test_teams.test_device_flow_polls_on_schedule_after_pending_and_slow_down"
+          ],
+          "detail": ""
+        }
+      ],
+      "source_sha256": "ae592e21d033a5ff7159ed49ff43ce130b5f2cd2f1e3c27a885e41f512095491",
+      "snapshot_sha256": "cc369b45967fb4a5ba36c9537661dab837bd24f0c489569b3b1a0e57382e100e"
+    }
+  },
+  "completed_on_local_date": "2026-10-23"
+}

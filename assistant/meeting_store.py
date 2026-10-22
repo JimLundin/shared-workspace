@@ -8,7 +8,7 @@ import os
 import sqlite3
 import time
 import uuid
-from collections.abc import Generator, Iterator, Sequence
+from collections.abc import Callable, Generator, Iterator, Sequence
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -68,11 +68,14 @@ class BacklogFullError(OSError):
 
 
 class MeetingStore:
-    __slots__ = ("folder", "max_pending_bytes")
+    __slots__ = ("folder", "max_pending_bytes", "publish")
 
-    def __init__(self, folder: Path, *, max_pending_bytes: int = MAX_PENDING_BYTES) -> None:
+    def __init__(
+        self, folder: Path, *, max_pending_bytes: int = MAX_PENDING_BYTES, publish: Callable[[Path, Path], None] = _replace_transcript,
+    ) -> None:
         self.folder = folder
         self.max_pending_bytes = max_pending_bytes
+        self.publish = publish
 
     @property
     def transcript(self) -> Path:
@@ -99,11 +102,14 @@ class MeetingStore:
             connection.close()
 
     @classmethod
-    def create(cls, root: Path, source: AudioSource, title: str = "Meeting", *, max_pending_bytes: int = MAX_PENDING_BYTES) -> MeetingStore:
+    def create(
+        cls, root: Path, source: AudioSource, title: str = "Meeting", *, max_pending_bytes: int = MAX_PENDING_BYTES,
+        publish: Callable[[Path, Path], None] = _replace_transcript,
+    ) -> MeetingStore:
         now = time.time()
         folder = root / (datetime.fromtimestamp(now).strftime("%Y-%m-%d_%H-%M-%S_") + uuid.uuid4().hex[:8])
         folder.mkdir(parents=True)
-        store = cls(folder, max_pending_bytes=max_pending_bytes)
+        store = cls(folder, max_pending_bytes=max_pending_bytes, publish=publish)
         with store.connection() as connection:
             connection.executescript("""
                 PRAGMA auto_vacuum=FULL;
@@ -212,8 +218,28 @@ class MeetingStore:
                     output.write(f"*{duration(state.pending / RATE)} of audio is saved locally and awaiting transcription.*\n")
                 output.flush()
                 os.fsync(output.fileno())
-            _replace_transcript(temporary, self.transcript)
+            self.publish(temporary, self.transcript)
             with self.connection(writing=True) as connection:
                 connection.execute("UPDATE meeting SET exported_revision=? WHERE id=1", (state.revision,))
         finally:
             temporary.unlink(missing_ok=True)
+
+
+class MeetingArchive:
+    """Create and reopen journals with the same storage and publication policy."""
+
+    __slots__ = ("max_pending_bytes", "publish", "root")
+
+    def __init__(
+        self, root: Path, *, max_pending_bytes: int = MAX_PENDING_BYTES, publish: Callable[[Path, Path], None] = _replace_transcript,
+    ) -> None:
+        self.root, self.max_pending_bytes, self.publish = root, max_pending_bytes, publish
+
+    def create(self, source: AudioSource, title: str = "Meeting") -> MeetingStore:
+        return MeetingStore.create(self.root, source, title, max_pending_bytes=self.max_pending_bytes, publish=self.publish)
+
+    def open(self, folder: Path) -> MeetingStore:
+        return MeetingStore(folder, max_pending_bytes=self.max_pending_bytes, publish=self.publish)
+
+    def journals(self) -> tuple[Path, ...]:
+        return tuple(sorted(self.root.glob("*/session.sqlite3")))

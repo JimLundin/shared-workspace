@@ -3,7 +3,6 @@
 import json
 import threading
 import time
-from unittest.mock import patch
 
 from assistant.activity import Activity, ContextSnapshot
 from assistant.agent import Agent
@@ -130,14 +129,17 @@ def test_disabled_context_does_not_capture_or_add_observations_to_the_request() 
 
 
 def test_unavailable_screen_context_keeps_the_request_and_activity_usable() -> None:
+    class LockedDesktop(FakeMachine):
+        def screenshot(self, *, area: Rect | None = None, handle: int = 0, monitor: int = -1, longest: int = 1280) -> tuple[bytes, Shot]:
+            raise OSError("The desktop is locked.")
+
     with fake_endpoint() as endpoint:
         rig = Rig(endpoint, says("I can still work with files."))
         agent = Agent(
-            Settings(endpoint.url, "fixture", "transcribe", "chat", "agent", "", ""), rig.machine, rig.window,
+            Settings(endpoint.url, "fixture", "transcribe", "chat", "agent", "", ""), LockedDesktop(), rig.window,
             rig.stop, journal=rig.journal.append, context=context(),
         )
-        with patch.object(FakeMachine, "screenshot", side_effect=OSError("The desktop is locked.")):
-            assert agent.run("Find this workbook")
+        assert agent.run("Find this workbook")
         body = json.dumps(rig.sent(0)[0])
         assert "Find this workbook" in body and "Budget.xlsx" in body and "desktop is locked" in body
         assert "input_image" not in body and agent.shot is None

@@ -16,7 +16,10 @@ unnecessary for the existing browser tools. [Sources: Edge guide][edge-mcp],
 
 This provides **background work in the user's running browser**. It does not
 create a second headless browser that can concurrently share the live profile.
-Normal background tabs remain in the tab strip. An experimental CDP option can
+Normal background tabs remain in the tab strip; Toolkit now groups new Edge
+work in a collapsed **Toolkit** group. Native tab/group controls and their
+version-specific validation are described in [background automation](background-automation.md).
+An experimental CDP option can
 create targets outside the tab strip, but those still belong to the running
 browser and are not an independent headless instance. [Sources: headless
 mode][headless], [profile ownership][profiles], [CDP target creation][target-api].

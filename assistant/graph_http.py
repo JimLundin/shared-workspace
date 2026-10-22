@@ -5,11 +5,10 @@ import contextlib
 import json
 import ssl
 import threading
+from math import isfinite
 from typing import cast
 
 from .llm import Json
-
-REQUEST_TIMEOUT = 25
 
 
 class GraphError(OSError):
@@ -17,7 +16,12 @@ class GraphError(OSError):
 
 
 class Http:
-    __slots__ = ()
+    __slots__ = ("socket_timeout", "timeout")
+
+    def __init__(self, *, timeout: float = 25, socket_timeout: float = 20) -> None:
+        if not all(isfinite(value) and value > 0 for value in (timeout, socket_timeout)):
+            raise ValueError("HTTP timeouts must be finite and positive.")
+        self.timeout, self.socket_timeout = timeout, socket_timeout
 
     def request(
         self, method: str, url: str, headers: dict[str, str], body: bytes | None, cancel: threading.Event,
@@ -33,7 +37,7 @@ class Http:
 
         async def receive() -> tuple[int, dict[str, Json]]:
             async with (
-                httpx.AsyncClient(verify=ssl.create_default_context(), timeout=20, follow_redirects=False) as client,
+                httpx.AsyncClient(verify=ssl.create_default_context(), timeout=self.socket_timeout, follow_redirects=False) as client,
                 client.stream(method, url, headers=headers, content=body) as response,
             ):
                 data = bytearray()
@@ -48,7 +52,7 @@ class Http:
 
         pending = asyncio.create_task(receive())
         try:
-            async with asyncio.timeout(REQUEST_TIMEOUT):
+            async with asyncio.timeout(self.timeout):
                 while not pending.done():
                     if cancel.is_set():
                         raise GraphError("Stopped. A request already sent to Microsoft may have completed; check its result before retrying.")

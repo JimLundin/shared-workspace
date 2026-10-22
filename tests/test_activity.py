@@ -3,9 +3,8 @@
 import json
 import threading
 from typing import cast
-from unittest.mock import Mock
 
-from assistant.activity import ActivityTracker, ContextSnapshot, observed
+from assistant.activity import ActivityTracker, ContextSnapshot, Observation, observed
 from assistant.llm import Json
 from winapi.shapes import Window
 
@@ -58,12 +57,16 @@ def test_agent_activity_is_identified_separately_from_user_work() -> None:
 
 
 def test_disabled_context_never_reads_the_desktop_and_shutdown_clears_history() -> None:
-    read = Mock()
+    reads: list[str] = []
+    def read() -> Observation:
+        reads.append("desktop")
+        return "unavailable"
+
     disabled = ActivityTracker(read, lambda: False, enabled=False)
     disabled.start()
     assert disabled.thread is None
     assert disabled.snapshot().state == "disabled"
-    read.assert_not_called()
+    assert not reads
     history = tracker()
     history.observe(Window(1, 'File', 'app.exe', False), 10)
     history.close()

@@ -1,14 +1,14 @@
 """Delegated Teams chat operations; authentication stays outside model context."""
 
 import json
-import os
 import threading
 import time
 import uuid
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, replace
+from enum import Enum, auto
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Protocol, assert_never, cast
 from urllib.parse import quote, urlencode, urlsplit
 
 from .graph_http import GraphError, Http
@@ -96,7 +96,26 @@ class Transport(Protocol):
     ) -> tuple[int, dict[str, Json]]: ...
 
 
-@dataclass(slots=True)
+class Clock(Protocol):
+    def time(self) -> float: ...
+    def monotonic(self) -> float: ...
+    def wait(self, cancel: threading.Event, seconds: float) -> bool: ...
+
+
+class SystemClock:
+    __slots__ = ()
+
+    def time(self) -> float:
+        return time.time()
+
+    def monotonic(self) -> float:
+        return time.monotonic()
+
+    def wait(self, cancel: threading.Event, seconds: float) -> bool:
+        return cancel.wait(seconds)
+
+
+@dataclass(frozen=True, slots=True)
 class DeviceFlow:
     code: str
     user_code: str
@@ -104,6 +123,35 @@ class DeviceFlow:
     expires: float
     interval: int
     next_poll: float
+
+
+class Poll(Enum):
+    REQUEST = auto()
+    EXPIRED = auto()
+    STOPPED = auto()
+    PENDING = auto()
+
+
+@dataclass(frozen=True, slots=True)
+class WaitForPoll:
+    seconds: float
+
+
+def sign_in_action(flow: DeviceFlow, now: float, deadline: float, *, stopped: bool) -> Poll | WaitForPoll:
+    if stopped:
+        return Poll.STOPPED
+    if now >= flow.expires:
+        return Poll.EXPIRED
+    if now >= deadline:
+        return Poll.PENDING
+    if now < flow.next_poll:
+        return WaitForPoll(min(.05, flow.next_poll - now, deadline - now, flow.expires - now))
+    return Poll.REQUEST
+
+
+def defer_poll(flow: DeviceFlow, now: float, *, slow_down: bool) -> DeviceFlow:
+    interval = flow.interval + 5 if slow_down else flow.interval
+    return replace(flow, interval=interval, next_poll=now + interval)
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,10 +164,19 @@ class Page:
 class Teams:
     """A configured public client; no client secrets or migration-only app permissions."""
 
-    __slots__ = ("flow", "folder", "http", "lock", "pages", "store")
+    __slots__ = ("clock", "environment", "flow", "folder", "http", "lock", "pages", "store")
 
-    def __init__(self, folder: Path, *, store: TokenStore | None = None, http: Transport | None = None) -> None:
+    def __init__(
+        self, folder: Path, *, store: TokenStore | None = None, http: Transport | None = None,
+        environment: Mapping[str, str] | None = None, clock: Clock | None = None,
+    ) -> None:
         self.folder = folder
+        settings: Mapping[str, str] = environment if environment is not None else {}
+        # Pyright 1.1.414's stub incorrectly gives frozendict.__init__ no arguments.
+        self.environment: frozendict[str, str] = frozendict({  # pyright: ignore[reportCallIssue]
+            name: settings[name] for name in ("TOOLKIT_GRAPH_CLIENT_ID", "TOOLKIT_GRAPH_TENANT_ID") if name in settings
+        })
+        self.clock: Clock = clock if clock is not None else SystemClock()
         self.store = store or TokenStore(folder / "tokens.bin")
         self.http = http or Http()
         self.flow: DeviceFlow | None = None
@@ -132,8 +189,8 @@ class Teams:
             saved = _object(cast(Json, json.loads(path.read_bytes()))) if path.is_file() else {}
         except (OSError, ValueError) as error:
             raise GraphError("Teams setup could not be read. Use teams_configure with the approved app's IDs.") from error
-        client = os.environ.get("TOOLKIT_GRAPH_CLIENT_ID") or _text(saved, "client_id")
-        tenant = os.environ.get("TOOLKIT_GRAPH_TENANT_ID") or _text(saved, "tenant_id")
+        client = self.environment.get("TOOLKIT_GRAPH_CLIENT_ID") or _text(saved, "client_id")
+        tenant = self.environment.get("TOOLKIT_GRAPH_TENANT_ID") or _text(saved, "tenant_id")
         if not client or not tenant:
             if required:
                 raise GraphError("Teams setup needs an approved Entra app's client ID and tenant ID. Use teams_configure when available.")
@@ -152,7 +209,7 @@ class Teams:
         lifetime = _integer(data, "expires_in", 3600, 1, 172800)
         stored: dict[str, Json] = {
             **self._config(), "access_token": token, "refresh_token": _text(data, "refresh_token") or _text(previous or {}, "refresh_token"),
-            "expires_at": time.time() + lifetime, "scope": _text(data, "scope"),
+            "expires_at": self.clock.time() + lifetime, "scope": _text(data, "scope"),
         }
         self.store.write(stored)
         return token
@@ -163,7 +220,7 @@ class Teams:
         if not saved or any(saved.get(name) != value for name, value in config.items()):
             raise GraphError("Sign in to the configured Teams integration with teams_sign_in first.")
         expires = saved.get("expires_at", 0)
-        if isinstance(expires, (int, float)) and expires > time.time() + 60 and _text(saved, "access_token"):
+        if isinstance(expires, (int, float)) and expires > self.clock.time() + 60 and _text(saved, "access_token"):
             return _text(saved, "access_token")
         refresh = _text(saved, "refresh_token")
         if not refresh:
@@ -206,8 +263,8 @@ class Teams:
                 or parsed.netloc not in ("microsoft.com", "www.microsoft.com", "login.microsoftonline.com")):
             raise GraphError("Microsoft returned an unexpected sign-in destination.")
         interval = _integer(result, "interval", 5, 1, 60)
-        self.flow = DeviceFlow(code, user_code, verification, time.monotonic() + _integer(result, "expires_in", 900, 1, 3600),
-                               interval, time.monotonic() + interval)
+        now = self.clock.monotonic()
+        self.flow = DeviceFlow(code, user_code, verification, now + _integer(result, "expires_in", 900, 1, 3600), interval, now + interval)
         return {
             "state": "waiting_for_sign_in", "verification_url": verification, "user_code": user_code,
             "message": "Show this code to the user. browser_sign_in can open the URL; use teams_finish_sign_in after they sign in.",
@@ -217,35 +274,43 @@ class Teams:
         flow = self.flow
         if flow is None:
             raise GraphError("No Teams sign-in is pending. Use teams_sign_in first.")
-        deadline = min(time.monotonic() + timeout, flow.expires)
-        while time.monotonic() < deadline:
-            if cancel.wait(.05):
-                self.flow = None
-                raise GraphError("Teams sign-in stopped.")
-            if time.monotonic() < flow.next_poll:
-                continue
+        deadline = self.clock.monotonic() + timeout
+        while True:
+            action = sign_in_action(flow, self.clock.monotonic(), deadline, stopped=cancel.is_set())
+            match action:
+                case WaitForPoll(seconds):
+                    self.clock.wait(cancel, seconds)
+                    continue
+                case Poll.STOPPED:
+                    self.flow = None
+                    raise GraphError("Teams sign-in stopped.")
+                case Poll.EXPIRED:
+                    self.flow = None
+                    raise GraphError("The Teams sign-in code expired. Start sign-in again.")
+                case Poll.PENDING:
+                    return {
+                        "state": "waiting_for_sign_in",
+                        "message": "The user has not finished signing in. Call teams_finish_sign_in after they finish.",
+                    }
+                case Poll.REQUEST:
+                    pass
+                case _:
+                    assert_never(action)
             status, result = self._oauth("token", {
                 "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
                 "client_id": _text(self._config(), "client_id"), "device_code": flow.code,
             }, cancel)
-            flow.next_poll = time.monotonic() + flow.interval
             if status == 200:
                 self._save(result)
                 self.flow = None
                 return {"state": "signed_in", "message": "Teams sign-in saved with Windows account protection."}
             error = result.get("error")
-            if error == "authorization_pending":
-                continue
-            if error == "slow_down":
-                flow.interval += 5
-                flow.next_poll = time.monotonic() + flow.interval
+            if error in ("authorization_pending", "slow_down"):
+                flow = defer_poll(flow, self.clock.monotonic(), slow_down=error == "slow_down")
+                self.flow = flow
                 continue
             self.flow = None
             raise GraphError("Teams sign-in was declined, expired or blocked by Microsoft. Start sign-in again when ready.")
-        if time.monotonic() >= flow.expires:
-            self.flow = None
-            raise GraphError("The Teams sign-in code expired. Start sign-in again.")
-        return {"state": "waiting_for_sign_in", "message": "The user has not finished signing in. Call teams_finish_sign_in after they finish."}
 
     def _page(self, page: Page, cancel: threading.Event) -> dict[str, Json]:
         if page.entries:
@@ -311,7 +376,7 @@ class Teams:
             "client_id": _guid(_text(args, "client_id"), "Client ID"), "tenant_id": _guid(_text(args, "tenant_id"), "Tenant ID"),
         }
         for key, variable in (("client_id", "TOOLKIT_GRAPH_CLIENT_ID"), ("tenant_id", "TOOLKIT_GRAPH_TENANT_ID")):
-            if (environment := os.environ.get(variable)) and _guid(environment, key) != config[key]:
+            if (environment := self.environment.get(variable)) and _guid(environment, key) != config[key]:
                 raise GraphError(f"{variable} overrides saved setup. Update that environment setting before saving different app IDs.")
         if config != self._config(required=False):
             self.store.clear()
@@ -328,7 +393,7 @@ class Teams:
             saved = self.store.read() if config else {}
             return {
                 "configured": bool(config), "saved_sign_in": bool(saved) and all(saved.get(k) == v for k, v in config.items()),
-                "sign_in_pending": self.flow is not None and self.flow.expires > time.monotonic(), "scopes": list(SCOPES),
+                "sign_in_pending": self.flow is not None and self.flow.expires > self.clock.monotonic(), "scopes": list(SCOPES),
                 "message": "Use teams_configure with an approved app's client and tenant IDs, then teams_sign_in." if not config else "",
             }
         if operation == "sign_out":

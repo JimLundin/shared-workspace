@@ -12,9 +12,9 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from assistant.llm import RATE, Failure
-from assistant.meeting_store import MAX_PENDING_BYTES, BacklogFullError, MeetingStore
+from assistant.meeting_store import BacklogFullError, MeetingArchive, MeetingStore
 from assistant.meetings import Meetings
-from assistant.recording_state import AudioSource, RecordingState
+from assistant.recording_state import AudioSource, RecordingState, RetryPolicy
 
 from .fake_endpoint import Received, Reply, fake_endpoint
 from .test_llm import settings
@@ -145,9 +145,14 @@ def test_text_commit_survives_an_interrupted_markdown_export(tmp_path: Path) -> 
     assert batch is not None
     store.complete(batch, "The decision is durable.")
     original = store.transcript.read_bytes()
-    with patch.object(Path, "replace", side_effect=OSError("fixture: disk unavailable")), TestCase().assertRaises(OSError):
-        store.export()
+    def unavailable(temporary: Path, transcript: Path) -> None:
+        raise OSError("fixture: disk unavailable")
+
+    with TestCase().assertRaises(OSError):
+        MeetingStore(store.folder, publish=unavailable).export()
     assert store.transcript.read_bytes() == original
+    assert not store.transcript.with_suffix(".tmp").exists()
+    assert store.state().revision != store.state().exported_revision
     reopened = MeetingStore(store.folder)
     assert reopened.batch() is None
     reopened.export()
@@ -167,45 +172,19 @@ def test_recovery_does_not_overwrite_edits_to_a_completed_transcript(tmp_path: P
     assert store.transcript.read_text(encoding="utf-8") == "The user's corrected transcript.\n"
 
 
-def test_export_retries_brief_reader_locks_without_losing_the_old_file(tmp_path: Path) -> None:
-    store = MeetingStore.create(tmp_path, "microphone")
-    original = store.transcript.read_bytes()
-    store.append(SPEECH)
-    store.finish_capture()
-    batch = store.batch()
-    assert batch is not None
-    store.complete(batch, "Saved after the reader closed.")
-    replace = Path.replace
-    attempts = 0
-
-    def locked(path: Path, target: Path) -> Path:
-        nonlocal attempts
-        attempts += 1
-        if attempts < 3:
-            assert store.transcript.read_bytes() == original
-            raise PermissionError("fixture: a reader is holding the file")
-        return replace(path, target)
-
-    with patch.object(Path, "replace", new=locked):
-        store.export()
-    assert attempts == 3
-    assert "Saved after the reader closed." in store.transcript.read_text(encoding="utf-8")
-
-
 def test_recording_and_transcription_continue_while_the_markdown_file_is_locked(tmp_path: Path) -> None:
-    export = MeetingStore.export
     locked = threading.Event()
     locked.set()
     capture = GeneratedCapture(31, hold=True)
 
-    def busy(store: MeetingStore) -> None:
-        state = store.state()
+    def busy(temporary: Path, transcript: Path) -> None:
+        state = MeetingStore(transcript.parent).state()
         if state.frames and state.pending < state.frames and locked.is_set():
             raise PermissionError("fixture: another app is reading the transcript")
-        export(store)
+        temporary.replace(transcript)
 
-    with fake_endpoint() as endpoint, patch.object(MeetingStore, "export", new=busy):
-        service = Meetings(settings(endpoint.url), lambda source: capture, root=tmp_path)
+    with fake_endpoint() as endpoint:
+        service = Meetings(settings(endpoint.url), lambda source: capture, archive=MeetingArchive(tmp_path, publish=busy))
         try:
             service.start()
             wait_for(lambda: "refresh its file" in service.snapshot().detail)
@@ -225,7 +204,7 @@ def test_recording_uses_the_configured_endpoint_and_saves_incremental_text(tmp_p
     capture = GeneratedCapture(tail=SPEECH[:1000])
     states: list[RecordingState] = []
     with fake_endpoint() as endpoint:
-        service = Meetings(settings(endpoint.url), lambda source: capture, root=tmp_path, on_update=states.append)
+        service = Meetings(settings(endpoint.url), lambda source: capture, archive=MeetingArchive(tmp_path), on_update=states.append)
         try:
             service.start()
             wait_for(lambda: service.snapshot().phase == "saved")
@@ -244,7 +223,7 @@ def test_recording_uses_the_configured_endpoint_and_saves_incremental_text(tmp_p
 def test_a_tiny_final_fragment_is_padded_for_upload_without_changing_recorded_duration(tmp_path: Path) -> None:
     tail = SPEECH[:1000]
     with fake_endpoint() as endpoint:
-        service = Meetings(settings(endpoint.url), lambda source: GeneratedCapture(0, tail), root=tmp_path)
+        service = Meetings(settings(endpoint.url), lambda source: GeneratedCapture(0, tail), archive=MeetingArchive(tmp_path))
         try:
             service.start()
             wait_for(lambda: service.snapshot().phase == "saved")
@@ -262,24 +241,25 @@ def test_slow_transcription_does_not_block_capture_stop_or_shutdown(tmp_path: Pa
     entered, release = threading.Event(), threading.Event()
     capture = GeneratedCapture(40, tail=SPEECH[:500], hold=True)
 
-    def slow(*args: object, **kwargs: object) -> str:
+    def slow(audio: bytes, *, context: str) -> str:
         entered.set()
         assert release.wait(5)
         return "The late response."
 
-    service = Meetings(settings("https://fixture.invalid/v1"), lambda source: capture, root=tmp_path)
-    with patch("assistant.meetings.transcribe", side_effect=slow):
-        try:
-            service.start()
-            assert entered.wait(5)
-            wait_for(lambda: service.snapshot().seconds == 40)
-            service.close(timeout=0.2)
-            store = MeetingStore(Path(service.snapshot().path).parent)
-            assert store.state().finished and store.state().frames == RATE * 40 + 250
-            assert store.state().pending == store.state().frames
-        finally:
-            release.set()
-            service.close()
+    service = Meetings(
+        settings("https://fixture.invalid/v1"), lambda source: capture, archive=MeetingArchive(tmp_path), transcribe_audio=slow,
+    )
+    try:
+        service.start()
+        assert entered.wait(5)
+        wait_for(lambda: service.snapshot().seconds == 40)
+        service.close(timeout=0.2)
+        store = MeetingStore(Path(service.snapshot().path).parent)
+        assert store.state().finished and store.state().frames == RATE * 40 + 250
+        assert store.state().pending == store.state().frames
+    finally:
+        release.set()
+        service.close()
 
 
 def test_restart_recovers_pending_audio_without_opening_the_microphone(tmp_path: Path) -> None:
@@ -298,7 +278,7 @@ def test_restart_recovers_pending_audio_without_opening_the_microphone(tmp_path:
             exported.set()
 
     with fake_endpoint() as endpoint:
-        service = Meetings(settings(endpoint.url), create, root=tmp_path, on_update=published)
+        service = Meetings(settings(endpoint.url), create, archive=MeetingArchive(tmp_path), on_update=published)
         try:
             service.start_worker()
             # Committing text to the journal precedes publishing its file. Wait
@@ -315,61 +295,74 @@ def test_restart_recovers_pending_audio_without_opening_the_microphone(tmp_path:
 
 def test_failed_requests_retain_the_audio_and_retry_without_duplicate_text(tmp_path: Path) -> None:
     capture = GeneratedCapture(1)
+    failed, resume = threading.Event(), threading.Event()
     calls = 0
 
-    def intermittent(*args: object, **kwargs: object) -> str | Failure:
+    def intermittent(audio: bytes, *, context: str) -> str | Failure:
         nonlocal calls
         calls += 1
-        return Failure("fixture: temporarily offline") if calls == 1 else "Recovered after the outage."
+        if calls == 1:
+            failed.set()
+            return Failure("fixture: temporarily offline")
+        assert resume.wait(5)
+        return "Recovered after the outage."
 
-    service = Meetings(settings("https://fixture.invalid/v1"), lambda source: capture, root=tmp_path)
-    with patch("assistant.meetings.transcribe", side_effect=intermittent):
-        try:
-            service.start()
-            wait_for(lambda: calls == 1)
-            assert MeetingStore(Path(service.snapshot().path).parent).state().pending == RATE
-            wait_for(lambda: service.snapshot().phase == "saved")
-            assert Path(service.snapshot().path).read_text(encoding="utf-8").count("Recovered after the outage.") == 1
-            assert calls == 2
-        finally:
-            service.close()
+    service = Meetings(
+        settings("https://fixture.invalid/v1"), lambda source: capture, archive=MeetingArchive(tmp_path),
+        transcribe_audio=intermittent, retry_policy=RetryPolicy(delays=(0,)),
+    )
+    try:
+        service.start()
+        assert failed.wait(5)
+        assert MeetingStore(Path(service.snapshot().path).parent).state().pending == RATE
+        resume.set()
+        wait_for(lambda: service.snapshot().phase == "saved")
+        assert Path(service.snapshot().path).read_text(encoding="utf-8").count("Recovered after the outage.") == 1
+        assert calls == 2
+    finally:
+        resume.set()
+        service.close()
 
 
 def test_a_full_backlog_stops_capture_and_saves_every_completed_block(tmp_path: Path) -> None:
     capture = GeneratedCapture(50)
-    service = Meetings(settings("https://fixture.invalid/v1"), lambda source: capture, root=tmp_path, max_pending_bytes=RATE * 4)
-    with patch("assistant.meetings.transcribe", return_value=Failure("fixture offline")):
-        try:
-            service.start()
-            wait_for(lambda: bool(service.snapshot().detail))
-            store = MeetingStore(Path(service.snapshot().path).parent)
-            assert store.state().finished and store.state().frames == RATE * 2
-            assert "storage limit" in store.state().problem
-        finally:
-            service.close()
+    def unavailable(audio: bytes, *, context: str) -> Failure:
+        return Failure("fixture offline")
+
+    service = Meetings(
+        settings("https://fixture.invalid/v1"), lambda source: capture, archive=MeetingArchive(tmp_path, max_pending_bytes=RATE * 4),
+        transcribe_audio=unavailable,
+    )
+    try:
+        service.start()
+        wait_for(lambda: bool(service.snapshot().detail))
+        store = MeetingStore(Path(service.snapshot().path).parent)
+        assert store.state().finished and store.state().frames == RATE * 2
+        assert "storage limit" in store.state().problem
+    finally:
+        service.close()
 
 
 def test_export_failure_can_be_retried_immediately_without_uploading_audio_again(tmp_path: Path) -> None:
-    export = MeetingStore.export
     failed = False
     retried = threading.Event()
     capture = GeneratedCapture(1)
 
-    def interrupted(store: MeetingStore) -> None:
+    def interrupted(temporary: Path, transcript: Path) -> None:
         nonlocal failed
-        state = store.state()
+        state = MeetingStore(transcript.parent).state()
         if state.finished and state.frames and not state.pending and not failed:
             failed = True
             raise OSError("fixture: interrupted transcript replacement")
-        export(store)
+        temporary.replace(transcript)
 
     def changed(state: RecordingState) -> None:
         if state.phase == "paused" and not retried.is_set():
             retried.set()
             service.retry()
 
-    with fake_endpoint() as endpoint, patch.object(MeetingStore, "export", new=interrupted):
-        service = Meetings(settings(endpoint.url), lambda source: capture, root=tmp_path, on_update=changed)
+    with fake_endpoint() as endpoint:
+        service = Meetings(settings(endpoint.url), lambda source: capture, archive=MeetingArchive(tmp_path, publish=interrupted), on_update=changed)
         try:
             service.start()
             wait_for(lambda: service.snapshot().phase == "saved")
@@ -383,16 +376,14 @@ def test_export_failure_can_be_retried_immediately_without_uploading_audio_again
 def test_a_new_meeting_keeps_its_state_when_the_previous_request_finishes(tmp_path: Path) -> None:
     entered, release_response = threading.Event(), threading.Event()
     creating, release_create = threading.Event(), threading.Event()
-    create = MeetingStore.create
     requests = 0
 
-    def delayed_create(
-        root: Path, source: AudioSource, title: str = "Meeting", *, max_pending_bytes: int = MAX_PENDING_BYTES,
-    ) -> MeetingStore:
-        if title == "Second":
-            creating.set()
-            assert release_create.wait(5)
-        return create(root, source, title, max_pending_bytes=max_pending_bytes)
+    class DelayedArchive(MeetingArchive):
+        def create(self, source: AudioSource, title: str = "Meeting") -> MeetingStore:
+            if title == "Second":
+                creating.set()
+                assert release_create.wait(5)
+            return super().create(source, title)
 
     def reply(request: Received) -> Reply:
         nonlocal requests
@@ -403,9 +394,9 @@ def test_a_new_meeting_keeps_its_state_when_the_previous_request_finishes(tmp_pa
             return Reply(b'{"text":"First meeting."}')
         return Reply(b'{"text":"Second meeting."}')
 
-    with fake_endpoint() as endpoint, patch.object(MeetingStore, "create", new=delayed_create):
+    with fake_endpoint() as endpoint:
         endpoint.respond = reply
-        service = Meetings(settings(endpoint.url), lambda source: GeneratedCapture(1), root=tmp_path)
+        service = Meetings(settings(endpoint.url), lambda source: GeneratedCapture(1), archive=DelayedArchive(tmp_path))
         try:
             service.start(title="First")
             assert entered.wait(5)

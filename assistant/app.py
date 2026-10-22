@@ -12,7 +12,6 @@ import sys
 import threading
 import time
 import traceback
-from collections import deque
 from collections.abc import Callable, Mapping
 from enum import Enum, auto
 from pathlib import Path
@@ -43,7 +42,8 @@ from winapi.shapes import Rect, Window
 
 from . import commands, uia
 from .activity import ActivityTracker, ContextSnapshot, Observation
-from .agent import Agent
+from .agent_execution import AgentExecution
+from .agent_runner import AgentRunner
 from .browser import Browser, Product
 from .desktop import WinDesktop
 from .features import Assistant
@@ -56,8 +56,7 @@ from .overlay import OverlayState, load_enabled, save_enabled
 from .recording_state import RecordingAction, RecordingState
 from .report import write_report
 from .teams import Teams
-from .ui import AgentWindow, Ui
-from .workspace import Workspace
+from .ui import Ui
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 LOCK_NAME: Final = "Local\\toolkit-assistant"
@@ -144,7 +143,7 @@ class WinMachine:
         self.desktop = desktop
         self.ui = ui
         self.background_browser = Browser(DIRECTORY / "browser-profile", source=Product.EDGE)
-        self.teams_client = Teams(DIRECTORY / "teams")
+        self.teams_client = Teams(DIRECTORY / "teams", environment=os.environ)
         self.meetings: Meetings | None = None
 
     def meeting(self, operation: str, source: str = "both", title: str = "Meeting") -> str:
@@ -301,144 +300,6 @@ def write_journal(entry: Mapping[str, Json]) -> None:
             file.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-class AgentRunner:
-    """One conversation; requests, including queued follow-ups, run one at a time."""
-
-    __slots__ = (
-        "context", "finished", "history", "lock", "machine", "on_done", "on_problem", "on_start", "pending", "settings", "stop_event", "thread",
-        "ui", "window", "workspace",
-    )
-
-    def __init__(
-        self, settings: Settings, machine: WinMachine, ui: Ui, *, on_done: Callable[[], None], on_problem: Callable[[str], None],
-        on_start: Callable[[], None] | None = None,
-        context: Callable[[], ContextSnapshot] | None = None,
-    ) -> None:
-        self.settings = settings
-        self.machine = machine
-        self.ui = ui
-        self.on_done = on_done
-        self.on_problem = on_problem
-        self.on_start = on_start
-        self.context = context
-        self.stop_event = threading.Event()
-        self.finished = threading.Event()
-        self.finished.set()
-        self.thread: threading.Thread | None = None
-        self.history: list[Json] = []
-        self.workspace = Workspace()
-        self.lock = threading.Lock()
-        self.pending: deque[tuple[str, ContextSnapshot | None]] = deque()
-        self.window: AgentWindow | None = None
-
-    def running(self) -> bool:
-        return self.thread is not None and self.thread.is_alive() and not self.finished.is_set()
-
-    def show(self) -> None:
-        """Open conversation history without starting a request or resetting context."""
-        self._panel(None, focus=True)
-
-    def voice(self, text: str) -> None:
-        if self.window is None or not self.window.reply_by_voice(text):
-            self.start(text)
-
-    def prepare(self) -> None:
-        self._panel(None, reveal=False)
-
-    def _panel(self, task: str | None, *, focus: bool = False, queued: bool = False, reveal: bool = True) -> AgentWindow:
-        window = self.ui.agent(
-            task, self.stop, on_problem=self.on_problem, on_reset=self.new_conversation, on_submit=self.start,
-            focus=focus, reveal=reveal and not queued, queued=queued,
-        )
-        with self.lock:
-            if self.window is None:
-                # A second request can arrive while the very first window is
-                # being built. Show those pending requests once it is available.
-                for pending, _context in self.pending:
-                    window.queued(pending)
-            self.window = window
-        return window
-
-    def start(self, task: str) -> None:
-        if not (task := task.strip()):
-            return
-        context = self.context() if self.context is not None else None
-        with self.lock:
-            if not self.finished.is_set():
-                self.pending.append((task, context))
-                if self.window is not None:
-                    self.window.queued(task)
-                return
-            self.finished.clear()
-            self.stop_event = threading.Event()
-        try:
-            window = self._panel(task)
-        except Exception:
-            with self.lock:
-                self.pending.clear()
-                self.finished.set()
-            raise
-        self.thread = threading.Thread(target=self.run, args=(task, window, self.stop_event, context), name="agent", daemon=True)
-        if self.on_start is not None:
-            self.on_start()
-        self.thread.start()
-
-    def run(self, task: str, window: AgentWindow, stop: threading.Event, context: ContextSnapshot | None = None) -> None:
-        try:
-            while True:
-                self.run_task(task, window, stop, context)
-                with self.lock:
-                    if not self.pending:
-                        self.finished.set()
-                        window.finish()
-                        break
-                    task, context = self.pending.popleft()
-                    stop = self.stop_event = threading.Event()
-                window = self._panel(task, queued=True)
-        except Exception:
-            log(traceback.format_exc())
-            with self.lock:
-                self.pending.clear()
-                self.finished.set()
-                window.problem("Couldn't continue the agent conversation; see the assistant's log.")
-                window.finish()
-        self.on_done()
-
-    def run_task(self, task: str, window: AgentWindow, stop: threading.Event, context: ContextSnapshot | None = None) -> None:
-        started = time.monotonic()
-        finished = False
-        agent = Agent(self.settings, self.machine, window, stop, journal=write_journal, workspace=self.workspace, history=self.history,
-                      context=context, context_reader=self.context)
-        try:
-            finished = agent.run(task)
-        except Exception:
-            log(traceback.format_exc())
-            window.problem("Something went wrong; it's in the assistant's log.")
-        finally:
-            if stop.is_set():
-                self.machine.close_background()
-            with contextlib.suppress(OSError):
-                usage.record("assistant", "agent", {"ok": finished, "seconds": round(time.monotonic() - started, 1), **agent.timings})
-
-    def stop(self) -> None:
-        with self.lock:
-            self.pending.clear()
-            self.stop_event.set()
-            if self.window is not None:
-                self.window.stopping()
-
-    def new_conversation(self) -> bool:
-        """Reset only when idle; closing or stopping the window keeps the conversation."""
-        with self.lock:
-            if not self.finished.is_set():
-                return False
-            self.history.clear()
-            self.workspace = Workspace()
-            if self.window is not None:
-                self.window.reset()
-            return True
-
-
 # ---- the program -----------------------------------------------------------------------
 
 
@@ -471,8 +332,8 @@ class _Menu(Enum):
 
 class AssistantApp:
     __slots__ = (
-        "_recording_phase", "activity", "agent", "assistant", "desktop", "jobs", "layout", "meetings", "mic_event", "overlay",
-        "tray", "ui", "window", "worker",
+        "_recording_phase", "activity", "agent", "assistant", "desktop", "jobs", "layout", "machine", "meetings", "mic_event", "overlay",
+        "settings", "tray", "ui", "window", "worker",
     )
 
     def __init__(self, settings: Settings | Missing) -> None:
@@ -487,18 +348,30 @@ class AssistantApp:
         self.desktop = WinDesktop(self.window.handle, mic, self.ui, on_state=self.show, on_notify=self.tray.notify, on_problem=self.problem)
         missing = settings if isinstance(settings, Missing) else None
         usable = settings if isinstance(settings, Settings) else Settings("", "", "", "", "", "", "")
+        self.settings = usable
+        self.activity: ActivityTracker
+        def context() -> ContextSnapshot:
+            # The tracker and runner refer to each other; observe after composition.
+            return self.activity.snapshot()
+
+        self.machine = WinMachine(self.desktop, self.ui)
         self.agent = AgentRunner(
-            usable, WinMachine(self.desktop, self.ui), self.ui, on_done=self.agent_done, on_problem=self.problem,
-            on_start=lambda: self.show(State.AGENT),
+            AgentExecution(
+                usable, self.machine, journal=write_journal, record=lambda details: self.record("agent", details),
+                report_error=log, close_background=self.machine.close_background, context=context,
+            ),
+            lambda runner: self.ui.agent(
+                None, runner.stop, on_problem=self.problem, on_reset=runner.new_conversation, on_submit=runner.start, reveal=False,
+            ),
+            on_done=self.agent_done, report_error=log, on_start=lambda: self.show(State.AGENT), context=context,
         )
         self.meetings = Meetings(
             usable, lambda source: recording.MeetingAudio(computer_audio=source == "both"), on_update=self.recording_changed,
         )
-        self.agent.machine.meetings = self.meetings
+        self.machine.meetings = self.meetings
         self.activity = ActivityTracker(
             foreground_context, self.agent.running, enabled=os.environ.get("TOOLKIT_AGENT_CONTEXT", "recent").lower() != "off",
         )
-        self.agent.context = self.activity.snapshot
         self.assistant = Assistant(
             self.desktop,
             usable,
@@ -524,7 +397,7 @@ class AssistantApp:
         if (layout_window := windows.find(LAYOUT_WINDOW)) is not None:
             system.post_message(layout_window, WM_QUERY_LAYOUT_STATE, 0, 0)
         keeper.ready()  # tells the keeper this version came up
-        if self.agent.settings.api_key:
+        if self.settings.api_key:
             threading.Thread(target=warm_agent, name="agent warmup", daemon=True).start()
             threading.Thread(target=self.agent.prepare, name="agent panel warmup", daemon=True).start()
         system.run_message_loop()
@@ -535,7 +408,7 @@ class AssistantApp:
         except OSError as error:
             log(str(error))
         self.agent.stop()
-        self.agent.machine.close_background()
+        self.machine.close_background()
         self.activity.close()
         self.ui.close_agent()
         self.jobs.put(None)

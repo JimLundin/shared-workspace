@@ -12,9 +12,13 @@ The main places to read are:
 | --- | --- | --- |
 | `assistant/llm.py` | System, user, assistant, and tool-result message variants; request serialization | HTTP client functions |
 | `assistant/agent_session.py` | Typed events, messages, questions, approvals, session transitions, and presentation | `agent_window.py`, `agent_input.py`, `agent_toasts.py`, and `agent_panel.py` |
-| `assistant/notifications.py`, `notification_reading.py`, `toast_style.py` | Bounded projection, reading states, lifetimes, semantic colors, and motion sampling | `agent_toasts.py`, `winapi/appearance.py`, `winapi/notification_input.py` |
-| `assistant/browser.py` | Browser source and ownership variants; bounded endpoint validation | `Browser`, `Cdp` and a cancellable connection wait |
-| `assistant/recording_state.py` | Audio batches, stored observations, completion rules, stale-update rejection, and recording controls | `meetings.py` and `meeting_store.py` |
+| `assistant/agent_runner.py` | Tasks, FIFO queueing, completion, and stopping transitions | `AgentRunner` owns threads and views; `agent_execution.py` owns SDK history and turn cleanup |
+| `assistant/action_text.py` | Readable action targets and results, formatted before preview limits | `agent.py` publishes previews; session presentation handles raw payloads too |
+| `assistant/notifications.py`, `notification_text.py`, `notification_reading.py`, `toast_style.py` | Grouped turns, attached results, optional steps, reading states, lifetimes, tints, and motion sampling | `agent_toasts.py`, `winapi/appearance.py`, `winapi/notification_input.py` |
+| `assistant/browser_values.py`, `browser_session.py`, `browser.py` | Browser ownership, immutable page/tab/group observations and command variants, group selection, typed paginated projections | `Browser`, `NativeSessions`, `Cdp`, `browser_tabs.TabStrip` and a cancellable connection wait |
+| `assistant/recording_state.py` | Audio batches, stored observations, completion rules, retry policy, stale-update rejection, and recording controls | `meetings.py` and `meeting_store.py` |
+| `assistant/teams.py` | Frozen device flow, polling deadlines, and retry intervals from clock observations | `Teams`, `SystemClock`, `TokenStore`, and `graph_http.Http` |
+| `runtime.py` | Bootstrap handoff plan and dependency ABI validation | `execute_bootstrap`, `bootstrap`, and `activate` |
 | `assistant/activity.py` | Bounded window history reduced from a window or desktop-state observation | `ActivityTracker` and the Windows foreground reader |
 | `assistant/geometry.py`, `panel.py`, `rich_text.py` | Geometry, preferences, and Markdown values | Tk views and preference files |
 
@@ -24,6 +28,14 @@ without changing its source state. Views receive the immutable session itself.
 Questions carry a pending, answered, or cancelled reply; approvals carry a
 decision. A reply for the wrong request kind or an already resolved request
 leaves the session unchanged.
+
+The task controller accepts an execution adapter and a window factory. Its
+immutable `Active` state carries the current task and pending tasks with their
+invocation context; `Stopping` discards the queue until completion. The execution
+adapter owns mutable SDK history, workspace, telemetry, and cancellation cleanup.
+Each run has its own completion event, including its completion callback, so a
+later startup cannot observe the previous worker's completion. Application
+composition supplies the concrete machine, native view, and observation reader.
 
 Live replies and reasoning summaries carry an identity and stream state; tools
 carry a working, succeeded, failed, or cancelled outcome. The session replaces
@@ -44,11 +56,18 @@ pure transition. Replies take turns, and waiting replies retain their lifetime.
 Reduced motion advances pages with an overlapping line and keeps a manually
 chosen starting position. None of these presentation transitions remove conversation messages.
 `Entry` uses the session index as its stable key; an answered question adds a
-separate `Response` keyed by that question's index. New tool calls get their own
-entries, while updates to one tool or streaming reply retain its identity.
-The compact `Working` control stays below the conversation. Its `Busy` enum
-distinguishes thinking, waiting, and stopping. Reasoning summaries never become
-notification text or trigger text layout.
+`Response` keyed by that question's index. `Turn` groups these immutable entries
+under a stable `TurnKey(request)`, immediately after its user request. Its state
+is `Working(generation, phase, queued)` or `Settled.FINISHED | STOPPED | ATTENTION`.
+The `Busy` enum distinguishes thinking, waiting, and stopping. `results` keeps
+the latest reply and pending input attached; `steps` contains earlier replies,
+resolved questions and action activity. An answered question stays with its
+response until another reply supersedes it. Follow-ups cannot acquire an earlier
+turn's entries or revive its expired terminal state. `notification_text` formats
+the attached result and expanded steps separately. Reasoning summaries never become notification text or
+trigger text layout. Action previews format complete payloads before shortening
+them, omit transport IDs and search controls, and leave the model's tool results
+unchanged. Both conversation views use the same readable presentation.
 
 The Tk owner schedules one expiry callback and animates at most five cards,
 retargeting from the current geometry. Each notification fits its rendered content
@@ -63,12 +82,16 @@ paragraph layout during long streams. Text wraps at the chosen width before
 any visible card changes size.
 Its tall, hidden viewport supplies cached display-line bounds
 for preview fitting; an exact-count fallback handles unusually tall work areas.
-Body, header and footer get separate rectangles; viewports end on complete
+Steps, result, header and footer get separate rectangles; viewports end on complete
 display lines. All reply text remains in the native text widget, with no character
-cutoff. A small scroll marker tracks its position. `Frame` carries top, width, height and opacity together. Every active
+cutoff. The result and steps have independent scroll positions and small overflow
+markers. The steps use smaller type and a bounded height, reserving room for the
+attached result. Collapsing only changes the steps' viewport; the result retains
+its widget, selection and reading position. `Frame` carries top, width, height,
+opacity and the steps' height together. Every active
 card retargets on the same clock when the layout changes, so growing and shrinking
 neighbors retain their gaps throughout the transition. Native positioning applies
-each sampled rectangle with a fixed right edge, keeping text and glass attached.
+each sampled rectangle with its right edge anchored.
 The text wraps at its destination width once per content update; moving bounds
 reveal it without rewrapping words on every frame. The stop icon follows the
 visible right edge throughout the transition.
@@ -82,7 +105,23 @@ Motion follows Vault of Glass's 280 ms base and 160 ms fast durations, with its
 time and requests Windows' finer timer resolution only while movement or text
 reveals run. Reduced motion, opening history, and closing release that request.
 A shared callback rotates existing spinner shapes while work runs. Windows owns
-the glass composition; Tk retains opaque text and controls. A bounded pointer
+the glass composition and its visual corner radius; Tk retains opaque text and
+controls. A 26-logical-pixel region rounds the solid fallback and hit area; DWM
+chooses the smaller visual corner radius of native acrylic. Blue user and lilac
+assistant tints use 22% opacity; foreground ink remains opaque. Questions and
+errors vary the accent within the same material. `Frost.LIGHT` omits acrylic's
+extra luminosity layer over dark backgrounds; `SMOKED` keeps white text legible
+over bright surroundings. Four pixels outside the card's sides determine the
+material, with a conservative fallback when sampling is unavailable.
+`FrostSampler` owns one background worker and one pending batch: desktop pixel
+reads never block Tk. The existing pointer observer submits at most every 750 ms,
+applies only observations matching the current bounds, and defers material
+changes while geometry or text reveals animate. No captured image is retained.
+After a material update, Tk resolves both text widgets' wrapped-height caches
+before paging can use their native scroll ranges.
+The stop icon uses the card background in every state. Native layers at 1/255
+opacity preserve the full stop and disclosure click areas over color-keyed
+glass; they move with the header and close with the card. A bounded pointer
 observer preserves hover-to-pause over color-keyed glass. Motion, pointer
 observation, and window creation stay in the assistant process. A UI-owned mouse
 hook routes only vertical wheel events inside overflowing card bounds. Its
@@ -94,9 +133,26 @@ Browser ownership is `Stopped | Managed | Attached`. A managed variant carries
 the process, optional Windows job and visibility. An attached variant identifies
 the borrowed browser; closing it only disconnects CDP. The source selection
 persists separately across disconnects. Toolkit-created target IDs are tracked
-apart from personal tabs for creation limits; navigation and explicit tab closure
+apart from personal tabs for session metadata; navigation and explicit tab closure
 use the requested ID. Pending consent is a single WebSocket connection, whose
 socket is closed on cancellation. Status inspection never starts that connection.
+
+`BrowserSession` pairs a connection with its ownership. `Browser` obtains it
+through `SessionOpener`; `NativeSessions` owns endpoint discovery, consent and
+process creation. The same `connect`/`close` interface is used by callers and
+tests. Attached sessions only disconnect; managed sessions close and reap the
+owned process. Tab mutation waits use the clock supplied to `TabStrip`.
+
+Browser page, tab and group state uses frozen, slotted dataclasses. Tab edits,
+group creation/changes, placement and closure use payload variants; required
+data lives on its variant. `TypedDict` defines structured tool responses and
+native command wire shapes, with `Literal` values for fixed protocol fields.
+Raw JSON is decoded and validated at the transport boundary. Tool and future UI
+projections can share the concrete state and response types. Group selection
+and pagination are pure functions of observations and arguments. The Edge tab
+controller owns one hidden Favorites page, whose API calls remain separate from
+ordinary page DOM evaluation. Only explicit activation brings a tab forward;
+default opens reuse Toolkit's group without changing its expanded state.
 
 Recording state is a projection for the UI. The journal can still be absent
 while a capture starts. Publication decisions use immutable observations read
@@ -107,6 +163,13 @@ responsibility of their existing effect owners. A transcription batch reads its
 audio, completion flag and prior text in one SQLite snapshot, so capture cannot
 finish between queries and pair the finished flag with an incomplete tail.
 The read transaction ends before audio assembly or network work.
+
+`MeetingArchive` keeps creation and reopening on the same storage/publication
+policy. `Meetings` accepts that archive and a transcription operation; retry
+decisions return a delay with the new failure count or an exhausted state.
+The worker retains cancellation and wait ownership. Teams similarly captures
+configuration at composition and passes clock observations to device-flow
+decisions, while the HTTP adapter owns request deadlines and cancellation.
 
 Frozen dataclasses are shallow: nested state also uses immutable values such as
 tuples, bytes, and other frozen dataclasses. External JSON and operating-system
@@ -129,6 +192,14 @@ such as whether caps word is enabled, remain booleans.
 The engine owns bounded mutable state and sends effects through `Host`. Its
 handler updates held keys and modifiers in place. Using enum-style data does not
 require constructing a new engine state or a list of effects for every press.
+
+Each engine accepts a frozen `Configuration`. Construction snapshots action
+tables in built-in `frozendict`, freezes snippet definitions, validates timing,
+and precomputes the longest trigger. The default configuration is built once.
+Event handling reads it without rebuilding tables or wrapping each event in a
+new controller state. An empty snippet set keeps the typing buffer empty.
+See [testing through explicit dependencies](testing-dependencies.md) for the
+replacement tests and before/after keyboard measurements.
 
 ## Keyboard and audio performance
 

@@ -1,242 +1,99 @@
-# Testing dependency inventory
+# Testing through explicit dependencies
 
-The October 2026 audit found **177 calls to `patch`, `patch.object`, or
-`patch.dict` across 23 test files**. This counts static call sites, not runtime
-invocations: a call in a loop can patch many cases. Subclasses, hand-written
-adapters, `__new__`, and assignment to private fields are not included in that
-number. Several patches replace test helpers rather than production effects;
-those need fixture improvements rather than new production interfaces.
+The dependency refactor replaces global patching with small interfaces for
+execution, browser sessions, transcription, publication, configuration, and
+time. Tests pass observations or adapters through the same interfaces as the
+application, and continue to use real SQLite, temporary files, sockets, and SDK
+requests where those establish the contract.
 
-The desired change is to pass observations and dependencies explicitly, put
-decisions in pure functions, and test observable results through the same
-interface callers use. Giving every global function a constructor parameter
-would preserve the coupling in a different form. Prefer a small interface that
-owns a useful operation, with real and deterministic adapters where needed.
-
-## Prioritized changes
-
-### 1. Agent execution and task lifecycle
-
-**Evidence:** [SDK execution](../assistant/sdk.py) creates its HTTP client,
-model, and streamed runner inside `run`. [AgentRunner](../assistant/app.py)
-creates an `Agent` and uses concrete `WinMachine` and `Ui` types. Tests in
-[test_windows_agent.py](../tests/test_windows_agent.py) allocate `Ui` and
-`WinMachine` with `__new__`, cast `FakeMachine` to `WinMachine`, and patch
-`Agent.run`, `Ui.agent`, and usage recording.
-
-**Change:** make the task controller accept the existing `Machine` interface,
-a session view/publisher, and an execution adapter. That adapter owns one
-complete streamed turn, including cancellation and history, while the SDK
-adapter owns client creation and disposal. Give the controller immutable task
-events and a pure transition for queued follow-ups, stop, completion, and reset.
-Supply the usage recorder at application composition.
-
-**Replacement tests:** replay completion, failure, stop, and queued-input events
-through the controller without Tk, SDK HTTP, private fields, or constructor
-bypasses. Keep a small set of real SDK tests against the local HTTP fixture for
-wire serialization, streaming, history, and cancellation. In this audit, 15
-tool-only cases already moved to `Agent.call` with the existing `Machine`
-adapter. Their file, command, approval, and cancellation assertions no longer
-require an SDK round trip.
-
-### 2. Recording, transcription, and recovery
-
-**Evidence:** [Meetings](../assistant/meetings.py) accepts capture but directly
-calls `transcribe`, constructs `MeetingStore`, creates worker threads, and waits
-on retry timers. [test_meetings.py](../tests/test_meetings.py) patches those
-operations, `sqlite3.connect`, and `Path.replace` to trigger failures.
-
-**Change:** accept a transcription operation and move retry decisions to a pure
-transition supplied with time and success/failure observations. Keep worker,
-lock, and wake ownership in `Meetings`. Give transcript publication an explicit
-operation that owns replace/retry behavior. Continue to use the real
-`MeetingStore` for storage; it already accepts a folder and capacity.
-
-**Replacement tests:** check retry deadlines and capture/transcription state
-without sleeping. Use a deterministic transcriber to exercise the controller
-against temporary SQLite databases. Keep actual transaction, duplicate-batch,
-recovery, and audio-erasure assertions against SQLite; replacing SQL with a
-mock would lose their value. Use a failing publication adapter to exercise
-recovery, plus one native file-lock test for the Windows replace operation.
-The recovery test now uses the existing `on_update` publication signal to wait
-for export completion, removing a Windows race caused by polling the file.
-
-### 3. Browser discovery, attachment, and ownership
-
-**Evidence:** [Browser](../assistant/browser.py) has useful source/ownership
-variants and `Cdp(channel)`, but `_attach` and `_start` obtain profile paths,
-endpoint files, clocks, connections, processes, and jobs internally.
-[test_browser_attachment.py](../tests/test_browser_attachment.py) patches
-`user_data_root`, `read_endpoint`, `edge_path`, and `Cdp.connect`.
-
-**Change:** compose a browser-session adapter that discovers or launches a
-session and returns its connection and ownership. Express endpoint readiness,
-retry, timeout, and cancellation decisions using observations and timestamps.
-The Windows adapter retains real profile discovery, socket consent, and process
-job ownership; CDP request/reply tests continue to use the existing channel
+Portable tests now have **5 patch call sites, down from 49**. The changed test
+areas remove 65 sites in total, including the former Windows-only agent-runner
+tests. This counts calls to `patch`, `patch.object`, and `patch.dict`, rather
+than runtime invocations. It does not count subclasses or ordinary adapters;
+replacing a patch with a private-field assignment would not establish a better
 interface.
 
-**Replacement tests:** exercise attached versus managed session transitions
-with explicit session adapters; prove attached browsers are left running on
-close and managed browsers are cleaned up. Retain real-socket consent and
-cancellation checks, plus Windows Edge integration and native file locking.
-The audit found a real temporary `DevToolsActivePort` lock that the startup
-retry loop did not handle; a native lock test now covers the fix without patching.
+## Implemented seams
 
-### 4. Windows application wiring and desktop observations
+| Area | Interface and owner | Test surface |
+| --- | --- | --- |
+| Agent lifecycle | `AgentRunner` accepts `Execution` and a window factory. `Task`, `Active`, `Stopping`, and `Idle` have a pure transition. `AgentExecution` owns SDK history, workspace, journal, metrics, and cancellation cleanup. `AssistantApp` composes them. | Portable controller tests use a recording execution and the real `AgentWindow` with its recording view. Two local-HTTP SDK scenarios cover history/reset and cancellation cleanup. |
+| Meetings | `Meetings` accepts a transcriber, `MeetingArchive`, and `RetryPolicy`. The archive supplies consistent capacity and transcript-publication policy when creating or reopening a journal. Retry decisions return `Retry` or `Exhausted`. Threads, locks, waits, capture, and SQLite stay with their owners. | Real journals and files cover recovery, durable text, audio deletion, failed publication, and immediate retry. A controlled transcriber covers slow and failed requests. Native file-lock coverage remains. |
+| Browser sessions | `SessionOpener.open` returns a `BrowserSession` containing CDP and `Managed` or `Attached` ownership. `NativeSessions` owns discovery, consent, launch, and process cleanup. `Browser.connect` and `close` own session transitions. `TabStrip` accepts its clock. | Scripted sessions and CDP channels cover commands and ownership without assigning a connection or owner after construction. Real sockets cover consent and cancellation; Windows Edge tests retain native process and tab behavior. |
+| Keyboard | Each `Engine` accepts a frozen `Configuration` containing action tables, snippet definitions, and timing. Construction snapshots the table with built-in `frozendict`, normalizes snippet tuples, and computes the buffer bound once. | Existing emitted-key assertions use explicit configuration. Separate engines cannot share mutable layout state; timing, modifier ownership, snippets, and disabled-snippet bounds remain observable. |
+| Teams and HTTP | `Teams` captures just its two Graph environment settings in a `frozendict` and accepts a clock. Frozen `DeviceFlow`, `sign_in_action`, and `defer_poll` express polling decisions. `SystemClock` performs real waits. `Http` accepts validated request/socket timeouts. | A manual clock drives exact poll times and token expiry through the existing HTTP and token-store interfaces. The HTTP deadline test uses its real local server. |
+| Bootstrap | `bootstrap_plan` takes platform, interpreter, arguments, environment, and bundle observations. Its result is `Continue`, `Relaunch`, or `InvalidBundle`; `execute_bootstrap` performs the handoff. `validate_dependencies` checks the dependency ABI before activation. | Pure plan/validation tests replace all 12 runtime patches. Real children establish console exit/environment behavior and the Windows windowed handoff. Copied-source SDK/Tk integration remains. |
+| Files and fixtures | `find_files` accepts a bounded result limit. Test desktop/machine adapters accept the failures they model. Activity tests record their observations directly. | Real filesystem results, cancelled mouse releases, unavailable screenshots, and failed voice input replace patches of globals and fake classes. Reset checks the actual workspace path. |
 
-**Evidence:** [test_windows_bindings.py](../tests/test_windows_bindings.py)
-contains 45 patch calls. Tray commands, startup queries, input dispatch, and
-overlay preferences require replacing global window, thread, and message-loop
-operations. [WinMachine and AssistantApp](../assistant/app.py) own those effects
-alongside application decisions. Some tests build incomplete instances with
-`__new__`.
+The task runner also uses one completion event per run. Waiting during a later
+startup cannot accidentally join the previous worker, and completion includes
+the callback. Tests reproduce startup, queueing, cancellation, and completion
+interleavings using events rather than sleeps or thread-field inspection.
 
-**Change:** reduce tray/menu and startup-message decisions from explicit layout,
-preference, and window observations. Return immutable command variants for the
-Windows owner to execute. Make desktop context selection accept an observation
-provider instead of patching `windows.foreground`, `visible_rect`, and monitor
-enumeration. Keep the existing `Machine` interface as the agent-facing seam.
+The bootstrap remains importable on Python 3.12; `frozendict` is used only in
+application modules requiring Python 3.15. Pyright 1.1.414 incorrectly declares
+`frozendict.__init__` as accepting no arguments. The two constructor calls have
+narrow, documented `reportCallIssue` suppressions; their input and result types
+remain checked. Mypy and Python 3.15 on Linux and Windows accept those constructors.
 
-**Replacement tests:** table-driven decision tests should cover absent,
-minimized, stopped, and active windows on either OS. Retain a compact Windows
-adapter check for message IDs, input tags, and actual window operations. The UIA
-integration now batches operations inside one PowerShell process but still uses
-element IDs across processes and independently observes the resulting UI.
+## Remaining instrumentation
 
-### 5. Notification and panel environment
+The five portable patch sites each observe a specific external operation:
 
-**Evidence:** [AgentToasts](../assistant/agent_toasts.py) already accepts a clock,
-motion preference, and material preference; session, reading, geometry, and
-lifetime decisions already have pure modules. Native tests still patch pointer
-position, material application, focus, work areas, and internal card methods.
-[Overlay tests](../tests/test_windows_overlay.py) patch global time and placement.
+| Test | Reason retained |
+| --- | --- |
+| `test_browser.py` | Verifies that the WebSocket library receives `proxy=None`, independent of machine proxy configuration. |
+| `test_browser_attachment.py` | Observes the real socket's timeout while consent is pending and after approval. The actual socket, handshake, and commands still run. |
+| `test_meetings.py` | Interleaves a real SQLite writer between reader queries to prove that batch data and capture completion come from one transaction snapshot. |
+| `test_keeper.py`, `test_selfcheck.py` | Instrument directory traversal to prove excluded dependency/cache trees are never entered. A timing assertion would be weaker. |
 
-**Change:** extend the existing observation model to include pointer position,
-work area, scale, and focus. Let one native owner apply placement/material and
-schedule callbacks. Keep card layout and reading decisions pure. Use existing
-injected clocks consistently before adding any new abstraction.
+Windows tests still inject native failures and instrument Tk/Win32/COM effects.
+These include input rejection, partially initialized audio, focus, placement,
+and application wiring. Native appearance tests also contain concurrent work.
+The remaining count is an inventory, not a claim that every Windows patch is
+essential. Further changes should move decisions behind an existing seam and
+retain native ownership/cleanup checks; adding a constructor argument for every
+Win32 call would only move the coupling.
 
-**Replacement tests:** pure transitions cover hover, paging, expiry, retargeting,
-and screen changes. Native tests verify actual Tk text layout, glass hit areas,
-focus preservation, and rendering under real system settings. Tests patching
-`Card` or `AgentToasts` methods should move to observable widget outcomes or the
-pure decision interface, rather than preserving internal call sequences.
+## Keyboard measurements
 
-### 6. Keyboard configuration and native input
+The before/after runs use the same Windows Python 3.15.1 build, 100,000 events
+per round, five rounds per process, and enabled GC. No run imports the assistant.
+Traced peak live memory is **1,780 bytes**, retained memory **855 bytes**, and
+observed collections **zero** on both sides. Audio sample loops and copying
+were not changed.
 
-**Evidence:** [Engine](../miryoku/engine.py) accepts a `Host`, but obtains action
-tables and snippets from globals. [test_engine.py](../tests/test_engine.py)
-patches `action` and `SNIPPETS`, including newly strengthened audit scenarios.
-The Windows binding tests also patch `WinHost` methods and native `_SendInput`.
+Each latency cell below is the median of five round percentiles, in
+microseconds; the maximum retains the worst individual event across all five
+rounds. The initial mapping-proxy implementation is retained as intermediate
+evidence, followed by the requested built-in `frozendict` implementation.
 
-**Change:** provide immutable per-engine configuration for actions, snippets,
-and timing. Resolve configuration once, outside the key-event loop. Pure native
-event conversion and input-buffer construction can be tested separately from
-the owner that sends those buffers to Windows.
+| Comparison | p50 before → after | p95 before → after | p99 before → after | p99.9 before → after | Worst event before → after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Initial paired run, mapping proxy | 4.8 → 5.2 | 12.5 → 13.4 | 17.2 → 20.9 | 42.3 → 73.4 | 9,679.7 → 1,216.6 |
+| `frozendict`, after then before | 3.2 → 3.5 | 8.0 → 8.8 | 11.1 → 13.0 | 25.4 → 28.6 | 8,628.6 → 31,989.2 |
+| Same CPU, after then before | 4.4 → 4.5 | 11.7 → 11.2 | 18.5 → 18.0 | 71.4 → 74.0 | 11,496.5 → 29,086.8 |
+| Same CPU, before then after | 3.5 → 3.5 | 7.9 → 7.7 | 10.9 → 10.1 | 18.5 → 17.8 | 11,666.1 → 21,152.8 |
 
-**Replacement tests:** supply small layouts directly and assert emitted key
-events for layer ownership, overlapping modifiers, chords, and snippets. Keep a
-native adapter check for Windows flags and rejected input. Before any production
-refactor, measure key-event latency, allocations, and GC with
-`scripts/benchmark_keyboard.py`, then repeat after the change. Preserve process
-isolation, bounded mutable buffers, acyclic event data, and the live hook's GC
-policy. This audit changed keyboard tests only.
+The same-CPU runs restrict only the benchmark process to the third eligible
+logical processor, in after/before/before/after order. Central latency does not
+show a consistent increase in those pairs, while earlier unrestricted runs
+do show small increases. Large outliers and changing distributions remain;
+these observations do not establish a latency improvement or rule out a small
+regression. They measure engine decisions with a silent host, not native hook
+or `SendInput` latency. Raw rounds and source hashes are retained with the
+verification evidence in [dependency-refactor-checks.json](dependency-refactor-checks.json).
 
-### 7. Bootstrap and bundled-runtime selection
+## Verification
 
-**Evidence:** [runtime.py](../runtime.py) reads process-global platform,
-executable, arguments, environment, and its own `__file__`. The 12 patch calls in
-[test_runtime.py](../tests/test_runtime.py) replace these observations plus
-`Popen` and `site.addsitedir`.
+Twelve seeded regressions across the runner, SDK history, browser ownership,
+transcript publication, retry exhaustion, Teams polling, bootstrap environment,
+and keyboard configuration are all detected by the replacement tests. All eight
+campaign baselines pass, with no surviving mutations, timeouts, or collection
+errors. These are targeted contract checks, not a whole-project mutation score.
 
-**Change:** compute a bootstrap plan from explicit platform, executable, source
-folder, bundle observations, arguments, and environment. Represent continue,
-relaunch, and invalid-bundle results explicitly; a small effect owner performs
-the chosen launch or activation.
-
-**Replacement tests:** assert the chosen interpreter, cleaned environment,
-arguments, and exit behavior from the plan. Retain a real copied-source child
-process importing SDK/Tk and constructing a Tk window. The bootstrap must
-remain importable with system Python 3.12; keep its syntax compatible.
-
-### 8. Audio device and COM lifecycle
-
-**Evidence:** [native audio tests](../tests/test_windows_audio.py) and
-[recording tests](../tests/test_windows_recording.py) patch 27 native call sites
-to force partial initialization, wait failures, and cleanup. Format and PCM
-processing already have direct value-based tests.
-
-**Change:** separate lifecycle decisions from the native adapter that owns
-device handles, COM methods, memory, and waits. Pass initialization outcomes and
-packet observations to the decision code; keep copying and sample loops in
-their current performance-sensitive owner.
-
-**Replacement tests:** replay partial initialization and failure observations
-and verify required cleanup commands without patching native symbols. Retain
-real device/COM adapter checks. Measure buffer copying and audio loop cost
-before and after refactoring; avoid allocating domain objects per sample.
-
-### 9. Teams configuration, clocks, and HTTP timeout
-
-**Evidence:** [Teams](../assistant/teams.py) already accepts HTTP and token-store
-adapters, and `TokenStore` accepts encryption/decryption operations. Config and
-token expiry still read environment and wall/monotonic clocks internally.
-[test_teams.py](../tests/test_teams.py) patches the environment;
-[test_graph_http.py](../tests/test_graph_http.py) patches `REQUEST_TIMEOUT`.
-
-**Change:** validate configuration at composition; supply it and time to token
-and device-flow decisions. Make request timeout an HTTP adapter setting.
-
-**Replacement tests:** run expiry, polling, and cancellation decisions with
-explicit times. Continue to test HTTP behavior through the local server and
-token persistence through temporary files. No extra transport abstraction is
-needed where the existing interfaces already work.
-
-### 10. Files, workspace checks, and test fixtures
-
-**Evidence:** [Agent file tools](../assistant/agent.py) own real `Path` operations
-and global result limits. The strengthened file-search test patches `MAX_FILES`.
-Workspace tests patch `Workspace.check`; selfcheck and keeper tests patch
-`os.scandir` to prove excluded trees are never entered.
-
-**Change:** give file search an explicit result limit; keep real temporary-file
-tests for read/write behavior. Extract check-command construction and result
-classification as pure decisions if more execution variants are added. Retain
-candidate-process isolation, source digests, and the protected full install
-gate. The scandir patches are traversal instrumentation, not substitutes for
-filesystem outcomes; replace them only with a meaningful traversal interface
-or a dedicated instrumentation check, not a flaky timing assertion.
-
-**Replacement tests:** compare real file results and actual candidate check
-outcomes. Patches against `FakeMachine`, `FakeDesktop`, or a fake window should
-become explicit fixture behavior or a small subclass; they do not justify new
-production dependencies. The stop-during-confirmation test now uses this form.
-
-## Complete static patch count
-
-| Test file | Calls |
-| --- | ---: |
-| `test_windows_bindings.py` | 45 |
-| `test_windows_agent.py` | 16 |
-| `test_windows_agent_toasts.py` | 14 |
-| `test_windows_audio.py` | 14 |
-| `test_windows_recording.py` | 13 |
-| `test_runtime.py` | 12 |
-| `test_browser_attachment.py` | 11 |
-| `test_meetings.py` | 9 |
-| `test_windows_computer.py` | 8 |
-| `test_windows_overlay.py` | 8 |
-| `test_windows_agent_panel.py` | 5 |
-| `test_windows_agent_approvals.py` | 4 |
-| `test_teams.py` | 3 |
-| `test_agent.py`, `test_browser.py`, `test_engine.py`, `test_features.py`, `test_windows_browser.py` | 2 each |
-| `test_agent_streaming.py`, `test_computer_tools.py`, `test_graph_http.py`, `test_keeper.py`, `test_selfcheck.py` | 1 each |
-| **Total** | **177** |
-
-For each refactor, replace the patch-heavy cases once the new interface tests
-detect the same seeded regressions. Delete assertions that only repeat fields
-or verify internal call order. Preserve tests that establish a real contract,
-especially Windows ownership, cleanup, transaction durability, and the install
-gate. Mutation evidence and measured runtime, rather than test count alone,
-determine whether the replacement is better.
+Final checks pass: **473 portable/Linux tests** with 15 skipped native modules,
+and **586 Windows tests** with three opt-in desktop E2E modules skipped. Mypy,
+Pyright, Ruff, and `git diff --check` pass. Python 3.12.8 imports the bootstrap.
+The first Windows run's three failures and their focused recheck are retained
+in the evidence rather than counted as successful full validation.

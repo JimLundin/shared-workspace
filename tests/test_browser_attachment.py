@@ -16,9 +16,10 @@ from websockets.http11 import Request, Response
 from websockets.sync.server import ServerConnection, serve
 
 from assistant.browser import MAX_OUTPUT, Attached, Browser, BrowserError, Cdp, InterruptedError, Product, endpoint
+from assistant.browser_session import NativeSessions
 from assistant.llm import Json
 
-from .test_browser import Channel, decoded
+from .test_browser import Channel, ScriptedSessions, connected_browser, decoded
 
 
 @contextmanager
@@ -44,12 +45,11 @@ def consent_browser(tmp_path: Path, approval: threading.Event) -> Generator[tupl
     server = serve(commands, "127.0.0.1", 0, process_request=approve, ping_interval=None, close_timeout=.5)
     port = cast(tuple[str, int], server.socket.getsockname())[1]
     (tmp_path / "DevToolsActivePort").write_text(f"{port}\n/devtools/browser/fixture\n", encoding="ascii")
-    browser = Browser(tmp_path / "unused", source=Product.EDGE)
+    browser = Browser(tmp_path / "unused", source=Product.EDGE, opener=NativeSessions(tmp_path / "unused", profiles=lambda _: tmp_path))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        with patch("assistant.browser.user_data_root", return_value=tmp_path):
-            yield browser, approvals, requested
+        yield browser, approvals, requested
     finally:
         approval.set()
         browser.close()
@@ -69,7 +69,7 @@ def test_attachment_waits_for_consent_then_reuses_the_approved_connection(tmp_pa
 
     with (
         consent_browser(tmp_path, approval) as (browser, approvals, requested),
-        patch("assistant.browser.socket.create_connection", new=connecting),
+        patch("assistant.browser_session.socket.create_connection", new=connecting),
         ThreadPoolExecutor(max_workers=1) as worker,
     ):
         pending = worker.submit(browser.request, "attach", {}, threading.Event())
@@ -97,10 +97,10 @@ def test_endpoint_discovery_is_bounded_and_accepts_only_a_local_browser_path() -
 
 
 def test_status_does_not_read_profiles_or_request_a_connection(tmp_path: Path) -> None:
-    browser = Browser(tmp_path / "separate", source=Product.EDGE)
-    with patch("assistant.browser.Cdp.connect") as connect, patch("assistant.browser.read_endpoint") as read:
-        status = decoded(browser.request("tabs", {}, threading.Event()).text)
-    assert not connect.called and not read.called
+    opener = ScriptedSessions()
+    browser = Browser(tmp_path / "separate", source=Product.EDGE, opener=opener)
+    status = decoded(browser.request("tabs", {}, threading.Event()).text)
+    assert not opener.opened
     assert status["mode"] == "stopped" and status["browser"] == "edge" and status["tabs"] == []
     assert "edge://inspect/#remote-debugging" in str(status["setup"])
     assert not browser.profile.exists()
@@ -112,15 +112,23 @@ def test_attach_reuses_one_connection_and_never_closes_the_personal_browser(tmp_
     port_file.write_bytes(original)
     channel = Channel('{"id":1,"result":{"targetInfos":[]}}', '{"id":2,"result":{"targetInfos":[]}}')
     connection = Cdp(channel)
-    browser = Browser(tmp_path / "unused", source=Product.EDGE)
     cancel = threading.Event()
-    with patch("assistant.browser.user_data_root", return_value=tmp_path), patch.object(Cdp, "connect", return_value=connection) as connect:
-        first = decoded(browser.request("attach", {}, cancel).text)
-        second = decoded(browser.request("attach", {}, cancel).text)
-        assert first == second and first["mode"] == "attached"
-        connect.assert_called_once_with("ws://127.0.0.1:12345/devtools/browser/fixture-123", cancel, timeout=60)
-        assert browser.owner == Attached(Product.EDGE) and browser.process is None
-        browser.close()
+    opened: list[tuple[str, threading.Event, float]] = []
+
+    def connect(uri: str, cancel: threading.Event, *, timeout: float = 2) -> Cdp:
+        opened.append((uri, cancel, timeout))
+        return connection
+
+    browser = Browser(
+        tmp_path / "unused", source=Product.EDGE,
+        opener=NativeSessions(tmp_path / "unused", profiles=lambda _: tmp_path, connect=connect),
+    )
+    first = decoded(browser.request("attach", {}, cancel).text)
+    second = decoded(browser.request("attach", {}, cancel).text)
+    assert first == second and first["mode"] == "attached"
+    assert opened == [("ws://127.0.0.1:12345/devtools/browser/fixture-123", cancel, 60)]
+    assert browser.owner == Attached(Product.EDGE) and browser.process is None
+    browser.close()
     assert channel.closed and [command["method"] for command in channel.sent] == ["Target.getTargets", "Target.getTargets"]
     assert port_file.read_bytes() == original and not browser.profile.exists()
 
@@ -130,16 +138,13 @@ def test_attached_tab_pages_identify_created_tabs_and_keep_late_targets_accessib
         {"type": "page", "targetId": f"page-{index}", "title": "t" * 300, "url": "https://example.com/" + "u" * 900}
         for index in range(65)
     ]
-    enabled: dict[str, Json] = {}
     replies: list[Json] = [
         {"targetInfos": targets}, {"targetInfos": targets}, {"targetInfos": targets},
-        {"sessionId": "late-page"}, enabled, {"success": True},
+        {"success": True}, {"targetInfos": targets[:-1]},
     ]
     messages: list[dict[str, Json]] = [{"id": index, "result": value} for index, value in enumerate(replies, 1)]
     channel = Channel(*(json.dumps(message) for message in messages))
-    browser = Browser(tmp_path / "unused", source=Product.EDGE)
-    browser.connection = Cdp(channel)
-    browser.owner = Attached(Product.EDGE)
+    browser = connected_browser(tmp_path / "unused", channel)
     browser.created.add("page-64")
     cancel = threading.Event()
 
@@ -156,26 +161,32 @@ def test_attached_tab_pages_identify_created_tabs_and_keep_late_targets_accessib
     assert isinstance(final_tabs, list) and len(final_tabs) == 5 and "next_offset" not in final
     assert isinstance(final_tabs[-1], dict) and final_tabs[-1]["id"] == "page-64" and final_tabs[-1]["created_in_session"] is True
     browser.request("close", {"target_id": "page-64"}, cancel)
-    assert channel.sent[-1]["method"] == "Target.closeTarget" and channel.sent[-1]["params"] == {"targetId": "page-64"}
+    close = [command for command in channel.sent if command["method"] == "Target.closeTarget"]
+    assert len(close) == 1 and close[0]["params"] == {"targetId": "page-64"}
     assert "page-64" not in browser.created
     browser.close()
     assert all(command["method"] != "Browser.close" for command in channel.sent)
 
 
 def test_missing_or_denied_attachment_does_not_launch_a_separate_browser(tmp_path: Path) -> None:
-    browser = Browser(tmp_path / "unused", source=Product.CHROME)
-    with patch("assistant.browser.user_data_root", return_value=tmp_path), patch("assistant.browser.edge_path") as launch:
-        with TestCase().assertRaisesRegex(BrowserError, "chrome://inspect"):
-            browser.request("open", {"url": "https://example.com"}, threading.Event())
-        assert not launch.called and not browser.profile.exists()
-    with (
-        patch("assistant.browser.user_data_root", return_value=tmp_path),
-        patch("assistant.browser.read_endpoint", return_value="ws://127.0.0.1:12345/devtools/browser/fixture"),
-        patch.object(Cdp, "connect", side_effect=BrowserError("Denied")) as connect,
-    ):
-        with TestCase().assertRaisesRegex(BrowserError, "Could not attach to Chrome"):
-            browser.request("attach", {}, threading.Event())
-        assert connect.call_count == 1 and browser.connection is None
+    attempts: list[str] = []
+
+    def denied(uri: str, cancel: threading.Event, *, timeout: float = 2) -> Cdp:
+        attempts.append(uri)
+        raise BrowserError("Denied")
+
+    browser = Browser(
+        tmp_path / "unused", source=Product.CHROME,
+        opener=NativeSessions(tmp_path / "unused", profiles=lambda _: tmp_path, connect=denied),
+    )
+    with TestCase().assertRaisesRegex(BrowserError, "chrome://inspect"):
+        browser.request("open", {"url": "https://example.com"}, threading.Event())
+    assert not attempts and not browser.profile.exists()
+    (tmp_path / "DevToolsActivePort").write_text("12345\n/devtools/browser/fixture\n")
+    with TestCase().assertRaisesRegex(BrowserError, "Could not attach to Chrome"):
+        browser.request("attach", {}, threading.Event())
+    assert attempts == ["ws://127.0.0.1:12345/devtools/browser/fixture"]
+    assert browser.connection is None and browser.source is Product.CHROME and not browser.profile.exists()
 
 
 def test_stop_closes_the_socket_while_browser_consent_is_pending() -> None:

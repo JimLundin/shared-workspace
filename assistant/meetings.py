@@ -17,8 +17,12 @@ from typing import Protocol
 from usage import DIRECTORY
 
 from .llm import RATE, Failure, Settings, transcribe, wav
-from .meeting_store import MAX_PENDING_BYTES, MeetingStore
-from .recording_state import AudioSource, Phase, Publication, RecordingState, published, source_name
+from .meeting_store import MeetingArchive, MeetingStore
+from .recording_state import AudioSource, Exhausted, Phase, Publication, RecordingState, RetryPolicy, published, source_name
+
+
+class Transcriber(Protocol):
+    def __call__(self, audio: bytes, *, context: str) -> str | Failure: ...
 
 
 class Capture(Protocol):
@@ -52,16 +56,22 @@ class _Writer:
 class Meetings:
     __slots__ = (
         "_capture", "_closing", "_lock", "_paused", "_queue", "_quit", "_recovery", "_retry_pending", "_scheduled", "_state", "_stop", "_wake",
-        "_worker", "factory", "max_pending_bytes", "on_update", "root", "settings",
+        "_worker", "archive", "factory", "on_update", "retry_policy", "settings", "transcribe_audio",
     )
 
     def __init__(
-        self, settings: Settings, factory: Callable[[AudioSource], Capture], *, root: Path = DIRECTORY / "meetings",
-        on_update: Callable[[RecordingState], None] | None = None, max_pending_bytes: int = MAX_PENDING_BYTES,
+        self, settings: Settings, factory: Callable[[AudioSource], Capture], *, archive: MeetingArchive | None = None,
+        on_update: Callable[[RecordingState], None] | None = None, transcribe_audio: Transcriber | None = None,
+        retry_policy: RetryPolicy | None = None,
     ) -> None:
-        self.settings, self.factory, self.root = settings, factory, root
+        self.settings, self.factory = settings, factory
+        self.archive = archive if archive is not None else MeetingArchive(DIRECTORY / "meetings")
+        def configured_transcriber(audio: bytes, *, context: str) -> str | Failure:
+            return transcribe(settings, audio, context=context)
+
+        self.transcribe_audio: Transcriber = transcribe_audio if transcribe_audio is not None else configured_transcriber
+        self.retry_policy = retry_policy if retry_policy is not None else RetryPolicy()
         self.on_update = on_update
-        self.max_pending_bytes = max_pending_bytes
         self._lock = threading.RLock()
         self._state = RecordingState()
         self._stop, self._quit, self._wake = threading.Event(), threading.Event(), threading.Event()
@@ -72,7 +82,11 @@ class Meetings:
         self._capture: threading.Thread | None = None
         self._worker: threading.Thread | None = None
         self._closing = False
-        self._recovery = tuple(sorted(root.glob("*/session.sqlite3")))
+        self._recovery = self.archive.journals()
+
+    @property
+    def root(self) -> Path:
+        return self.archive.root
 
     def snapshot(self) -> RecordingState:
         with self._lock:
@@ -112,7 +126,7 @@ class Meetings:
         state = self.snapshot()
         if not state.path:
             return
-        store = MeetingStore(Path(state.path).parent)
+        store = self.archive.open(Path(state.path).parent)
         with self._lock:
             self._paused.pop(store.folder, None)
             if store.folder in self._scheduled:
@@ -169,7 +183,7 @@ class Meetings:
         writer: _Writer | None = None
         problem = ""
         try:
-            store = MeetingStore.create(self.root, source, title, max_pending_bytes=self.max_pending_bytes)
+            store = self.archive.create(source, title)
             with self._lock:
                 self._state = replace(self._state, identity=store.folder.name, path=str(store.transcript))
             self._publish(store)
@@ -216,7 +230,7 @@ class Meetings:
             if self._quit.is_set():
                 return
             try:
-                store = MeetingStore(path.parent)
+                store = self.archive.open(path.parent)
                 state = store.state()
                 if not state.finished:
                     store.finish_capture("Recording was interrupted when Toolkit closed. Saved audio has been recovered; capture was not restarted.")
@@ -278,20 +292,21 @@ class Meetings:
             # Some endpoints reject tiny uploads. Pad only the request's final
             # fragment; stored duration and timestamps retain the captured length.
             upload = batch.pcm.ljust(RATE * 2, b"\0")
-            result = transcribe(self.settings, wav(upload, RATE), context=batch.context) if any(batch.pcm) else ""
+            result = self.transcribe_audio(wav(upload, RATE), context=batch.context) if any(batch.pcm) else ""
             if self._quit.is_set():
                 return
             if isinstance(result, Failure):
-                failures += 1
+                retry = self.retry_policy.failed(failures, finished=state.finished)
                 detail = "Transcription is unavailable. Audio is saved locally for retry."
                 self._publish(store, detail=detail)
-                if state.finished and failures >= 3:
+                if retry is Exhausted.PAUSED:
                     store.export()
                     with self._lock:
                         self._paused[store.folder] = detail
                     self._publish(store, detail=detail, phase="paused")
                     return
-                self._quit.wait(min(30, 1 << min(failures, 5)))
+                failures = retry.failures
+                self._quit.wait(retry.delay)
                 continue
             failures = 0
             store.complete(batch, result)
@@ -314,9 +329,9 @@ class Meetings:
 
     def recent(self) -> str:
         entries: list[str] = []
-        for path in sorted(self.root.glob("*/session.sqlite3"), reverse=True)[:20]:
+        for path in reversed(self.archive.journals()[-20:]):
             with contextlib.suppress(OSError, ValueError, sqlite3.Error):
-                store = MeetingStore(path.parent)
+                store = self.archive.open(path.parent)
                 state = store.state()
                 entries.append(f"{state.title} · {state.frames / RATE:.0f}s · {store.transcript}")
         return "\n".join(entries) or "No saved meeting transcripts yet."

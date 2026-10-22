@@ -176,14 +176,20 @@ layer. The agent appears as up to five narrow smoked-glass notification bubbles 
 bottom-right of the screen. New bubbles move earlier ones upward; the desktop
 between them remains visible and clickable. There is no standing toolbar or
 message field, and notifications never take keyboard focus.
-Windows supplies the background blur and rounded edges; text remains opaque.
-Accents distinguish your messages (blue), work (violet), actions (cyan), replies (mint), questions
-(amber), errors (coral), and recording (pink). Labels also identify each kind.
+Windows supplies the background blur, rounded glass edges and soft shadows;
+text remains opaque. Your requests have a subtle blue tint; assistant bubbles
+use lilac. Dark surroundings keep the glass highly transparent, while light
+backgrounds add enough shading to keep the text readable. Captions stay inside
+the glass. Windows controls the native glass corner radius.
 Disabling Windows transparency uses solid surfaces; high-contrast mode uses the
 system's foreground and background colors.
 
-The current conversation stays visible while the task runs, with a compact
-spinner and an **×** stop button below it. Meeting recording has its own control.
+The current conversation stays visible while the task runs. Your request comes
+first, followed by one assistant bubble with a compact **Thinking** heading and
+an **×** stop button inside it. Click the heading to expand the steps in order.
+Collapsing hides only those steps: the latest reply or question stays attached
+inside the same bubble, including after the task finishes. The stop icon shares
+the surrounding glass, including when pressed. Meeting recording has its own control.
 Replies stream with Markdown, a brief reveal for new text, and smooth bubble
 growth: short text expands sideways up to the width limit, then wraps downward.
 Text and glass move together. Long replies retain all their text and scroll
@@ -196,10 +202,13 @@ then fade upward and disappear. Reduced motion advances overlapping pages.
 The stack disappears completely when idle. **Hold V + Ö** also stops the agent and
 clears queued follow-ups. The recording bubble's **×** ends only the recording.
 
-Your requests, agent replies, questions, voice answers, and tool activities keep
-separate entries as the conversation grows. Thinking appears as a small spinner,
+Each follow-up request starts its own turn. Replies, questions, voice answers,
+and tool activities retain their history within that turn. Thinking appears as a small spinner,
 without a stream of reasoning text; reduced motion keeps the indicator static. Public reasoning
 summaries remain available in the full history; private reasoning is not shown.
+Actions show readable targets and result summaries instead of JSON payloads.
+Expanded steps and the attached reply scroll independently, with a small
+scroll indicator when their content overflows.
 Questions stay visible until answered or cancelled: hold **N** to speak your
 reply. If you opt in to approval mode, say exactly **approve** or **decline**
 with the same hotkey. Other speech does not decide an approval. When it is
@@ -249,14 +258,19 @@ Chrome on request. Enable **Allow remote debugging for this browser instance** a
 `edge://inspect/#remote-debugging` (or `chrome://inspect/#remote-debugging`), then
 approve the browser's connection dialog. Toolkit keeps that connection for
 subsequent work; the browser may ask again after a disconnect or restart.
-It opens background tabs, reads page text and controls, fills forms, handles
-frames and open shadow roots, and captures browser screenshots. Existing tabs
-can be selected by their IDs when the task needs their current state. Stop and
-Toolkit exit disconnect, leaving your browser and its tabs open.
+New Edge tabs open in a **Toolkit** group, created collapsed so the agent can
+work while you browse. If you expand the group to collaborate, it stays expanded.
+The agent can open and close tabs, group and ungroup them, rename and collapse
+groups, move tabs or groups between windows, pin tabs and reload them. Ask it to
+show a page when you want that tab brought forward. It can also work on your
+existing tabs when requested, read page text and controls, fill forms, handle
+frames and open shadow roots, and capture browser screenshots. Stop and Toolkit
+exit disconnect, leaving your browser, tabs and groups open.
 
 This reuses the running browser's session; it is not a second headless process
-sharing an open profile. Normal background tabs remain in the tab strip. The
-separate headless Edge profile is still available when explicitly selected.
+sharing an open profile. The group's tabs remain accessible in the tab strip.
+Chrome retains the page tools; native tab/group management currently uses Edge.
+The separate headless Edge profile is still available when explicitly selected.
 See [browser session reuse](docs/browser-session-reuse.md) for supported setup
 and the browser's consent requirements.
 
@@ -511,7 +525,7 @@ specific regression. Native desktop tests require `--workers 1`. Mutation runs
 are an explicit audit command; they do not slow editing checks or installation.
 See the [test audit](docs/testing-audit.md) for measurements and surviving
 mutations, and the [dependency inventory](docs/testing-dependencies.md) for the
-changes needed to replace patch-heavy tests with tests through explicit interfaces.
+implemented interfaces, replacement tests, and remaining native instrumentation.
 
 Inside an extracted Windows bundle, use `.python\python.exe selfcheck.py` to run
 checks with its matching interpreter. The bundle builder can run on Windows or

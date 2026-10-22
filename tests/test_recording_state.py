@@ -3,7 +3,30 @@
 from dataclasses import replace
 
 from assistant.llm import RATE
-from assistant.recording_state import Batch, Phase, Publication, RecordingState, StoredState, completion_phase, duration, published
+from assistant.recording_state import (
+    Batch,
+    Exhausted,
+    Phase,
+    Publication,
+    RecordingState,
+    Retry,
+    RetryPolicy,
+    StoredState,
+    completion_phase,
+    duration,
+    published,
+)
+
+
+def test_transcription_retries_back_off_while_capturing_and_pause_after_capture() -> None:
+    policy = RetryPolicy()
+    assert [policy.failed(count, finished=False) for count in range(7)] == [
+        Retry(1, 2), Retry(2, 4), Retry(3, 8), Retry(4, 16), Retry(5, 30), Retry(6, 30), Retry(7, 30),
+    ]
+    assert policy.failed(0, finished=True) == Retry(1, 2)
+    assert policy.failed(1, finished=True) == Retry(2, 4)
+    assert policy.failed(2, finished=True) is Exhausted.PAUSED
+    assert policy.failed(10, finished=True) is Exhausted.PAUSED
 
 
 def observation() -> Publication:

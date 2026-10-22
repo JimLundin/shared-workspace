@@ -3,6 +3,7 @@ into, in Windows terms (virtual keys, modifiers). It makes no Win32 calls itself
 those go through a `Host`, so the logic can be tested without Windows.
 """
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Final, Protocol, assert_never
@@ -17,6 +18,7 @@ from .layout import (
     QUIT_HOLD_MS,
     SHIFT_ONLY,
     STREAK_MS,
+    TABLE,
     VOICE_KEYS,
     Action,
     Chord,
@@ -29,7 +31,6 @@ from .layout import (
     Scancode,
     TapHold,
     Unmapped,
-    action,
     character,
     describe,
     is_left_hand,
@@ -87,13 +88,46 @@ class Decision(Enum):
 
 MAX_LAYERS = 5
 """Layers held at once: the layout has five layer keys."""
-MAX_TRIGGER = max((len(trigger) for trigger in SNIPPETS), default=0)
-"""Characters remembered for snippets: the longest trigger."""
 MAX_BUFFERED = 18
 """Key events that can wait on one undecided tap-hold key. One finger holds that
 key; each of the other nine can add at most one press, plus the release of a key
 it was already holding (auto-repeats are not buffered): 9 x 2 = 18. Anything
 beyond that decides the key as a hold rather than growing."""
+
+
+type Snippet = str | Callable[[], str]
+
+
+@dataclass(frozen=True, slots=True)
+class Configuration:
+    """Resolve tables and buffer bounds once, before handling keyboard events."""
+
+    actions: Mapping[Layer | None, tuple[Action, ...]]
+    snippets: tuple[tuple[str, Snippet], ...]
+    streak_ms: int = STREAK_MS
+    quick_tap_ms: int = QUICK_TAP_MS
+    quit_hold_ms: int = QUIT_HOLD_MS
+    max_trigger: int = field(init=False)
+
+    def __post_init__(self) -> None:
+        actions = {layer: tuple(row) for layer, row in self.actions.items()}
+        snippets = tuple((trigger, value) for trigger, value in self.snippets)
+        layers: set[Layer | None] = {None}
+        layers.update(Layer)
+        if set(actions) != layers or any(len(row) != CELLS for row in actions.values()):
+            raise ValueError("Every layer must define one action per keyboard cell.")
+        if any(not trigger for trigger, _value in snippets):
+            raise ValueError("Snippet triggers must not be empty.")
+        if self.streak_ms < 0 or self.quick_tap_ms < 0 or self.quit_hold_ms <= 0:
+            raise ValueError("Keyboard timings must be nonnegative, with a positive quit hold.")
+        # Pyright 1.1.414's stub incorrectly gives frozendict.__init__ no arguments.
+        table = frozendict(actions)  # pyright: ignore[reportCallIssue]
+        object.__setattr__(self, "actions", table)
+        object.__setattr__(self, "snippets", snippets)
+        object.__setattr__(self, "max_trigger", max((len(trigger) for trigger, _value in snippets), default=0))
+
+
+DEFAULT_CONFIGURATION: Final = Configuration(TABLE, tuple(SNIPPETS.items()))
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,6 +259,7 @@ class Engine:
     released. Tap the lock key again, or the escape key, to unlock.
     """
 
+    configuration: Configuration = field(default=DEFAULT_CONFIGURATION, kw_only=True)
     escape_down_at: int | None = None
     """When the escape key went down, if it is down."""
     enabled: bool = True
@@ -282,7 +317,7 @@ class Engine:
                     self.escape_down_at = now
             elif self.escape_down_at is not None:
                 pressed_at, self.escape_down_at = self.escape_down_at, None
-                if elapsed(now, pressed_at) >= QUIT_HOLD_MS:
+                if elapsed(now, pressed_at) >= self.configuration.quit_hold_ms:
                     self.release_all(host)
                     return Verdict.QUIT
                 self.toggle(host)
@@ -309,10 +344,10 @@ class Engine:
                 return Verdict.SWALLOW
 
     def in_streak(self, now: int) -> bool:
-        return STREAK_MS > 0 and self.last_typed_at is not None and elapsed(now, self.last_typed_at) < STREAK_MS
+        return self.configuration.streak_ms > 0 and self.last_typed_at is not None and elapsed(now, self.last_typed_at) < self.configuration.streak_ms
 
     def quick_tap(self, cell: int, now: int) -> bool:
-        return self.last_tap is not None and self.last_tap.cell == cell and elapsed(now, self.last_tap.at) < QUICK_TAP_MS
+        return self.last_tap is not None and self.last_tap.cell == cell and elapsed(now, self.last_tap.at) < self.configuration.quick_tap_ms
 
     def layer(self) -> Layer | None:
         """The layer keys are read from: the top held layer, else a locked one, else
@@ -336,7 +371,7 @@ class Engine:
                         self.press(host, current, now)
                     return
                 layer = self.layer()
-                match action(layer, cell):
+                match self.configuration.actions[layer][cell]:
                     case TapHold(tap) if self.quick_tap(cell, now):
                         a: Action = tap
                     case TapHold(tap, Mod() as mod) if mod != Mod.SHIFT and self.in_streak(now):
@@ -464,6 +499,9 @@ class Engine:
 
     def remember(self, host: Host, a: Output) -> None:
         """Snippets: keep the last characters typed, and expand a complete trigger."""
+        if not self.configuration.max_trigger:
+            self.typed = ""
+            return
         key, mods = (a, frozenset[Mod]()) if isinstance(a, Key) else (a.key, a.mods)
         held = frozenset(self.mods.counts) | mods
         if key is Key.BACKSPACE and not held:
@@ -473,8 +511,8 @@ class Engine:
         if typed is None:
             self.typed = ""
             return
-        self.typed = (self.typed + typed)[-MAX_TRIGGER:]
-        for trigger, text in SNIPPETS.items():
+        self.typed = (self.typed + typed)[-self.configuration.max_trigger:]
+        for trigger, text in self.configuration.snippets:
             if self.typed.endswith(trigger):
                 self.typed = ""
                 for _ in trigger:

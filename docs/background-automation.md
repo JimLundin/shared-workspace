@@ -20,8 +20,11 @@ connection. Toolkit reuses an established connection across operations and tasks
 Status checks never connect or trigger consent. A denied or blocked connection
 does not launch a separate profile or change browser policy.
 
-New pages open in background tabs in the existing browser context. They remain
-in the tab strip; the integration does not turn the user's browser headless.
+New Edge pages open in background tabs in a **Toolkit** group in the existing
+browser context. The first group is blue and collapsed. Later opens reuse it,
+preserving its color and expanded state, including after Toolkit reconnects.
+The group's tabs remain accessible in the tab strip. Set `group_id=-1` for an
+ordinary ungrouped tab, or provide another group ID or normal window ID.
 Use an explicit existing `target_id` for a page whose tab-local state is needed.
 Initial browser consent may bring its window forward; subsequent DOM actions
 and viewport captures do not select a tab or move the desktop pointer.
@@ -29,14 +32,42 @@ and viewport captures do not select a tab or move the desktop pointer.
 | Tool | Use |
 |---|---|
 | `browser_attach` | Connect to the running signed-in `edge` or `chrome`; return current tabs. |
-| `browser_open` | Open a background HTTP(S) page or navigate an explicit `target_id`. Optional `browser`: `edge`, `chrome`, or `separate`. |
-| `browser_tabs` | Report connection/setup status and list pages. Follow `next_offset` for more tabs. |
+| `browser_open` | Open a background HTTP(S) page or `about:blank`, normally in Toolkit's group, or navigate an explicit `target_id`. Optional `browser`: `edge`, `chrome`, or `separate`. |
+| `browser_tabs` | Report connection/setup status. Default `view=pages` lists CDP page IDs. Edge's `view=strip` lists native tab IDs, windows, group membership, active/pinned/muted state and the listed tabs' groups. Follow `next_offset` for more tabs. |
+| `browser_group` | Create a group from `tab_ids`, add tabs to `group_id`, edit its title/color/collapsed state, or move it using `index` and optional `window_id`. Unspecified existing properties stay unchanged. |
+| `browser_ungroup` | Remove native `tab_ids` from their groups, keeping the tabs open. |
+| `browser_tab` | Pin, unpin, reload or move a native `tab_id`. `activate` explicitly selects the tab and brings its window forward. |
 | `browser_snapshot` | Read visible text and controls. Follow the returned next offsets for more text, controls or frames. |
 | `browser_action` | Click, fill, select an option by value, or check a native checkbox/radio. |
 | `browser_evaluate` | Evaluate a JavaScript expression in an isolated world; await promises and return bounded output. |
 | `browser_screenshot` | Capture the browser viewport. Its coordinates are independent of desktop screenshots. |
 | `browser_sign_in` | Open the dedicated profile visibly so the user can complete sign-in or MFA. |
-| `browser_close` | Close the specified page; with no ID, detach from a personal browser or close Toolkit's separate browser. |
+| `browser_close` | Close a page's `target_id`, native `tab_ids`, or every tab in a `group_id`. With no selector, detach from a personal browser or close Toolkit's separate browser. |
+
+Native tab IDs and CDP page IDs are different identifiers. Use the pages view
+for DOM tools and the strip view for tab/group management. Newly created group
+tabs return both IDs. The integration identifies them by a unique temporary
+blank-page URL before navigating; it never guesses an existing tab's identity
+from its title or URL. Explicit native operations work on existing personal
+tabs as well as agent tabs. Strip results can filter `window_id` or `group_id`
+(`-1` means ungrouped); group metadata accompanies each page of matching tabs.
+Tab batches contain up to 200 IDs and list pages up to 40 tabs.
+
+Edge tab/group management uses the browser's built-in `tabs`, `tabGroups` and
+`windows` APIs from a hidden `edge://favorites/` control page on the existing
+approved CDP connection. That page is outside the tab strip and belongs to the
+connection; disconnecting destroys it without closing ordinary tabs. No
+extension is installed and no browser flags or policy settings are changed.
+This WebUI API exposure was tested against Edge **155.0.4283.62**. A runtime probe
+checks availability; unsupported versions return an error, with `group_id=-1`
+available for ordinary background opening. Chrome retains its existing page
+tools but does not expose this Edge control surface.
+
+Muting remains read-only in the tab metadata. Calling `tabs.update({muted:...})`
+from a WebUI page crashes this Edge version: the Chromium implementation
+dereferences `extension()->id()` although WebUI has no extension. The adapter
+rejects mute/unmute before touching the browser. See
+[the tabs implementation](https://github.com/chromium/chromium/blob/main/chrome/browser/extensions/api/tabs/tabs_api.cc).
 
 Use control IDs from the latest snapshot of the selected page and frame. A new
 snapshot replaces that frame's IDs. Actions do not imply that the intended
@@ -61,10 +92,13 @@ No `/json/version` probe is used, because the consent mode does not expose it.
 
 Attached browsers and all their ordinary tabs survive Stop, disconnect and
 Toolkit exit. Only an explicitly selected target is navigated or closed; an
-arbitrary personal blank tab is never reused. Toolkit-created tabs have a limit
-of 20 per connection, independent of the user's existing tabs. Attached tab lists
-mark these with `created_in_session`; tabs from before the connection do not
-count toward that limit.
+arbitrary personal blank tab is never reused. There is no artificial limit of
+20 agent tabs. Attached page lists mark the current connection's new pages with
+`created_in_session`. Closing by page ID uses the target lifecycle API directly,
+so closing a tab does not depend on permission to attach to its page scripts.
+It waits briefly for removal and returns `state=closed`, or `state=requested`
+if the page remains open. Inspection can then handle any outstanding browser
+dialog without sending the close again.
 
 In separate mode, Toolkit starts Edge suspended, assigns it to an owned job and
 then resumes it. Stop and exit close that owned process tree. Normal closure

@@ -1,4 +1,4 @@
-"""Quiet semantic accents over a dark material; labels also identify each role."""
+"""Quiet blue and lilac glass, with opaque ink and a dark solid fallback."""
 
 from dataclasses import dataclass
 from typing import Final, assert_never
@@ -6,9 +6,11 @@ from typing import Final, assert_never
 from .notifications import Tone
 
 GLASS_KEY: Final = "#000000"
-INK: Final = "#f1f3f8"
-SECONDARY: Final = "#c8cedc"
-USER: Final = "#a9cbff"
+INK: Final = "#f6f3ff"
+SECONDARY: Final = "#e0dced"
+USER: Final = "#c7dcff"
+SURFACE: Final = "#262337"
+EDGE: Final = "#716a87"
 
 
 def reveal_ink(progress: float) -> str:
@@ -24,23 +26,18 @@ class Palette:
     surface: str
     edge: str
     accent: str
+    tint: str
 
 
 def palette(tone: Tone) -> Palette:
     match tone:
-        case Tone.USER:
-            return Palette("#202a38", "#475f7a", USER)
-        case Tone.THINKING:
-            return Palette("#242131", "#58516e", "#c4b4ff")
-        case Tone.ACTION:
-            return Palette("#1c2930", "#42606b", "#92ddeb")
-        case Tone.REPLY:
-            return Palette("#1e2b29", "#45655c", "#a1e5c5")
+        case Tone.USER | Tone.RECORDING:
+            return Palette("#222c42", "#62738e", "#d3e3ff", "#335ba5")
+        case Tone.THINKING | Tone.ACTION | Tone.REPLY:
+            return Palette(SURFACE, EDGE, "#e8e1ff", "#4e4173")
         case Tone.QUESTION:
-            return Palette("#30291e", "#726346", "#f5d596")
+            return Palette(SURFACE, EDGE, "#f2ddb9", "#4e4173")
         case Tone.ERROR:
-            return Palette("#312124", "#795354", "#ffaba4")
-        case Tone.RECORDING:
-            return Palette("#2d2230", "#715570", "#f2b5de")
+            return Palette(SURFACE, EDGE, "#ffb7b2", "#4e4173")
         case _:
             assert_never(tone)

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field, replace
 from enum import Enum, auto
 from typing import Literal, assert_never
 
+from . import action_text
 from .recording_state import RecordingState
 
 type Decision = Literal["pending", "approved", "declined", "cancelled"]
@@ -89,13 +90,16 @@ class ToolActivity:
 
     @property
     def text(self) -> str:
+        detail = action_text.arguments(self.name, self.detail)
         match self.outcome:
             case ToolStatus.RUNNING:
-                return self.detail
-            case Succeeded(text) | Failed(text):
-                return "\n".join(part for part in (self.detail, text) if part)
+                return detail
+            case Succeeded(text):
+                return "\n".join(part for part in (detail, action_text.result(self.name, text)) if part)
+            case Failed(text):
+                return "\n".join(part for part in (detail, action_text.readable(text)) if part)
             case ToolStatus.CANCELLED:
-                return self.detail
+                return detail
             case _:
                 assert_never(self.outcome)
 
@@ -466,7 +470,7 @@ def presentation(message: Message) -> Presentation:
                     status = "stopped"
                 case _:
                     assert_never(outcome)
-            return Presentation(f"{name.replace('_', ' ').capitalize()} · {status}", "plain", muted=True)
+            return Presentation(f"{action_text.title(name)} · {status}", "plain", muted=True)
         case MeetingMessage():
             return Presentation("Meeting")
         case Question(detail=detail, reply=reply):

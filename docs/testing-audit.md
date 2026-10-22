@@ -4,8 +4,8 @@ Toolkit now uses fast checks while editing and full Windows checks before
 installation. This follows the requested workflow: shorten the iteration loop,
 retain real integrations at the install gate, and improve assertions using
 mutation evidence. Remaining hard-coded dependencies are listed in the
-[dependency inventory](testing-dependencies.md), with proposed interfaces and
-replacement tests.
+[dependency inventory](testing-dependencies.md), alongside the implemented
+interfaces and replacement tests.
 
 ## Measured check cost
 
@@ -172,3 +172,94 @@ For future test reduction, seed regressions at the behavior being preserved,
 replace patch-heavy tests through the proposed interface, and compare both the
 detected mutations and elapsed time. A matching sampled kill set alone is not
 enough reason to delete a distinct user-visible contract.
+
+## Conversation UI follow-up
+
+The conversation UI work builds on merged commit `9a0ba60`. Its tool-preview test
+now uses `ToolRig` and `Agent.call`, following this audit's direct tool fixture.
+It verifies readable notifications and the original model-facing result without
+starting an unused HTTP server. The existing SDK streaming scenarios remain.
+
+The merged mutation runner exposed missing assertions for control/window action
+wording, empty searches, omitted result counts, compact nested details, previews
+that fit exactly, standalone questions, and voice answers followed by more
+actions. Tests exercise these through conversation presentation and session
+transitions. Those coverage improvements did not change production code. The
+following comparison records that earlier design; the combined-bubble campaign
+below covers its replacement.
+
+| Scope | Tested | Detected before | Detected after |
+| --- | ---: | ---: | ---: |
+| `assistant/action_text.py` | 67 | 40 | 66 |
+| `notifications.observe`, `order_of`, `timelines` | 32 | 24 | 27 |
+| **Total** | **99** | **64** | **93** |
+
+All generated mutations in those scopes ran. No previously detected mutation
+survived the new tests; there were no timeouts or runner errors. Two additional
+seeded regressions were detected: shortening raw action JSON before formatting
+it, and returning the display preview to the model in place of its full tool
+result. The [conversation mutation evidence](conversation-mutations.json)
+records both campaigns, source hashes, exact replacements, and detecting tests.
+
+Six mutations remain:
+
+* `shortened` changing `limit > 0` to `limit > 1` differs only for a one-character
+  preview. Production callers use unlimited text or 240/360-character previews.
+  Revisit this uncovered boundary if the UI introduces one-character previews.
+* Five `order_of` literal changes preserve the relative order of all valid
+  cards: the response and working tertiary ranks still follow their request;
+  the sole recording card still follows the conversation. Tests assert visible
+  order rather than arbitrary numeric sort keys.
+
+The accepted design subsequently replaced the separate activity cards and rail
+with one `Turn` bubble. Its result remains attached when the steps collapse.
+The current campaign includes `observe.finish_turn` explicitly: the runner's
+function selection is exact and does not automatically include nested functions.
+
+| Current scope | Tested | Detected before | Detected after |
+| --- | ---: | ---: | ---: |
+| Turn grouping, result/step selection, captions, ordering, and expiry | 83 | 72 | 74 |
+
+The additional assertion keeps a reading hold through a content update while
+the agent is still busy. It catches two mutations that would let an unread
+answer expire after completion. Tests also cover captions for earlier replies
+without tools, terminal turns without output, follow-up isolation, queued work,
+and successful retries after a failed action. A separate seeded reversal of
+terminal-state precedence is detected. These runs had no timeouts or runner
+errors; the same evidence file retains both the historical and current reports.
+
+Nine mutations in the current campaign preserve observable behavior:
+
+* Changing the `results` sentinel from -1 to -2 cannot match a session index.
+* Increasing the serial increment from one to two preserves its monotonic order.
+* Seven sort-key literal changes preserve projected order. Responses now live
+  inside turns; requests still precede their turn, and the sole recording card
+  still follows the conversation. Tests do not require arbitrary numeric ranks.
+
+The 37 native conversation checks cover the attached result, reversing a
+disclosure transition without losing selection, immediate keyboard disclosure,
+independent step scrolling and its overflow marker, full glass hit targets,
+solid/high-contrast fallback, and asynchronous material observation. A live
+50-sample desktop measurement found a median 28.0 ms and p95 34.5 ms for the four
+background pixels with GC enabled. Those reads therefore run in one bounded
+worker, not in a Tk callback; observations from an old rectangle are discarded.
+A follow-up run measured the nonblocking result poll at 0.0012 ms median and
+0.0119 ms maximum; the first worker submission took 2.89 ms.
+Native validation also exposed Tk invalidating its wrapped text-height cache
+after a material color change. Paging could then use an incorrect, even negative,
+scroll range. A failing regression now checks that a material change preserves
+the long reply's range and reading position; resolving text metrics after the
+style update fixes the failure without changing the reading model.
+
+Reproduce the current decision campaigns with pytest installed:
+
+```sh
+python scripts/mutate.py assistant/action_text.py --tests tests/test_action_text.py --limit 0 --workers 2 --output dist/action-mutations.json
+python scripts/mutate.py assistant/notifications.py --function observe --function observe.finish_turn --function results --function steps --function settled --function caption --function order_of --function advance --tests tests/test_notifications.py --limit 0 --workers 4 --output dist/turn-mutations.json
+python scripts/mutate.py assistant/notifications.py --tests tests/test_notifications.py --replace 'for entry in reversed(entries):' 'for entry in entries:' --output dist/turn-precedence-mutation.json
+```
+
+These commands exit nonzero for the documented survivors. Mutation runs remain
+an explicit audit; editing uses the fast profile, and deployment retains the
+full Windows integration gate, including native glass, stop-target, and attached-result
+checks.

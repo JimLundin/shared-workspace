@@ -25,6 +25,8 @@ def span_tags(text: tk.Text, span: Span, styles: set[str]) -> tuple[str, ...]:
     family, size = MONO if "code" in span.tags else FONT
     if "heading" in span.tags and "code" not in span.tags:
         size = 15 if "h1" in span.tags else 13 if "h2" in span.tags else 11
+    elif any(tag in span.tags for tag in ("step", "step_detail", "step_error")):
+        size = 9
     weight = "bold" if "bold" in span.tags or "heading" in span.tags else "normal"
     slant = "italic" if "italic" in span.tags else "roman"
     font = f"font-{family}-{size}-{weight}-{slant}"

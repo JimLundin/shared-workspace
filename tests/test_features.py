@@ -3,7 +3,6 @@
 import json
 from collections.abc import Callable, Mapping
 from typing import cast
-from unittest.mock import patch
 
 from assistant.features import Assistant, pick_window
 from assistant.geometry import Shot
@@ -51,9 +50,10 @@ class FakeAnswer:
 
 
 class FakeDesktop:
-    __slots__ = ("follow_up", "log", "prompts", "region", "selection", "speech", "windows_open")
+    __slots__ = ("follow_up", "input_error", "log", "prompts", "recording_error", "region", "selection", "speech", "windows_open")
 
-    def __init__(self) -> None:
+    def __init__(self, *, input_error: OSError | None = None, recording_error: OSError | None = None) -> None:
+        self.input_error, self.recording_error = input_error, recording_error
         self.log: list[str] = []
         self.speech = SPEECH
         self.selection: str | None = None
@@ -67,6 +67,8 @@ class FakeDesktop:
         return None
 
     def stop_listening(self) -> bytes:
+        if self.recording_error is not None:
+            raise self.recording_error
         self.log.append("stop listening")
         return self.speech
 
@@ -77,6 +79,8 @@ class FakeDesktop:
         self.log.append(f"paste {text}")
 
     def type_text(self, text: str) -> None:
+        if self.input_error is not None:
+            raise self.input_error
         self.log.append(f"type {text!r}")
 
     def set_clipboard(self, text: str) -> None:
@@ -128,9 +132,9 @@ class Rig:
 
     __slots__ = ("agent", "assistant", "desktop", "endpoint", "used")
 
-    def __init__(self, endpoint: FakeEndpoint, missing: Missing | None = None) -> None:
+    def __init__(self, endpoint: FakeEndpoint, missing: Missing | None = None, *, desktop: FakeDesktop | None = None) -> None:
         self.endpoint = endpoint
-        self.desktop = FakeDesktop()
+        self.desktop = desktop if desktop is not None else FakeDesktop()
         self.used: list[tuple[str, Mapping[str, Detail]]] = []
         self.agent: list[str] = []
         settings = Settings(endpoint.url, "k", "transcribe", "chat", "agent", "", "")
@@ -213,13 +217,13 @@ def test_voice_diagnostics_distinguish_a_failed_request_from_failed_input() -> N
 
         transcript = "The first sentence. The missing ending."
         endpoint.replies = [said(transcript)]
-        with patch.object(FakeDesktop, "type_text", side_effect=OSError("Input was not accepted")):
-            try:
-                rig.hold(Tool.DICTATE)
-            except OSError:
-                pass
-            else:
-                raise AssertionError("A failed input operation must not report success.")
+        rig = Rig(endpoint, desktop=FakeDesktop(input_error=OSError("Input was not accepted")))
+        try:
+            rig.hold(Tool.DICTATE)
+        except OSError:
+            pass
+        else:
+            raise AssertionError("A failed input operation must not report success.")
         details = dict(rig.used)["dictate"]
         assert details["transcript_characters"] == len(transcript)
         assert details["requested_characters"] == len(transcript) + 1
@@ -296,9 +300,8 @@ def test_endpoint_failures_are_reported_and_logged() -> None:
 def test_an_incomplete_recording_is_reported_without_sending_a_partial_prompt() -> None:
     for tool in (Tool.DICTATE, Tool.AGENT_VOICE):
         with fake_endpoint() as endpoint:
-            rig = Rig(endpoint)
-            with patch.object(FakeDesktop, "stop_listening", side_effect=OSError("The microphone did not finish returning audio.")):
-                rig.hold(tool)
+            rig = Rig(endpoint, desktop=FakeDesktop(recording_error=OSError("The microphone did not finish returning audio.")))
+            rig.hold(tool)
             assert endpoint.received == []
             assert rig.agent == []
             assert rig.take()[-1] == "problem The microphone did not finish returning audio."

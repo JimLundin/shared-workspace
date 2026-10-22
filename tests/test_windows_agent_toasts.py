@@ -17,10 +17,10 @@ if sys.platform != "win32":
 
 import tkinter as tk
 
-from assistant.agent_session import Answer, Begin, Failed, Question, ReasoningSummary, Said, Session, StreamState, ToolActivity, transition
+from assistant.agent_session import Answer, Begin, Failed, Question, ReasoningSummary, Said, Session, StreamState, Succeeded, ToolActivity, transition
 from assistant.agent_toasts import AgentToasts, Card
 from assistant.agent_window import AgentWindow
-from assistant.notifications import MAX_VISIBLE, WIDTH, Kind, MessageKey, ResponseKey
+from assistant.notifications import MAX_VISIBLE, WIDTH, Kind, MessageKey, TurnKey
 from assistant.panel import PanelPreferences
 from assistant.recording_state import RecordingAction, RecordingState
 from assistant.rich_text import formatted
@@ -155,7 +155,7 @@ def test_wheel_pauses_reading_and_streaming_preserves_the_chosen_position() -> N
         panel.pump()
         panel.advance(.3)
         panel.advance(31)
-        card = panel.view.cards[MessageKey(1)]
+        card = panel.view.cards[TurnKey(0)]
         before = scroll_position(card)
         bounds = windows.outer_rect(card.handle)
         # The periodic glass observer must see the same hover as the wheel
@@ -222,7 +222,7 @@ def test_spinner_fits_its_contents_and_the_cross_stops_the_agent() -> None:
         foreground = windows.foreground()
         panel.agent.begin("Check the notes", panel.stop)
         panel.pump()
-        card = panel.view.cards[Kind.WORK]
+        card = panel.view.cards[TurnKey(0)]
         bounds = windows.outer_rect(card.handle)
         assert bounds.width == card.width < round(WIDTH * windows.scale(panel.root.winfo_id()) * .6)
         assert cast(str, card.stop.cget("text")) == "\u00d7"
@@ -236,15 +236,238 @@ def test_spinner_fits_its_contents_and_the_cross_stops_the_agent() -> None:
         assert windows.foreground() == foreground
 
 
+def test_glass_stop_has_a_full_click_target_without_a_different_background() -> None:
+    with notifications() as panel:
+        panel.view.material_preference = lambda: appearance.Material.GLASS
+        panel.agent.begin("Check the notes", panel.stop)
+        panel.pump()
+        card = panel.view.cards[TurnKey(0)]
+        background = cast(str, card.label.cget("background"))
+        assert cast(str, card.stop.cget("background")) == cast(str, card.stop.cget("activebackground")) == background
+        if card.glass:
+            target = card.stop_target
+            assert target is not None
+            bounds = windows.outer_rect(card.stop.winfo_id())
+            assert windows.outer_rect(target.handle) == bounds
+            # Layered pixels reach DWM after Tk lays out the button. Wait for
+            # their native hit region too, including on a busy desktop.
+            deadline = time.monotonic() + 1
+            while panel.root.winfo_containing(bounds.left + 3, bounds.top + 3) is not target.button and time.monotonic() < deadline:
+                windows.show_quietly(target.handle, True)
+                panel.pump()
+                time.sleep(.01)
+            assert panel.root.winfo_containing(bounds.left + 3, bounds.top + 3) is target.button
+            foreground = windows.foreground()
+            target.button.invoke()
+            panel.pump()
+            assert panel.agent.state.stopping and cast(str, target.button.cget("state")) == "disabled"
+            assert windows.foreground() == foreground
+            panel.agent.finish()
+            panel.pump()
+            assert not windows.is_visible(target.handle)
+
+
+def test_background_material_sampling_never_waits_for_desktop_pixels_on_the_ui_thread() -> None:
+    started, release = threading.Event(), threading.Event()
+    sampler = appearance.FrostSampler()
+    bounds = Rect(10, 20, 300, 400)
+    calls: list[tuple[Rect, ...]] = []
+
+    def sample(rects: tuple[Rect, ...]) -> tuple[appearance.Backdrop, ...]:
+        calls.append(rects)
+        started.set()
+        assert release.wait(2)
+        return tuple(appearance.Backdrop(rect, appearance.Frost.LIGHT) for rect in rects)
+
+    with patch.object(appearance, "sample_backgrounds", sample):
+        try:
+            sampler.submit((bounds,))
+            assert started.wait(1)
+            assert sampler.read() == ()  # Desktop observation is still blocked.
+            sampler.submit((Rect(0, 0, 500, 600),))
+            assert calls == [(bounds,)]  # A slow compositor cannot grow a queue.
+            release.set()
+            assert sampler.pending is not None
+            sampler.pending.result(timeout=1)
+            assert sampler.read() == (appearance.Backdrop(bounds, appearance.Frost.LIGHT),)
+            assert sampler.read() == ()
+        finally:
+            release.set()
+            sampler.close()
+
+
+def test_glass_shading_preserves_the_reply_and_rejects_old_positions() -> None:
+    dark = tuple(map(appearance.colorref, ("#181d2a", "#181d2a", "#353c50", "#353c50")))
+    assert appearance.frost_for(dark) is appearance.Frost.LIGHT
+    assert appearance.frost_for((*dark, appearance.colorref("#ffffff"))) is appearance.Frost.SMOKED
+    assert appearance.frost_for(()) is appearance.Frost.SMOKED
+    with notifications() as panel:
+        panel.view.material_preference = lambda: appearance.Material.GLASS
+        panel.agent.begin("Check the workbook", panel.stop)
+        panel.agent.say("The workbook is ready.")
+        panel.pump()
+        card = panel.view.cards[TurnKey(0)]
+        assert card.bounds is not None
+        if not card.glass:
+            return  # Native glass is optional on older Windows versions.
+        card.text.tag_add("sel", "1.4", "1.12")
+        card.match_background(appearance.Backdrop(card.bounds, appearance.Frost.LIGHT), appearance.Material.GLASS)
+        assert card.frost is appearance.Frost.LIGHT
+        card.match_background(appearance.Backdrop(Rect(0, 0, 1, 1), appearance.Frost.SMOKED), appearance.Material.GLASS)
+        assert card.frost is appearance.Frost.LIGHT
+        card.match_background(appearance.Backdrop(card.bounds, appearance.Frost.SMOKED), appearance.Material.GLASS)
+        assert panel.view.cards[TurnKey(0)].frost is appearance.Frost.SMOKED
+        assert card.text.get("1.0", "end-1c") == "The workbook is ready."
+        assert card.text.get("sel.first", "sel.last") == "workbook"
+
+
+def test_material_changes_preserve_the_scroll_range_of_a_long_reply() -> None:
+    with notifications() as panel:
+        panel.view.material_preference = lambda: appearance.Material.GLASS
+        panel.agent.say("A useful detail. " * 220 + "\n\nThe end.")
+        panel.pump()
+        card = panel.view.cards[MessageKey(0)]
+        assert card.bounds is not None
+        if not card.glass:
+            return
+        bounds = card.bounds
+        with patch.object(tk.Misc, "winfo_pointerxy", return_value=(bounds.left + 8, bounds.top + 8)):
+            card.scroll_delta(-480)
+            panel.pump()
+            anchor = card.text.index("@0,6")
+            position = scroll_position(card)
+            assert position > 0
+            for frost in (appearance.Frost.LIGHT, appearance.Frost.SMOKED):
+                card.match_background(appearance.Backdrop(bounds, frost), appearance.Material.GLASS)
+                # Reading and wheel movement use this native range before the
+                # next idle layout. A color change must not invalidate it.
+                card.text.yview_moveto(position)
+                panel.pump()
+                assert 0 <= scroll_position(card) <= 1
+                assert card.text.index("@0,6") == anchor
+
+
+def test_one_bubble_keeps_its_result_when_finished_and_when_steps_collapse() -> None:
+    with notifications() as panel:
+        foreground = windows.foreground()
+        panel.agent.begin("Read the workbook", panel.stop)
+        panel.pump()
+        card = panel.view.cards[TurnKey(0)]
+        handle = card.handle
+        publish = panel.agent.updates()
+        publish(ToolActivity("read", "read_file", '{"path":"budget.xlsx"}', 1, Succeeded('{"rows":24}')))
+        publish(ToolActivity("check", "read_file", "forecast.xlsx", 2, Succeeded("The totals match.")))
+        publish(Answer("answer", "The workbook is **ready**.", 3, StreamState.COMPLETE))
+        panel.pump()
+        assert len(panel.view.cards) == 2 and panel.view.cards[TurnKey(0)] is card
+        assert not card.details.winfo_manager() and card.text.get("1.0", "end-1c") == "The workbook is ready."
+        compact = windows.outer_rect(card.handle)
+        stop = windows.outer_rect(card.stop.winfo_id())
+        card.disclosure.invoke()
+        panel.pump()
+        expanded = windows.outer_rect(card.handle)
+        assert card.expanded and expanded.height > compact.height
+        assert "Path: budget.xlsx" in card.details.get("1.0", "end-1c")
+        assert "Rows: 24" in card.details.get("1.0", "end-1c")
+        assert card.details.get("1.0", "end-1c").index("budget.xlsx") < card.details.get("1.0", "end-1c").index("forecast.xlsx")
+        assert card.details.bbox("end-2c") is not None and not card.detail_scrollbar.winfo_viewable()
+        assert card.details.winfo_rooty() + card.details.winfo_height() <= card.text.winfo_rooty()
+        assert windows.outer_rect(card.stop.winfo_id()).right == stop.right
+        assert expanded.left < stop.right < expanded.right
+        panel.agent.finish()
+        panel.pump()
+        assert panel.view.cards[TurnKey(0)] is card and card.handle == handle
+        assert not card.stop.winfo_manager() and card.text.tag_ranges("bold")
+        card.disclosure.invoke()
+        panel.pump()
+        assert not bool(card.expanded)
+        assert not card.details.winfo_manager()
+        assert card.text.get("1.0", "end-1c") == "The workbook is ready."
+        assert card.text.bbox("end-2c") is not None
+        assert windows.outer_rect(card.handle).height < expanded.height
+        assert windows.foreground() == foreground
+        panel.agent.close()
+        panel.pump()
+        assert not windows.is_visible(handle)
+
+
+
+def test_reversing_disclosure_keeps_the_reply_visible_and_preserves_selection() -> None:
+    with notifications(animated=True) as panel:
+        panel.agent.begin("Check the workbook", panel.stop)
+        publish = panel.agent.updates()
+        for index in range(4):
+            publish(ToolActivity(str(index), "read_file", f"sheet-{index}.xlsx", index + 1, Succeeded("Read 24 rows.")))
+        answer = "The result stays attached while you open and close the steps."
+        publish(Answer("answer", answer, 5, StreamState.COMPLETE))
+        panel.agent.finish()
+        panel.pump()
+        panel.advance(.3)
+        card = panel.view.cards[TurnKey(0)]
+        card.text.mark_set("reading", "1.10")
+        card.text.tag_add("sel", "1.4", "1.10")
+        before = windows.outer_rect(card.handle)
+        card.disclosure.invoke()
+        panel.pump()
+        assert windows.outer_rect(card.handle) == before
+        motion = card.motion
+        assert motion is not None and motion.end.details > 0
+        for _ in range(5):
+            panel.now += .016
+            panel.view.tick()
+            panel.pump()
+            assert card.text.get("1.0", "end-1c") == answer and card.text.winfo_height() > 20
+            assert card.details.winfo_rooty() + card.details.winfo_height() <= card.text.winfo_rooty()
+        current = windows.outer_rect(card.handle)
+        card.disclosure.invoke()
+        panel.pump()
+        assert windows.outer_rect(card.handle) == current
+        panel.advance(.3)
+        assert card.motion is None and card.frame.details == 0 and not card.details.winfo_manager()
+        assert card.text.get("sel.first", "sel.last") == "result" and card.text.index("reading") == "1.10"
+        assert card.text.bbox("end-2c") is not None
+        event: tk.Event[tk.Misc] = tk.Event()
+        assert card.toggle_key(event) == "break"
+        panel.pump()
+        assert card.motion is None and card.frame.details > 0 and card.details.winfo_viewable()
+
+
+def test_long_steps_scroll_independently_of_the_attached_reply() -> None:
+    with notifications() as panel:
+        panel.agent.begin("Check the workbooks", panel.stop)
+        publish = panel.agent.updates()
+        for index in range(15):
+            publish(ToolActivity(str(index), "read_file", f"sheet-{index}.xlsx", index + 1, Succeeded("Read 24 rows.")))
+        publish(Answer("answer", "All fifteen sheets match.", 20, StreamState.COMPLETE))
+        panel.agent.finish()
+        panel.pump()
+        card = panel.view.cards[TurnKey(0)]
+        card.toggle(animate=False)
+        panel.pump()
+        assert card.details.get("1.0", "end-1c").count("Read file") == 15
+        assert card.detail_scrollbar.winfo_viewable()
+        thumb = card.detail_scrollbar.coords("thumb")
+        reply = card.text.index("@0,6")
+        start = card.details.index("@0,6")
+        card.scroll_details(-120)
+        panel.pump()
+        assert card.details.compare(card.details.index("@0,6"), ">", start)
+        assert card.detail_scrollbar.coords("thumb")[1] > thumb[1]
+        assert card.text.index("@0,6") == reply and card.text.bbox("end-2c") is not None
+        assert any(region.target == card.details.winfo_id() for region in panel.view.wheel.regions)
+        card.toggle(animate=False)
+        panel.pump()
+        assert not panel.view.wheel.regions and card.text.get("1.0", "end-1c") == "All fifteen sheets match."
+        assert not card.detail_scrollbar.winfo_viewable()
+
+
 def test_short_replies_grow_horizontally_then_wrap_at_the_width_limit() -> None:
     with notifications() as panel:
-        panel.agent.begin("Check the notes", panel.stop)
-        publish = panel.agent.updates()
         sizes: list[tuple[int, int]] = []
         for text in ("Ready.", "Ready to review.", "Ready to review the plan.", "Ready to review the plan. " * 4):
-            publish(Answer("stream", text, 1))
+            panel.view.render(transition(Session(identity="width-probe"), Said(text, 1)))
             panel.pump()
-            card = panel.view.cards[MessageKey(1)]
+            card = panel.view.cards[MessageKey(0)]
             sizes.append((card.width, card.height))
             assert windows.outer_rect(card.handle).width == card.width
             last = card.text.bbox("end-2c")
@@ -256,13 +479,11 @@ def test_short_replies_grow_horizontally_then_wrap_at_the_width_limit() -> None:
 
 def test_intrinsic_width_uses_rendered_markdown_lines_and_constrains_unbroken_text() -> None:
     with notifications() as panel:
-        panel.agent.begin("Check the notes", panel.stop)
-        publish = panel.agent.updates()
         widths: list[int] = []
         for text in ("## A heading\n\n**Ready**\n\n- OK", "[Docs](https://example.org/" + "a" * 160 + ")", "W" * 50):
-            publish(Answer("stream", text, 1))
+            panel.view.render(transition(Session(identity="width-probe"), Said(text, 1)))
             panel.pump()
-            card = panel.view.cards[MessageKey(1)]
+            card = panel.view.cards[MessageKey(0)]
             widths.append(card.width)
             index = "1.0"
             while card.text.compare(index, "<", "end-1c"):
@@ -275,16 +496,14 @@ def test_intrinsic_width_uses_rendered_markdown_lines_and_constrains_unbroken_te
 
 def test_width_changes_retarget_smoothly_with_the_right_edge_anchored() -> None:
     with notifications(animated=True) as panel:
-        panel.agent.begin("Check the notes", panel.stop)
-        publish = panel.agent.updates()
-        publish(Answer("stream", "Ready.", 1))
+        panel.view.render(transition(Session(identity="width-probe"), Said("Ready.", 1)))
         panel.pump()
         panel.advance(.3)
-        card = panel.view.cards[MessageKey(1)]
+        card = panel.view.cards[MessageKey(0)]
         right = windows.outer_rect(card.handle).right
         for text in ("Ready to review.", "Ready to review the plan.", "Ready to review the plan. " * 4, "**Done.**"):
             before = windows.outer_rect(card.handle)
-            publish(Answer("stream", text, 1))
+            panel.view.render(transition(Session(identity="width-probe"), Said(text, 1)))
             panel.pump()
             assert windows.outer_rect(card.handle) == before, "Adaptive width must not snap when a chunk arrives."
             widths: list[int] = []
@@ -310,7 +529,7 @@ def test_adaptive_width_respects_a_narrow_work_area_and_keeps_voice_hints_separa
         cap = 250 - 2 * round(16 * windows.scale(panel.root.winfo_id()))
         for card in panel.view.cards.values():
             assert windows.outer_rect(card.handle).width == card.width <= cap
-        question = panel.view.cards[MessageKey(1)]
+        question = panel.view.cards[TurnKey(0)]
         assert question.text.winfo_rooty() + question.text.winfo_height() <= question.hint.winfo_rooty()
         assert cast(str, question.hint.cget("text")) == "Hold N to reply by voice"
         assert question.hint.winfo_height() >= question.hint.winfo_reqheight()
@@ -367,7 +586,12 @@ def test_narrow_conversation_budget_keeps_complete_lines_and_a_separate_footer()
             panel.view.material_preference = selected
             panel.view.render(state)
             panel.pump()
-            assert len(panel.view.cards) == MAX_VISIBLE
+            card = panel.view.cards[TurnKey(0)]
+            if not card.expanded:
+                card.toggle(animate=False)
+                panel.pump()
+            assert len(panel.view.cards) == 2
+            assert "Result 0" in card.details.get("1.0", "end-1c")
             bounds = sorted((windows.outer_rect(card.handle) for card in panel.view.cards.values()), key=top)
             assert panel.view.work is not None and bounds[0].top >= panel.view.work.top
             assert bounds[-1].bottom < panel.view.work.bottom
@@ -380,7 +604,7 @@ def test_narrow_conversation_budget_keeps_complete_lines_and_a_separate_footer()
                     assert row is not None and row[1] >= 0 and row[1] + row[3] <= card.text.winfo_height() - 6
                     if card.hint.winfo_manager():
                         assert card.text.winfo_rooty() + card.text.winfo_height() <= card.hint.winfo_rooty()
-            question = panel.view.cards[MessageKey(4)]
+            question = panel.view.cards[TurnKey(0)]
             assert question.text.bbox("end-2c") is not None and "Hold N" in cast(str, question.hint.cget("text"))
 
 
@@ -391,7 +615,7 @@ def test_stream_growth_reflows_the_whole_stack_without_overlapping_neighbors() -
         publish(Answer("stream", "The summary is ready.", 1))
         panel.pump()
         panel.advance(.3)
-        reply = panel.view.cards[MessageKey(1)]
+        reply = panel.view.cards[TurnKey(0)]
         height = reply.height
         before = windows.outer_rect(reply.handle)
         publish(Answer("stream", "## Summary\n\n- **Alex:** prepare the draft by Friday.\n"
@@ -418,7 +642,7 @@ def test_stream_chunks_preserve_the_text_already_being_read() -> None:
         publish = panel.agent.updates()
         publish(Answer("stream", "The first paragraph stays here.", 1))
         panel.pump()
-        reply = panel.view.cards[MessageKey(1)]
+        reply = panel.view.cards[TurnKey(0)]
         reply.text.mark_set("reading", "1.10")
         reply.text.mark_gravity("reading", "left")
         reply.text.tag_add("sel", "1.4", "1.9")
@@ -438,7 +662,7 @@ def test_stream_bursts_retarget_growing_and_shrinking_neighbors_together() -> No
         publish(Answer("stream", "The summary follows.", 1))
         panel.pump()
         panel.advance(.3)
-        reply = panel.view.cards[MessageKey(3)]
+        reply = panel.view.cards[TurnKey(0)]
         text = "The summary follows."
         for index in range(45):
             panel.now += .016
@@ -466,7 +690,7 @@ def test_stream_reveals_only_new_text_and_finishes_when_the_agent_is_done() -> N
         publish(Answer("stream", "First.", 1))
         panel.pump()
         panel.advance(.3)
-        reply = panel.view.cards[MessageKey(1)]
+        reply = panel.view.cards[TurnKey(0)]
         for index in range(30):
             publish(Answer("stream", "First." + " a" * (index + 1), 2))
             panel.pump()
@@ -547,7 +771,7 @@ def test_streamed_unicode_links_and_markup_match_a_complete_render() -> None:
             text = prefix + suffix
             publish(Answer("stream", text, 1))
             panel.pump()
-            reply = panel.view.cards[MessageKey(1)]
+            reply = panel.view.cards[TurnKey(0)]
             spans = tuple(formatted(text))
             assert reply.text.get("1.0", "end-1c") == "".join(span.text for span in spans)
             assert set(reply.links.values()) == {span.link for span in spans if span.link}
@@ -560,7 +784,7 @@ def test_native_notifications_are_idle_until_needed_and_never_take_focus() -> No
         foreground = windows.foreground()
         panel.agent.begin("Find my workbook", panel.stop)
         panel.pump()
-        work = view.cards[Kind.WORK]
+        work = view.cards[TurnKey(0)]
         request = view.cards[MessageKey(0)]
         assert windows.is_visible(work.handle)
         assert work.stop.winfo_manager() == "pack"
@@ -572,17 +796,17 @@ def test_native_notifications_are_idle_until_needed_and_never_take_focus() -> No
         publish = panel.agent.updates()
         publish(ReasoningSummary("thought", "Checking **recent files**.", 1))
         panel.pump()
-        assert view.cards[Kind.WORK] is work
+        assert view.cards[TurnKey(0)] is work
         assert work.text.get("1.0", "end-1c") == ""
         assert view.cards[MessageKey(0)] is request and request.text.get("1.0", "end-1c") == "Find my workbook"
         panel.advance(3600)
-        assert work.handle == view.cards[Kind.WORK].handle
+        assert work.handle == view.cards[TurnKey(0)].handle
         publish(Answer("reply", "Found **budget.xlsx**.", 2, StreamState.COMPLETE))
         panel.agent.done("Found **budget.xlsx**.")
         panel.agent.finish()
         panel.pump()
-        assert Kind.WORK not in view.cards and len(view.cards) == 2
-        reply = view.cards[MessageKey(2)]
+        assert view.cards[TurnKey(0)] is work and len(view.cards) == 2
+        reply = work
         assert reply.text.tag_ranges("bold")
         assert reply.stop.winfo_manager() == ""
         assert reply.text.bbox("1.0") is not None
@@ -604,7 +828,7 @@ def test_native_stack_moves_up_retargets_and_bounds_windows_even_during_bursts()
         panel.pump()
         panel.advance(.3)
         request = view.cards[MessageKey(0)]
-        work = view.cards[Kind.WORK]
+        work = view.cards[TurnKey(0)]
         control_bounds = windows.outer_rect(work.handle)
         original = windows.outer_rect(request.handle)
         panel.agent.say("The first reply.")
@@ -616,12 +840,12 @@ def test_native_stack_moves_up_retargets_and_bounds_windows_even_during_bursts()
         panel.pump()
         assert request.motion is not None
         assert request.motion.start == current
-        assert windows.outer_rect(work.handle) == control_bounds
+        assert work.motion is not None and work.motion.end.y < control_bounds.top
         for index in range(12):
             panel.agent.say(f"Reply {index} with **Markdown**.")
             panel.pump()
             assert len(view.cards) <= MAX_VISIBLE
-            assert Kind.WORK in view.cards
+            assert TurnKey(0) in view.cards
         panel.advance(.5)
         active_timer = view.animation_timer
         assert active_timer is not None  # the active work's spinner still runs
@@ -645,7 +869,7 @@ def test_spinner_reuses_widgets_pauses_for_questions_and_cleans_up_when_done() -
         panel.agent.begin("Find **the workbook**", panel.stop)
         panel.pump()
         panel.advance(.3)
-        work = panel.view.cards[Kind.WORK]
+        work = panel.view.cards[TurnKey(0)]
         items = work.indicator.find_all()
         indicator = cast(IndicatorReading, work.indicator)
         angle = indicator.itemcget("spin", "start")
@@ -680,38 +904,38 @@ def test_spinner_reuses_widgets_pauses_for_questions_and_cleans_up_when_done() -
         assert not panel.view.cards
 
 
-def test_semantic_colors_and_readable_material_fallbacks_follow_live_updates() -> None:
+def test_tinted_glass_and_readable_material_fallbacks_follow_live_updates() -> None:
     with notifications() as panel:
         panel.view.material_preference = lambda: appearance.Material.SOLID
         panel.agent.begin("Read the workbook", panel.stop)
         panel.pump()
-        work = panel.view.cards[Kind.WORK]
+        work = panel.view.cards[TurnKey(0)]
         window = cast(WindowReading, work.window)
-        thinking = cast(str, work.label.cget("foreground"))
         assert not work.glass and not window.attributes("-transparentcolor")
+        assert cast(str, work.text.cget("background")) != cast(str, panel.view.cards[MessageKey(0)].text.cget("background"))
         publish = panel.agent.updates()
         publish(ToolActivity("tool", "read_file", "budget.xlsx", 1))
         panel.pump()
-        action_card = panel.view.cards[MessageKey(1)]
-        action = cast(str, action_card.label.cget("foreground"))
+        work.toggle(animate=False)
         publish(ToolActivity("tool", "read_file", "budget.xlsx", 2, Failed("Missing file")))
         panel.pump()
-        assert panel.view.cards[MessageKey(1)] is action_card
-        error = cast(str, action_card.label.cget("foreground"))
-        assert len({thinking, action, error}) == 3
+        assert panel.view.cards[TurnKey(0)] is work
+        assert "Missing file" in work.details.get("1.0", "end-1c") and work.details.tag_ranges("step_error")
         panel.view.material_preference = lambda: appearance.Material.GLASS
         with patch("assistant.agent_toasts.appearance._SetWindowCompositionAttribute", return_value=0):
             panel.view.refresh()
             panel.pump()
             assert not work.glass and not window.attributes("-transparentcolor")
-            assert action_card.text.bbox("1.0") is not None
+            assert work.details.bbox("1.0") is not None
         panel.view.material_preference = lambda: appearance.Contrast("#ffffff", "#000000")
         panel.view.refresh()
         panel.pump()
         assert not work.glass and not window.attributes("-transparentcolor")
         assert cast(str, work.text.cget("background")) == "#ffffff"
         assert cast(str, work.text.cget("foreground")) == "#000000"
+        assert cast(str, work.details.cget("foreground")) == "#000000"
         assert cast(str, panel.view.cards[MessageKey(0)].text.cget("foreground")) == "#000000"
+
 
 
 def test_hovering_empty_glass_pauses_expiry_and_closing_cancels_pointer_observation() -> None:
@@ -758,7 +982,7 @@ def test_questions_can_be_answered_or_stopped_by_voice_without_opening_history()
             assert panel.requested.wait(timeout=2)
             panel.pump()
             panel.advance(3600)
-            question = panel.view.cards[MessageKey(1)]
+            question = panel.view.cards[TurnKey(0)]
             assert "Hold N" in cast(str, question.hint.cget("text"))
             assert question.hint.winfo_viewable()
             assert "Open this?" in question.text.get("1.0", "end-1c")
@@ -766,17 +990,17 @@ def test_questions_can_be_answered_or_stopped_by_voice_without_opening_history()
             assert pending.result() == "The revenue sheet."
         panel.pump()
         assert panel.view.history is None
-        assert panel.view.cards[MessageKey(1)] is question
-        assert panel.view.cards[ResponseKey(1)].text.get("1.0", "end-1c") == "The revenue sheet."
-        assert "The revenue sheet." not in question.text.get("1.0", "end-1c")
+        assert panel.view.cards[TurnKey(0)] is question
+        assert "The revenue sheet." in question.text.get("1.0", "end-1c")
+        assert "Open this?" in question.text.get("1.0", "end-1c")
         panel.requested.clear()
         with asking(panel.agent.inputs) as pending:
             assert panel.requested.wait(timeout=2)
             panel.pump()
-            approval = panel.view.cards[MessageKey(2)]
+            approval = panel.view.cards[TurnKey(0)]
             assert "approve" in cast(str, approval.hint.cget("text"))
             assert approval.hint.winfo_viewable()
-            work = panel.view.cards[Kind.WORK]
+            work = panel.view.cards[TurnKey(0)]
             work.stop.invoke()
             assert pending.result() is None
         panel.pump()
@@ -790,7 +1014,7 @@ def test_history_keeps_expired_replies_and_returns_to_active_notifications() -> 
         panel.agent.say("## Result\n\n" + "A long response with **formatting**. " * 120)
         panel.agent.finish()
         panel.pump()
-        reply = panel.view.cards[MessageKey(1)]
+        reply = panel.view.cards[TurnKey(0)]
         assert reply.height <= reply.maximum
         assert reply.text.get("1.0", "end-1c").count("A long response") == 120
         assert reply.scrollbar.winfo_viewable()
@@ -808,7 +1032,7 @@ def test_history_keeps_expired_replies_and_returns_to_active_notifications() -> 
         history.hide()
         panel.pump()
         assert not windows.is_visible(history.handle)
-        assert Kind.WORK in panel.view.cards
+        assert TurnKey(2) in panel.view.cards
         assert MessageKey(2) in panel.view.cards and MessageKey(0) not in panel.view.cards
         panel.agent.say("The follow-up is done.")
         panel.agent.finish()

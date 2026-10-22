@@ -7,7 +7,9 @@ from typing import cast
 from unittest import TestCase
 from unittest.mock import patch
 
-from assistant.browser import MAX_OUTPUT, MAX_RESPONSE, Browser, BrowserError, Cdp, InterruptedError, Managed, web_url
+from assistant.browser import MAX_OUTPUT, MAX_RESPONSE, Attached, Browser, BrowserError, Cdp, InterruptedError, Managed, Product, Separate, web_url
+from assistant.browser_session import BrowserSession, Source
+from assistant.browser_tabs import TabStrip
 from assistant.llm import Json
 
 
@@ -40,6 +42,33 @@ class Channel:
 
     def close(self) -> None:
         self.closed = True
+
+    @classmethod
+    def results(cls, *results: dict[str, Json]) -> Channel:
+        return cls(*(json.dumps(dict[str, Json](id=index, result=result)) for index, result in enumerate(results, 1)))
+
+
+class ScriptedSessions:
+    def __init__(self, *sessions: BrowserSession | Exception) -> None:
+        self.sessions = list(sessions)
+        self.opened: list[tuple[Source, bool]] = []
+
+    def open(self, source: Source, cancel: threading.Event, *, visible: bool = False) -> BrowserSession:
+        self.opened.append((source, visible))
+        session = self.sessions.pop(0)
+        if isinstance(session, Exception):
+            raise session
+        return session
+
+
+def connected_browser(
+    path: Path, channel: Channel, *, owner: Attached | Managed | None = None, strip: TabStrip | None = None,
+) -> Browser:
+    owner = owner if owner is not None else Attached(Product.EDGE)
+    source = owner.product if isinstance(owner, Attached) else Separate.PROFILE
+    browser = Browser(path, source=source, opener=ScriptedSessions(BrowserSession(Cdp(channel), owner)), strip=strip)
+    browser.connect(threading.Event(), visible=isinstance(owner, Managed) and owner.visible)
+    return browser
 
 
 def test_cdp_ignores_events_and_late_replies_and_preserves_session() -> None:
@@ -107,30 +136,17 @@ def test_browser_accepts_web_pages_but_not_embedded_credentials_or_local_schemes
             web_url(url)
 
 
-class SnapshotBrowser(Browser):
-    __slots__ = ("snapshot",)
-
-    def __init__(self, path: Path, snapshot: dict[str, Json]) -> None:
-        super().__init__(path)
-        self.snapshot = snapshot
-
-    def _session(self, target: str, cancel: threading.Event) -> str:
-        return "fixture-session"
-
-    def _world(self, session: str, frame: str, cancel: threading.Event) -> tuple[int, dict[str, Json]]:
-        return 1, {"frame": {"id": "main", "url": "https://example.com"}}
-
-    def _evaluate(self, expression: str, session: str, context: int, cancel: threading.Event, *, timeout: float = 15) -> Json:
-        return self.snapshot
-
-
 def test_browser_snapshot_limits_keep_valid_json_and_progress_offsets(tmp_path: Path) -> None:
     source: dict[str, Json] = {
         "title": "Fixture", "url": "https://example.com", "text": "\x00" * 6000, "text_total": 7000,
         "controls": [{"id": str(i), "name": "n" * 300} for i in range(100)],
         "offset": 4, "total": 104, "more_controls": False,
     }
-    browser = SnapshotBrowser(tmp_path, source)
+    channel = Channel.results(
+        {"targetInfos": [{"type": "page", "targetId": "fixture"}]}, {"sessionId": "page-session"}, {},
+        {"frameTree": {"frame": {"id": "main", "url": "https://example.com"}}}, {"executionContextId": 1}, {"result": {"value": source}},
+    )
+    browser = connected_browser(tmp_path, channel)
     output = browser.request("snapshot", {"target_id": "fixture", "offset": 4}, threading.Event()).text
     assert len(output) <= MAX_OUTPUT
     page = decoded(output)
@@ -140,11 +156,42 @@ def test_browser_snapshot_limits_keep_valid_json_and_progress_offsets(tmp_path: 
 
 
 def test_browser_bad_screenshot_is_reported_as_a_tool_error(tmp_path: Path) -> None:
-    browser = SnapshotBrowser(tmp_path, {})
     for data in ("invalid base64!", "aGVsbG8="):
-        reply: dict[str, Json] = {"data": data}
-        with patch.object(Browser, "_call", return_value=reply), TestCase().assertRaisesRegex(BrowserError, "invalid"):
+        channel = Channel.results(
+            {"targetInfos": [{"type": "page", "targetId": "fixture"}]}, {"sessionId": "page-session"}, {}, {"data": data},
+        )
+        browser = connected_browser(tmp_path, channel)
+        with TestCase().assertRaisesRegex(BrowserError, "invalid"):
             browser.request("screenshot", {"target_id": "fixture"}, threading.Event())
+        browser.close()
+
+
+def test_closing_a_tab_does_not_require_page_scripting_access(tmp_path: Path) -> None:
+    channel = Channel(
+        '{"id":1,"result":{"targetInfos":[{"type":"page","targetId":"settings","url":"edge://settings"}]}}',
+        '{"id":2,"result":{"success":true}}',
+        '{"id":3,"result":{"targetInfos":[]}}',
+    )
+    browser = connected_browser(tmp_path / "unused", channel)
+    try:
+        closed = decoded(browser.request("close", {"target_id": "settings"}, threading.Event()).text)
+        assert closed == {"target_id": "settings", "state": "closed"}
+        assert [command["method"] for command in channel.sent] == ["Target.getTargets", "Target.closeTarget", "Target.getTargets"]
+    finally:
+        browser.close()
+
+
+def test_close_waits_for_removal_without_repeating_the_request(tmp_path: Path) -> None:
+    targets: dict[str, Json] = {"targetInfos": [{"type": "page", "targetId": "closing", "url": "about:blank"}]}
+    replies: tuple[Json, ...] = (targets, {"success": True}, targets, {"targetInfos": []})
+    channel = Channel(*(json.dumps(dict[str, Json](id=index, result=reply)) for index, reply in enumerate(replies, 1)))
+    browser = connected_browser(tmp_path / "unused", channel)
+    try:
+        result = decoded(browser.request("close", {"target_id": "closing"}, threading.Event()).text)
+        assert result["state"] == "closed"
+        assert [command["method"] for command in channel.sent].count("Target.closeTarget") == 1
+    finally:
+        browser.close()
 
 
 def test_browser_waits_for_the_root_after_job_termination_instead_of_killing_it_twice(tmp_path: Path) -> None:
@@ -176,7 +223,6 @@ def test_browser_waits_for_the_root_after_job_termination_instead_of_killing_it_
         def close(self) -> None:
             process.job_closed = True
 
-    browser = Browser(tmp_path / "profile")
-    browser.owner = Managed(process, Job(), False)
+    browser = connected_browser(tmp_path / "profile", Channel.results({}), owner=Managed(process, Job(), False))
     browser.close()
     assert process.job_closed

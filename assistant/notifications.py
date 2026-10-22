@@ -13,6 +13,7 @@ from .agent_session import (
     Answer,
     Answered,
     Approval,
+    Cancelled,
     ChatMessage,
     Failed,
     MeetingMessage,
@@ -20,6 +21,7 @@ from .agent_session import (
     ReasoningSummary,
     Snapshot,
     StreamState,
+    Succeeded,
     ToolActivity,
     ToolStatus,
     pending,
@@ -36,7 +38,6 @@ REVEAL_SECONDS: Final = .16  # Vault of Glass: motion.fast
 
 
 class Kind(Enum):
-    WORK = auto()
     RECORDING = auto()
 
 
@@ -66,7 +67,12 @@ class ResponseKey:
     index: int
 
 
-type Key = Kind | MessageKey | ResponseKey
+@dataclass(frozen=True, slots=True)
+class TurnKey:
+    request: int
+
+
+type Key = Kind | MessageKey | ResponseKey | TurnKey
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +80,12 @@ class Working:
     generation: int
     phase: Busy
     queued: int
+
+
+class Settled(Enum):
+    FINISHED = auto()
+    STOPPED = auto()
+    ATTENTION = auto()
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,11 +101,20 @@ class Response:
 
 
 @dataclass(frozen=True, slots=True)
+class Turn:
+    """One assistant bubble owns its steps and result, even after completion."""
+
+    request: int
+    entries: tuple[Entry | Response, ...]
+    state: Working | Settled
+
+
+@dataclass(frozen=True, slots=True)
 class Recording:
     state: RecordingState
 
 
-type Content = Working | Entry | Response | Recording
+type Content = Turn | Entry | Response | Recording
 
 
 class Held(Enum):
@@ -132,8 +153,8 @@ class Stack:
 
 def key_of(content: Content) -> Key:
     match content:
-        case Working():
-            return Kind.WORK
+        case Turn(request):
+            return TurnKey(request)
         case Recording():
             return Kind.RECORDING
         case Entry(index):
@@ -146,8 +167,8 @@ def key_of(content: Content) -> Key:
 
 def active(content: Content) -> bool:
     match content:
-        case Working():
-            return True
+        case Turn(entries=entries, state=state):
+            return isinstance(state, Working) or any(active(entry) for entry in entries)
         case Recording(state):
             return state.phase in ("starting", "recording", "stopping", "finishing", "paused")
         case Entry(message=Answer(state=StreamState.RUNNING) | ToolActivity(outcome=ToolStatus.RUNNING)):
@@ -162,8 +183,8 @@ def active(content: Content) -> bool:
 
 def can_stop(content: Content) -> bool:
     match content:
-        case Working():
-            return True
+        case Turn(state=state):
+            return isinstance(state, Working)
         case Recording(state):
             return state.capturing
         case Entry() | Response():
@@ -174,27 +195,98 @@ def can_stop(content: Content) -> bool:
 
 def observe(session: Snapshot) -> tuple[Content, ...]:
     result: list[Content] = []
+    requests = tuple(index for index, message in enumerate(session.messages) if isinstance(message, ChatMessage) and message.speaker == "You")
+    latest = requests[-1] if requests else -1
+    initial_input = any(isinstance(message, (Question, Approval)) for message in session.messages[:requests[0] if requests else None])
+    request: int | None = -1 if initial_input or (latest == -1 and session.busy) else None
+    entries: list[Entry | Response] = []
+
+    def finish_turn() -> None:
+        if request is None:
+            return
+        state: Working | Settled = settled(tuple(entries))
+        if request == latest:
+            if session.busy or session.waiting:
+                phase = Busy.STOPPING if session.stopping else Busy.WAITING if session.waiting else Busy.THINKING
+                state = Working(session.generation, phase, len(session.queued))
+            elif session.result == "Stopped":
+                state = Settled.STOPPED
+            elif session.result == "Needs attention":
+                state = Settled.ATTENTION
+        result.append(Turn(request, tuple(entries), state))
+
     for index, message in enumerate(session.messages):
         match message:
-            case ChatMessage() | Answer() | ToolActivity() | Question() | Approval():
+            case ChatMessage(speaker="You"):
+                finish_turn()
                 result.append(Entry(index, message))
+                request, entries = index, []
+            case ChatMessage() | Answer() | ToolActivity() | Question() | Approval():
+                target = result if request is None else entries
+                target.append(Entry(index, message))
                 match message:
                     case Question(reply=Answered(text)):
-                        result.append(Response(index, text))
+                        target.append(Response(index, text))
                     case Approval(decision="approved" | "declined" as decision):
-                        result.append(Response(index, decision.capitalize()))
+                        target.append(Response(index, decision.capitalize()))
                     case _:
                         pass
             case MeetingMessage() | ReasoningSummary():
                 pass
             case _:
                 assert_never(message)
-    if session.busy or session.waiting:
-        phase = Busy.STOPPING if session.stopping else Busy.WAITING if session.waiting else Busy.THINKING
-        result.append(Working(session.generation, phase, len(session.queued)))
+    finish_turn()
     if session.recording.visible:
         result.append(Recording(session.recording))
     return tuple(result)
+
+
+def settled(entries: tuple[Entry | Response, ...]) -> Settled:
+    for entry in reversed(entries):
+        match entry:
+            case Entry(message=ChatMessage(speaker="Error") | ToolActivity(outcome=Failed())):
+                return Settled.ATTENTION
+            case Entry(message=Answer(state=StreamState.INTERRUPTED) | ToolActivity(outcome=ToolStatus.CANCELLED)):
+                return Settled.STOPPED
+            case Entry(message=ChatMessage(speaker="Toolkit", text=text)) if text.startswith("Stopped"):
+                return Settled.STOPPED
+            case Entry(message=Question(reply=Cancelled()) | Approval(decision="cancelled")):
+                return Settled.STOPPED
+            case Entry(message=ChatMessage() | Answer() | ToolActivity(outcome=Succeeded())):
+                return Settled.FINISHED
+            case _:
+                pass
+    return Settled.FINISHED
+
+
+def results(turn: Turn) -> tuple[Entry | Response, ...]:
+    """Keep the latest reply and pending input attached when steps are collapsed.
+
+    An answered question stays visible with its response until a new reply or
+    question replaces it. Earlier replies and resolved input remain in steps.
+    """
+    latest = next((entry.index for entry in reversed(turn.entries) if isinstance(entry, Entry)
+                   and isinstance(entry.message, (Answer, ChatMessage, Question, Approval))), -1)
+    return tuple(entry for entry in turn.entries if entry.index == latest
+                 or (isinstance(entry, Entry) and isinstance(entry.message, (Question, Approval)) and pending(entry.message)))
+
+
+def steps(turn: Turn) -> tuple[Entry | Response, ...]:
+    attached = {entry.index for entry in results(turn)}
+    return tuple(entry for entry in turn.entries if entry.index not in attached)
+
+
+def caption(content: Content) -> str:
+    if not isinstance(content, Turn):
+        return ""
+    actions = tuple(entry.message for entry in content.entries if isinstance(entry, Entry) and isinstance(entry.message, ToolActivity))
+    count = len(actions)
+    if not count:
+        return "Show steps" if steps(content) else ""
+    complete = sum(isinstance(action.outcome, Succeeded) for action in actions)
+    if complete == count:
+        return f"{count} completed step" + ("s" if count != 1 else "")
+    return f"{complete} of {count} steps complete"
 
 
 def reading_seconds(content: Content) -> float:
@@ -209,10 +301,20 @@ def advance(stack: Stack, session: Snapshot, now: float) -> Stack:
     previous = {key_of(content): content for content in stack.observed}
     existing = {toast.key: toast for toast in stack.toasts}
     observed = observe(session)
+    current = next((content.request for content in reversed(observed) if isinstance(content, Turn)), None)
+    remembered: list[Content] = []
     toasts: list[Toast] = []
     serial = stack.serial
-    for content in observed:
+    for observation in observed:
+        content = observation
         key = key_of(content)
+        prior = previous.get(key)
+        # Session.result belongs only to the newest turn. Preserve an older
+        # completion once observed so a follow-up cannot revive it as changed.
+        if (isinstance(content, Turn) and content.request != current and isinstance(prior, Turn)
+                and isinstance(prior.state, Settled) and content.entries == prior.entries):
+            content = replace(content, state=prior.state)
+        remembered.append(content)
         toast = existing.get(key)
         changed = previous.get(key) != content
         if toast is None and not changed:
@@ -221,7 +323,7 @@ def advance(stack: Stack, session: Snapshot, now: float) -> Stack:
             serial += 1
             toast = Toast(key, content, Held.ACTIVE, serial)
         lifetime = toast.lifetime
-        if active(content) or ((session.busy or session.waiting) and isinstance(content, (Entry, Response))):
+        if active(content) or ((session.busy or session.waiting) and isinstance(content, (Turn, Entry, Response))):
             if lifetime is not Held.READING:
                 lifetime = Held.ACTIVE
         elif lifetime is Held.READING:
@@ -236,7 +338,7 @@ def advance(stack: Stack, session: Snapshot, now: float) -> Stack:
     # leaves this projection; every message remains in the session's history.
     toasts.sort(key=lambda toast: (priority(toast.content), toast.order), reverse=True)
     visible = tuple(sorted(toasts[:MAX_VISIBLE], key=order_of))
-    return Stack(session.identity, observed, visible, serial)
+    return Stack(session.identity, tuple(remembered), visible, serial)
 
 
 def reading_hold(stack: Stack, key: Key, reading: bool, now: float, *, busy: bool, hovered: bool) -> Stack:
@@ -257,7 +359,9 @@ def reading_hold(stack: Stack, key: Key, reading: bool, now: float, *, busy: boo
 
 def priority(content: Content) -> int:
     match content:
-        case Working() | Recording() if active(content):
+        case Turn() if hint(content):
+            return 2
+        case Turn() | Recording() if active(content):
             return 3
         case Entry(message=Question() | Approval() as message) if pending(message):
             return 2
@@ -265,9 +369,19 @@ def priority(content: Content) -> int:
             return int(active(content))
 
 
-def order_of(toast: Toast) -> tuple[int, int]:
-    """The conversation grows above the compact controls at the bottom."""
-    return (2 if isinstance(toast.content, Working) else 1 if isinstance(toast.content, Recording) else 0, toast.order)
+def order_of(toast: Toast) -> tuple[int, int, int]:
+    """A turn starts with its request, then thinking and its chronological activity."""
+    match toast.content:
+        case Entry(index):
+            return 0, index, 0
+        case Response(index):
+            return 0, index, 1
+        case Turn(request=request):
+            return 0, request, 2
+        case Recording():
+            return 1, 0, 0
+        case _:
+            assert_never(toast.content)
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,8 +440,8 @@ def body(content: Content) -> str:
     match content:
         case Entry(message=Question() | Approval() as message):
             return message.text + ("\n\n" + message.detail if message.detail else "")
-        case Working():
-            return ""
+        case Turn():
+            return "\n\n".join(body(entry) for entry in results(content))
         case Entry(message=message):
             return message.text
         case Response(text=text):
@@ -340,10 +454,22 @@ def body(content: Content) -> str:
 
 def heading(content: Content) -> str:
     match content:
-        case Working(phase=Busy.STOPPING):
-            return "Stopping…"
-        case Working(queued=queued):
-            return "Toolkit" + (f" · {queued} queued" if queued else "")
+        case Turn(state=progress):
+            match progress:
+                case Working(phase=Busy.STOPPING):
+                    return "Stopping…"
+                case Working(phase=Busy.WAITING):
+                    return "Waiting for you"
+                case Working(queued=queued):
+                    return "Thinking" + (f" · {queued} queued" if queued else "")
+                case Settled.FINISHED:
+                    return "Finished"
+                case Settled.STOPPED:
+                    return "Stopped"
+                case Settled.ATTENTION:
+                    return "Needs attention"
+                case _:
+                    assert_never(progress)
         case Entry(message=message):
             return presentation(message).role
         case Response():
@@ -356,6 +482,8 @@ def heading(content: Content) -> str:
 
 def hint(content: Content) -> str:
     match content:
+        case Turn():
+            return next((text for entry in results(content) if (text := hint(entry))), "")
         case Entry(message=Question() as message) if pending(message):
             return "Hold N to reply by voice"
         case Entry(message=Approval() as message) if pending(message):
@@ -376,13 +504,13 @@ def plain(content: Content) -> bool:
 
 def spinning(content: Content) -> bool:
     match content:
-        case Working(phase=Busy.WAITING):
+        case Turn(state=Working(phase=Busy.WAITING)):
             return False
-        case Working():
+        case Turn(state=Working()):
             return True
         case Recording(state=RecordingState(phase="starting" | "stopping" | "finishing")):
             return True
-        case Entry() | Response() | Recording():
+        case Turn() | Entry() | Response() | Recording():
             return False
         case _:
             assert_never(content)
@@ -392,15 +520,19 @@ def tone(content: Content) -> Tone:
     match content:
         case Entry(message=ChatMessage(speaker="You")) | Response():
             return Tone.USER
-        case Working(phase=Busy.WAITING) | Entry(message=Question() | Approval()):
+        case Turn() if hint(content):
+            return Tone.QUESTION
+        case Entry(message=Question() | Approval()):
             return Tone.QUESTION
         case Entry(message=ToolActivity(outcome=Failed()) | ChatMessage(speaker="Error")):
             return Tone.ERROR
         case Entry(message=ToolActivity()):
             return Tone.ACTION
-        case Working():
+        case Turn(state=Settled.ATTENTION):
+            return Tone.ERROR
+        case Turn(state=Working()):
             return Tone.THINKING
-        case Entry():
+        case Turn() | Entry():
             return Tone.REPLY
         case Recording(state=RecordingState(phase="paused" | "interrupted")):
             return Tone.QUESTION
@@ -416,6 +548,7 @@ class Frame:
     width: float
     height: float
     alpha: float
+    details: float = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -434,7 +567,8 @@ class Motion:
         return Frame(self.start.y + (self.end.y - self.start.y) * amount,
                      self.start.width + (self.end.width - self.start.width) * amount,
                      self.start.height + (self.end.height - self.start.height) * amount,
-                     self.start.alpha + (self.end.alpha - self.start.alpha) * amount)
+                     self.start.alpha + (self.end.alpha - self.start.alpha) * amount,
+                     self.start.details + (self.end.details - self.start.details) * amount)
 
     def finished(self, now: float) -> bool:
         return now >= self.started + MOTION_SECONDS

@@ -18,7 +18,7 @@ if sys.platform != "win32":
     raise unittest.SkipTest("Windows continuous audio bindings")
 
 from assistant.llm import RATE
-from assistant.meeting_store import MeetingStore
+from assistant.meeting_store import MeetingArchive, MeetingStore
 from assistant.meetings import Meetings
 from winapi import audio, recording
 
@@ -225,7 +225,7 @@ def test_meeting_service_saves_speech_after_a_microphone_dropout(tmp_path: Path)
                 assert api.ticks == api.stop_at
 
     with fake_endpoint() as endpoint:
-        service = Meetings(settings(endpoint.url), lambda source: Capture(), root=tmp_path)
+        service = Meetings(settings(endpoint.url), lambda source: Capture(), archive=MeetingArchive(tmp_path))
         try:
             service.start()
             wait_for(lambda: service.snapshot().phase in ("saved", "interrupted"))

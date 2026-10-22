@@ -67,10 +67,14 @@ def test_explicit_approval_mode_can_decline_browser_changes_and_teams_sends() ->
     for name, arguments in (
         ("browser_attach", {"browser": "edge"}),
         ("browser_action", {"target_id": "page", "id": "button", "action": "click"}),
+        ("browser_group", {"tab_ids": [7], "title": "Toolkit"}),
+        ("browser_ungroup", {"tab_ids": [7]}),
+        ("browser_tab", {"tab_id": 7, "action": "pin"}),
+        ("browser_close", {"group_id": 23}),
         ("teams_send_message", {"chat_id": "chat", "text": "message"}),
     ):
         assert not agent.call(ToolCall("fixture", name, json.dumps(arguments))).ok
-    assert sum(line.startswith("confirm") for line in machine.log) == 3
+    assert sum(line.startswith("confirm") for line in machine.log) == 7
     assert not any(line.startswith(("browser ", "teams ")) for line in machine.log)
 
 
@@ -83,6 +87,24 @@ def test_browser_images_invalidate_desktop_coordinates() -> None:
     click = agent.call(ToolCall("desktop", "click", '{"x":10,"y":10}'))
     assert not click.ok and "screenshot first" in click.text
     assert not any(line.startswith("click ") for line in machine.log)
+
+
+def test_agent_can_manage_tabs_and_groups_without_default_approval_prompts() -> None:
+    machine = FakeMachine()
+    agent = Agent(Settings("", "", "", "", "", "", ""), machine, FakeWindow(), threading.Event(), journal=lambda _: None)
+    for name, arguments in (
+        ("browser_tabs", {"view": "strip"}),
+        ("browser_open", {"url": "about:blank", "group_id": 23}),
+        ("browser_group", {"tab_ids": [7, 8], "title": "Toolkit", "collapsed": True}),
+        ("browser_group", {"group_id": 23, "title": "Research", "index": -1}),
+        ("browser_ungroup", {"tab_ids": [8]}),
+        ("browser_tab", {"tab_id": 7, "action": "pin"}),
+        ("browser_close", {"group_id": 23}),
+    ):
+        result = agent.call(ToolCall("tabs", name, json.dumps(arguments)))
+        assert result.ok, (name, result.text)
+    assert len(machine.log) == 7 and all(line.startswith("browser ") for line in machine.log)
+    assert {"browser_group", "browser_ungroup", "browser_tab"} <= {spec.name for spec in BROWSER_SPECS}
 
 
 def test_stopped_agent_does_not_start_background_tools_or_log_their_arguments() -> None:

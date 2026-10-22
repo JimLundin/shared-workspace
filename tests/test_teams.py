@@ -1,8 +1,6 @@
 """Teams setup, delegated auth and sends against a controlled transport."""
 
-import os
 import threading
-import time
 import zlib
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -10,12 +8,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 from unittest import TestCase
-from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 from assistant.graph_http import GraphError
 from assistant.llm import Json
-from assistant.teams import GRAPH, MAX_OUTPUT, SCOPES, Teams, TokenStore
+from assistant.teams import GRAPH, MAX_OUTPUT, SCOPES, DeviceFlow, Poll, Teams, TokenStore, WaitForPoll, defer_poll, sign_in_action
 
 from .test_browser import decoded
 
@@ -24,8 +21,26 @@ TENANT = "22222222-2222-2222-2222-222222222222"
 OWN = "33333333-3333-3333-3333-333333333333"
 RECIPIENT = "44444444-4444-4444-4444-444444444444"
 CONFIG: dict[str, Json] = {"client_id": CLIENT, "tenant_id": TENANT}
-ENVIRONMENT = {"TOOLKIT_GRAPH_CLIENT_ID": "", "TOOLKIT_GRAPH_TENANT_ID": ""}
 type Reply = tuple[int, dict[str, Json]] | Exception
+
+
+@dataclass(slots=True)
+class ManualClock:
+    elapsed: float = 0
+
+    def time(self) -> float:
+        return 1_700_000_000 + self.elapsed
+
+    def monotonic(self) -> float:
+        return self.elapsed
+
+    def advance(self, seconds: float) -> None:
+        self.elapsed += seconds
+
+    def wait(self, cancel: threading.Event, seconds: float) -> bool:
+        if not cancel.is_set():
+            self.advance(seconds)
+        return cancel.is_set()
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,10 +49,12 @@ class Request:
     url: str
     headers: dict[str, str]
     body: bytes | None
+    at: float
 
 
 @dataclass(slots=True)
 class Http:
+    clock: ManualClock = field(default_factory=ManualClock)
     replies: list[Reply] = field(default_factory=list[Reply])
     received: list[Request] = field(default_factory=list[Request])
     stop_during_request: bool = False
@@ -45,7 +62,7 @@ class Http:
     def request(
         self, method: str, url: str, headers: dict[str, str], body: bytes | None, cancel: threading.Event,
     ) -> tuple[int, dict[str, Json]]:
-        self.received.append(Request(method, url, headers, body))
+        self.received.append(Request(method, url, headers, body, self.clock.monotonic()))
         if self.stop_during_request:
             cancel.set()
             raise GraphError("Stopped during the request.")
@@ -58,17 +75,16 @@ class Http:
 
 @contextmanager
 def integration(folder: Path, *, signed_in: bool = False) -> Generator[tuple[Teams, Http]]:
-    with patch.dict(os.environ, ENVIRONMENT):
-        # Compression is only a deterministic fake for the DPAPI boundary.
-        store = TokenStore(folder / "tokens.bin", protect=zlib.compress, unprotect=zlib.decompress)
-        http = Http()
-        teams = Teams(folder, store=store, http=http)
-        teams.request("configure", CONFIG, threading.Event())
-        if signed_in:
-            store.write({
-                **CONFIG, "access_token": "fixture-access-secret", "refresh_token": "fixture-refresh-secret", "expires_at": time.time() + 3600,
-            })
-        yield teams, http
+    # Compression is only a deterministic fake for the DPAPI boundary.
+    store = TokenStore(folder / "tokens.bin", protect=zlib.compress, unprotect=zlib.decompress)
+    http = Http()
+    teams = Teams(folder, store=store, http=http, clock=http.clock)
+    teams.request("configure", CONFIG, threading.Event())
+    if signed_in:
+        store.write({
+            **CONFIG, "access_token": "fixture-access-secret", "refresh_token": "fixture-refresh-secret", "expires_at": http.clock.time() + 3600,
+        })
+    yield teams, http
 
 
 def begin(teams: Teams, http: Http) -> str:
@@ -78,29 +94,55 @@ def begin(teams: Teams, http: Http) -> str:
     }))
     result = teams.request("sign_in", {}, threading.Event())
     assert teams.flow is not None
-    teams.flow.next_poll = 0
+    http.clock.advance(1)
     return result
 
 
 def test_teams_setup_is_offline_and_unconfigured_status_is_actionable(tmp_path: Path) -> None:
-    with patch.dict(os.environ, ENVIRONMENT):
-        http = Http()
-        teams = Teams(tmp_path / "teams", http=http)
-        status = decoded(teams.request("status", {}, threading.Event()))
-        assert not status["configured"] and not teams.folder.exists() and not http.received
-        assert "teams_configure" in cast(str, status["message"])
-        result = decoded(teams.request("configure", CONFIG, threading.Event()))
-        assert result["configured"] and decoded((teams.folder / "config.json").read_text()) == CONFIG
-        assert not teams.store.path.exists() and not http.received
-        assert set(SCOPES) == {"User.Read", "User.ReadBasic.All", "Chat.ReadBasic", "Chat.Create", "ChatMessage.Send"}
+    http = Http()
+    teams = Teams(tmp_path / "teams", http=http, clock=http.clock)
+    status = decoded(teams.request("status", {}, threading.Event()))
+    assert not status["configured"] and not teams.folder.exists() and not http.received
+    assert "teams_configure" in cast(str, status["message"])
+    result = decoded(teams.request("configure", CONFIG, threading.Event()))
+    assert result["configured"] and decoded((teams.folder / "config.json").read_text()) == CONFIG
+    assert not teams.store.path.exists() and not http.received
+    assert set(SCOPES) == {"User.Read", "User.ReadBasic.All", "Chat.ReadBasic", "Chat.Create", "ChatMessage.Send"}
 
 
 def test_environment_overrides_cannot_silently_ignore_saved_configuration(tmp_path: Path) -> None:
     overrides = {"TOOLKIT_GRAPH_CLIENT_ID": RECIPIENT}
-    with integration(tmp_path) as (teams, http), patch.dict(os.environ, overrides):
+    with integration(tmp_path) as (teams, http):
+        overridden = Teams(teams.folder, store=teams.store, http=http, clock=http.clock, environment=overrides)
+        overrides["TOOLKIT_GRAPH_CLIENT_ID"] = CLIENT
         with TestCase().assertRaisesRegex(GraphError, "overrides"):
-            teams.request("configure", CONFIG, threading.Event())
+            overridden.request("configure", CONFIG, threading.Event())
         assert not http.received
+
+
+def test_device_flow_deadlines_and_poll_intervals_are_pure_observations() -> None:
+    flow = DeviceFlow("secret", "CODE", "https://microsoft.com/devicelogin", 10, 2, 3)
+    assert sign_in_action(flow, 2, 8, stopped=False) == WaitForPoll(.05)
+    assert sign_in_action(flow, 3, 8, stopped=False) is Poll.REQUEST
+    assert sign_in_action(flow, 3, 3, stopped=False) is Poll.PENDING
+    assert sign_in_action(flow, 10, 20, stopped=False) is Poll.EXPIRED
+    assert sign_in_action(flow, 2, 8, stopped=True) is Poll.STOPPED
+    deferred = defer_poll(flow, 4, slow_down=True)
+    assert deferred.interval == 7 and deferred.next_poll == 11 and deferred.expires == 10
+    assert flow.next_poll == 3 and flow.interval == 2
+    assert defer_poll(flow, 4, slow_down=False).next_poll == 6
+
+
+def test_device_flow_polls_on_schedule_after_pending_and_slow_down(tmp_path: Path) -> None:
+    with integration(tmp_path) as (teams, http):
+        begin(teams, http)
+        http.replies.extend([
+            (400, {"error": "authorization_pending"}), (400, {"error": "slow_down"}),
+            (200, {"access_token": "fixture-access-secret", "expires_in": 3600}),
+        ])
+        result = decoded(teams.request("finish_sign_in", {"timeout_seconds": 10}, threading.Event()))
+        assert result["state"] == "signed_in"
+        assert [round(request.at, 3) for request in http.received] == [0, 1, 2, 8]
 
 
 def test_device_flow_keeps_tokens_out_of_results_and_persists_protected_credentials(tmp_path: Path) -> None:
@@ -141,7 +183,7 @@ def test_device_flow_respects_pending_and_slow_down_responses(tmp_path: Path) ->
         assert result["state"] == "waiting_for_sign_in"
         assert teams.flow is not None and teams.flow.interval == 6
         assert len(http.received) == 2
-        teams.flow.expires = time.monotonic() - 1
+        http.clock.advance(900)
         with TestCase().assertRaisesRegex(GraphError, "expired"):
             teams.request("finish_sign_in", {"timeout_seconds": 1}, threading.Event())
         assert teams.flow is None
@@ -149,9 +191,7 @@ def test_device_flow_respects_pending_and_slow_down_responses(tmp_path: Path) ->
 
 def test_expired_tokens_refresh_and_invalid_grants_remove_the_saved_sign_in(tmp_path: Path) -> None:
     with integration(tmp_path, signed_in=True) as (teams, http):
-        saved = teams.store.read()
-        saved["expires_at"] = 0
-        teams.store.write(saved)
+        http.clock.advance(3600)
         http.replies.extend([(200, {"access_token": "refreshed-secret", "expires_in": 3600}), (200, {"value": []})])
         assert decoded(teams.request("list_chats", {}, threading.Event())) == {"chats": []}
         assert parse_qs((http.received[0].body or b"").decode())["grant_type"] == ["refresh_token"]
@@ -160,8 +200,7 @@ def test_expired_tokens_refresh_and_invalid_grants_remove_the_saved_sign_in(tmp_
         assert parse_qs(urlsplit(http.received[1].url).query)["$orderby"] == ["lastMessagePreview/createdDateTime desc"]
         saved = teams.store.read()
         assert saved["refresh_token"] == "fixture-refresh-secret"
-        saved["expires_at"] = 0
-        teams.store.write(saved)
+        http.clock.advance(3600)
         http.replies.append((400, {"error": "invalid_grant"}))
         with TestCase().assertRaisesRegex(GraphError, "Sign in again"):
             teams.request("list_chats", {}, threading.Event())

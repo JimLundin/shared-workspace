@@ -1,6 +1,7 @@
 """Every class we define uses slots, so instances can't grow attributes that
 nobody declared. Enums, exceptions, protocols, tuples, ctypes structures
-and SDK lifecycle hooks are exempt: their bases manage their own storage."""
+and SDK lifecycle hooks manage their own storage. TypedDicts describe dicts,
+not instances of an application class."""
 
 import importlib
 import inspect
@@ -9,6 +10,7 @@ import sys
 from enum import Enum
 from pathlib import Path
 from types import ModuleType
+from typing import is_typeddict
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGES = ("miryoku", "assistant", "winapi")
@@ -33,7 +35,8 @@ def modules() -> list[ModuleType]:
 def exempt(cls: type) -> bool:
     bases = [(base.__module__, base.__qualname__) for base in cls.__mro__]
     return (
-        issubclass(cls, (Enum, BaseException, tuple))
+        is_typeddict(cls)
+        or issubclass(cls, (Enum, BaseException, tuple))
         or ("typing", "Protocol") in bases
         or any(module in ("ctypes", "_ctypes") for module, _ in bases)
         or ("agents.lifecycle", "RunHooksBase") in bases

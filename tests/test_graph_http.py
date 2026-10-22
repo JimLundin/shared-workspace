@@ -8,7 +8,6 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import TestCase
-from unittest.mock import patch
 
 from assistant.graph_http import GraphError, Http
 
@@ -92,7 +91,7 @@ def test_http_has_an_overall_deadline_in_addition_to_socket_timeouts() -> None:
     release = threading.Event()
     with (
         endpoint(b'{}', release=release) as (url, _started, requests),
-        patch("assistant.graph_http.REQUEST_TIMEOUT", .5), TestCase().assertRaisesRegex(GraphError, "timed out"),
+        TestCase().assertRaisesRegex(GraphError, "timed out"),
     ):
-        Http().request("POST", url, {}, None, threading.Event())
+        Http(timeout=.5).request("POST", url, {}, None, threading.Event())
     assert len(requests) == 1

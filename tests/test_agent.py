@@ -7,10 +7,9 @@ import uuid
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Final, cast
-from unittest.mock import patch
 
 from assistant.agent import Agent, Output, allowed, key_strokes
-from assistant.agent_session import LiveMessage
+from assistant.agent_session import LiveMessage, Succeeded, ToolActivity, ToolStatus
 from assistant.geometry import Shot
 from assistant.llm import Json, Settings, ToolCall, settings_from
 from assistant.workspace import Workspace
@@ -371,7 +370,7 @@ def test_stopped_turn_keeps_completed_actions_and_accepts_a_follow_up() -> None:
 
 def test_desktop_requests_do_not_prepare_a_source_workspace(tmp_path: Path) -> None:
     workspace = source(tmp_path)
-    with fake_endpoint() as endpoint, patch.object(Workspace, "reset", side_effect=AssertionError("Desktop request copied source")):
+    with fake_endpoint() as endpoint:
         rig = Rig(endpoint, calls(("list_windows", {})), says("Outlook is open."), workspace=workspace)
         rig.run("What is open?")
         assert rig.window.log[-1] == "done Outlook is open."
@@ -414,6 +413,18 @@ def test_the_journal_records_each_action() -> None:
     assert rig.call("set_clipboard", text="hi").ok
     assert rig.machine.log == ["clipboard hi"]
     assert [(e["tool"], e["ok"]) for e in rig.journal] == [("set_clipboard", True)]
+
+
+def test_tool_publishes_readable_previews_without_changing_the_model_result() -> None:
+    rig = ToolRig()
+    result = rig.call("inspect_ui", query="Budget " * 60)
+    started, completed = rig.window.live
+    assert isinstance(started, ToolActivity) and isinstance(completed, ToolActivity)
+    assert started.outcome is ToolStatus.RUNNING and isinstance(completed.outcome, Succeeded)
+    assert started.detail.startswith("Find controls matching “Budget") and started.detail.endswith("…")
+    assert completed.identity == started.identity and completed.detail == started.detail
+    assert "• Save" in completed.text and '"controls"' not in completed.text
+    assert result.ok and result.text == '{"controls":[{"id":"1.2.3","name":"Save","actions":["invoke"]}]}'
 
 
 # ---- what needs permission -------------------------------------------------------------
@@ -549,8 +560,7 @@ def test_find_files_matches_names_under_a_folder(tmp_path: Path) -> None:
     assert result.ok and result.text == str(tmp_path / "a" / "report.xlsx")
     for name in ("second.xlsx", "third.xlsx"):
         (tmp_path / name).touch()
-    with patch("assistant.agent.MAX_FILES", 2):
-        bounded = rig.call("find_files", folder=str(tmp_path), pattern="*.xlsx")
+    bounded = rig.call("find_files", folder=str(tmp_path), pattern="*.xlsx", limit=2)
     lines = bounded.text.splitlines()
     assert bounded.ok and "[stopped at 2 files]" in lines
     assert len(lines) == 3 and len(set(lines)) == 3

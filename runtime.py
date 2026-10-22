@@ -6,29 +6,87 @@ import site
 import struct
 import subprocess
 import sys
+from collections.abc import Mapping
+from dataclasses import dataclass
+from enum import Enum, auto
 from pathlib import Path
-from typing import cast
+from typing import assert_never, cast
+
+
+@dataclass(frozen=True, slots=True)
+class PythonBundle:
+    folder: Path
+    files: frozenset[str]
+
+
+class Continue(Enum):
+    CURRENT = auto()
+
+
+class LaunchMode(Enum):
+    CONSOLE = auto()
+    WINDOWED = auto()
+
+
+@dataclass(frozen=True, slots=True)
+class Relaunch:
+    command: tuple[str, ...]
+    environment: tuple[tuple[str, str], ...]
+    mode: LaunchMode
+
+
+@dataclass(frozen=True, slots=True)
+class InvalidBundle:
+    message: str
+
+
+type BootstrapPlan = Continue | Relaunch | InvalidBundle
+
+
+def bootstrap_plan(
+    platform: str, executable: Path, arguments: tuple[str, ...], environment: Mapping[str, str], bundle: PythonBundle | None,
+) -> BootstrapPlan:
+    """Choose a handoff from observations; paths are normalized by the caller."""
+    if platform != "win32" or bundle is None:
+        return Continue.CURRENT
+    mode = LaunchMode.WINDOWED if executable.stem.lower().startswith("pythonw") else LaunchMode.CONSOLE
+    filename = "pythonw.exe" if mode is LaunchMode.WINDOWED else "python.exe"
+    target = bundle.folder / filename
+    if target == executable:
+        return Continue.CURRENT
+    if filename not in bundle.files:
+        return InvalidBundle("Toolkit's bundled Python is incomplete. Extract the complete Windows bundle again.")
+    clean = tuple((name, value) for name, value in environment.items() if name not in ("PYTHONHOME", "PYTHONPATH"))
+    return Relaunch((str(target), *arguments[1:]), clean, mode)
+
+
+def execute_bootstrap(plan: BootstrapPlan) -> None:
+    match plan:
+        case Continue.CURRENT:
+            return
+        case InvalidBundle(message):
+            raise RuntimeError(message)
+        case Relaunch(command, environment, mode):
+            match mode:
+                case LaunchMode.WINDOWED:
+                    subprocess.Popen(command, env=dict(environment), creationflags=0x0800_0000)
+                    raise SystemExit(0)
+                case LaunchMode.CONSOLE:
+                    process = subprocess.Popen(command, env=dict(environment))
+                    raise SystemExit(process.wait())
+                case _:
+                    assert_never(mode)
+        case _:
+            assert_never(plan)
 
 
 def bootstrap() -> None:
     """An existing .pyw association can hand off to the bundled interpreter."""
-    folder = Path(__file__).resolve().parent / ".python"
+    folder = (Path(__file__).resolve().parent / ".python").resolve()
     if sys.platform != "win32" or not folder.is_dir():
         return
-    windowed = Path(sys.executable).stem.lower().startswith("pythonw")
-    executable = folder / ("pythonw.exe" if windowed else "python.exe")
-    if executable.resolve() == Path(sys.executable).resolve():
-        return
-    if not executable.is_file():
-        raise RuntimeError("Toolkit's bundled Python is incomplete. Extract the complete Windows bundle again.")
-    environment = dict(os.environ)
-    for name in ("PYTHONHOME", "PYTHONPATH"):
-        environment.pop(name, None)
-    process = subprocess.Popen(
-        [str(executable), *sys.orig_argv[1:]], env=environment,
-        creationflags=0x0800_0000 if windowed else 0,
-    )
-    raise SystemExit(0 if windowed else process.wait())
+    bundle = PythonBundle(folder, frozenset(name for name in ("python.exe", "pythonw.exe") if (folder / name).is_file()))
+    execute_bootstrap(bootstrap_plan(sys.platform, Path(sys.executable).resolve(), tuple(sys.orig_argv), os.environ, bundle))
 
 
 def bundled() -> Path | None:
@@ -40,14 +98,20 @@ def bundled() -> Path | None:
     return Path(inherited) if inherited and Path(inherited).is_dir() else None
 
 
-def activate() -> None:
-    if folder := bundled():
+def validate_dependencies(metadata: object, platform: str, version: tuple[int, int], pointer_bytes: int) -> None:
+    required = cast("dict[str, object]", metadata).get("python") if isinstance(metadata, dict) else None
+    if not isinstance(required, str) or len(parts := required.split(".")) != 2 or not all(part.isdecimal() for part in parts):
+        raise RuntimeError("The bundled dependency manifest has no valid Python version. Extract the complete bundle again.")
+    if platform != "win32" or version != (int(parts[0]), int(parts[1])) or pointer_bytes != 8:
+        raise RuntimeError(f"This bundle requires Windows x64 Python {required}. Run StartToolkit.cmd or .python\\python.exe.")
+
+
+def activate(folder: Path | None = None) -> None:
+    if folder is None:
+        folder = bundled()
+    if folder is not None:
         metadata = cast(object, json.loads((folder / "manifest.json").read_text(encoding="utf-8")))
-        version = cast("dict[str, object]", metadata).get("python") if isinstance(metadata, dict) else None
-        if not isinstance(version, str) or len(parts := version.split(".")) != 2 or not all(part.isdecimal() for part in parts):
-            raise RuntimeError("The bundled dependency manifest has no valid Python version. Extract the complete bundle again.")
-        if sys.platform != "win32" or (sys.version_info.major, sys.version_info.minor) != (int(parts[0]), int(parts[1])) or struct.calcsize("P") != 8:
-            raise RuntimeError(f"This bundle requires Windows x64 Python {version}. Run StartToolkit.cmd or .python\\python.exe.")
+        validate_dependencies(metadata, sys.platform, (sys.version_info.major, sys.version_info.minor), struct.calcsize("P"))
         source = sys.path[0]  # Keep selfcheck's candidate tree ahead of dependencies too.
         sys.path.insert(0, str(folder))
         # Wheels such as pywin32 declare their import and DLL directories in
