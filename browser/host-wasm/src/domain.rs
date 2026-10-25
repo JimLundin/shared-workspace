@@ -6,7 +6,7 @@ use crate::model::{
     Snapshot,
 };
 use anyhow::{Context, Result, ensure};
-use iroh::{EndpointAddr, SecretKey};
+use iroh::{EndpointAddr, SecretKey, Signature};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -116,6 +116,32 @@ impl Domain {
 
     pub fn prepare_command(&mut self, command_json: &str) -> Result<String, String> {
         self.command(command_json).map_err(message)
+    }
+
+    /// A separate, domain-separated signature lane. Payloads never enter the
+    /// ordinary operation history or snapshot. Callers retain encrypted records.
+    pub fn sign_connection(&self, workspace_id: &str, payload: &str) -> Result<String, String> {
+        self.connection_bytes(workspace_id, &self.id(), payload)
+            .map(|bytes| hex::encode(self.key.sign(&bytes).to_bytes()))
+            .map_err(|_| "workspace connection cannot be signed".into())
+    }
+
+    pub fn verify_connection(
+        &self,
+        workspace_id: &str,
+        author: &str,
+        payload: &str,
+        signature: &str,
+    ) -> Result<(), String> {
+        let verify = || -> Result<()> {
+            let bytes = self.connection_bytes(workspace_id, author, payload)?;
+            ensure!(signature.len() == 128, "invalid connection signature");
+            let mut raw = [0u8; 64];
+            hex::decode_to_slice(signature, &mut raw)?;
+            model::validate_device(author)?.verify(&bytes, &Signature::from_bytes(&raw))?;
+            Ok(())
+        };
+        verify().map_err(|_| "workspace connection signature or membership is invalid".into())
     }
 
     pub fn prepare_grant(
@@ -233,6 +259,21 @@ impl Domain {
 }
 
 impl Domain {
+    fn connection_bytes(&self, workspace_id: &str, author: &str, payload: &str) -> Result<Vec<u8>> {
+        ensure!(
+            !payload.is_empty() && payload.len() <= 16_384,
+            "invalid connection payload size"
+        );
+        let selected = vec![workspace_id.to_string()];
+        self.check_scope_membership(&self.id(), &selected)?;
+        self.check_scope_membership(author, &selected)?;
+        Ok(serde_json::to_vec(&(
+            "shared-workspace/connection-signature/1",
+            workspace_id,
+            payload,
+        ))?)
+    }
+
     fn open(
         seed_hex: &str,
         name: &str,
@@ -652,6 +693,39 @@ fn command_matches(command: &Command, action: &Action) -> bool {
     match (command, action) {
         (Command::CreateWorkspace { title: a, .. }, Action::CreateWorkspace { title: b }) => a == b,
         (
+            Command::CreateSurface {
+                resource_id: ar,
+                title: at,
+                surface: a,
+                ..
+            },
+            Action::CreateSurface {
+                resource_id: br,
+                title: bt,
+                surface: b,
+            },
+        ) => ar == br && at == bt && a == b,
+        (
+            Command::EditSurface {
+                resource_id: ar,
+                title: at,
+                surface: a,
+                expected_heads: ah,
+                ..
+            },
+            Action::EditSurface {
+                resource_id: br,
+                title: bt,
+                surface: b,
+                expected_heads: bh,
+            },
+        ) => {
+            ar == br
+                && at == bt
+                && a == b
+                && ah.iter().collect::<BTreeSet<_>>() == bh.iter().collect::<BTreeSet<_>>()
+        }
+        (
             Command::CreateResource {
                 resource_id: ar,
                 title: at,
@@ -795,6 +869,121 @@ mod tests {
         )
         .unwrap();
         commit(receiver, &batch);
+    }
+
+    #[test]
+    fn surface_requests_reopen_with_exact_payload_and_stale_heads_stay_conflicts() {
+        let mut owner = domain(1);
+        let root = create(&mut owner, "work");
+        let create_command = json!({"type":"create_surface","operation_id":"code-created",
+            "workspace_id":"work","resource_id":"code","title":"script.py",
+            "surface":{"type":"code_document","language":"python","text":"print(1)\n"}});
+        let created = prepare(&mut owner, create_command.clone());
+        commit(&mut owner, &created);
+        let edit_command = json!({"type":"edit_surface","operation_id":"code-edited",
+            "workspace_id":"work","resource_id":"code","expected_heads":["code-created"],"title":"script.py",
+            "surface":{"type":"code_document","language":"python","text":"print(2)\n"}});
+        let edited = prepare(&mut owner, edit_command.clone());
+        commit(&mut owner, &edited);
+        let requests = json!([root["request"], created["request"], edited["request"]]);
+        let operations = owner.operations("[\"work\"]").unwrap();
+        let mut reopened = Domain::new(
+            &hex::encode([1; 32]),
+            "Restored",
+            &operations,
+            &requests.to_string(),
+        )
+        .unwrap();
+        assert_eq!(snapshot(&reopened).resources, snapshot(&owner).resources);
+        assert_eq!(
+            prepare(&mut reopened, create_command)["receipt"]["replayed"],
+            true
+        );
+        assert_eq!(
+            prepare(&mut reopened, edit_command.clone())["receipt"]["replayed"],
+            true
+        );
+        let mut stale = edit_command;
+        stale["operation_id"] = "stale-code-edit".into();
+        assert_eq!(prepare(&mut reopened, stale)["receipt"]["type"], "conflict");
+        let mut forged = requests;
+        forged[2]["surface"]["text"] = "Forged code".into();
+        assert!(
+            Domain::new(
+                &hex::encode([1; 32]),
+                "Restored",
+                &operations,
+                &forged.to_string()
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn connection_signatures_require_membership_and_bind_workspace_author_and_payload() {
+        let mut alice = domain(1);
+        let mut bob = domain(2);
+        create(&mut alice, "work");
+        create(&mut alice, "private");
+        let payload = "SYNTHETIC_ONLY_CONNECTION_RECORD";
+        assert!(bob.sign_connection("work", payload).is_err());
+        grant(&mut alice, &bob.id(), 17);
+        enroll(&alice, &mut bob);
+        let signature = alice.sign_connection("work", payload).unwrap();
+        assert!(
+            bob.verify_connection("work", &alice.id(), payload, &signature)
+                .is_ok()
+        );
+        assert!(
+            alice
+                .verify_connection("private", &alice.id(), payload, &signature)
+                .is_err()
+        );
+        assert!(
+            bob.verify_connection("work", &bob.id(), payload, &signature)
+                .is_err()
+        );
+        assert!(
+            bob.verify_connection("work", &alice.id(), "TAMPERED_SYNTHETIC_RECORD", &signature)
+                .is_err()
+        );
+        let retained = alice.export_for(&bob.id(), "[\"work\"]").unwrap();
+        let outsider = Domain::new(&hex::encode([3; 32]), "Unenrolled", &retained, "[]").unwrap();
+        assert!(
+            outsider
+                .verify_connection("work", &alice.id(), payload, &signature)
+                .is_err()
+        );
+        assert!(outsider.sign_connection("work", payload).is_err());
+        // An outsider can sign bytes without using our guarded helper. A valid
+        // signature alone must not turn that device into a workspace member.
+        let outsider_key = SecretKey::from_bytes(&[3; 32]);
+        let unauthorized_bytes =
+            serde_json::to_vec(&("shared-workspace/connection-signature/1", "work", payload))
+                .unwrap();
+        let unauthorized = hex::encode(outsider_key.sign(&unauthorized_bytes).to_bytes());
+        assert!(
+            alice
+                .verify_connection("work", &outsider.id(), payload, &unauthorized)
+                .is_err()
+        );
+        let ordinary: serde_json::Value =
+            serde_json::from_str(&alice.operations("[\"work\"]").unwrap()).unwrap();
+        assert!(
+            alice
+                .verify_connection(
+                    "work",
+                    &alice.id(),
+                    &ordinary[0]["operation"].to_string(),
+                    ordinary[0]["signature"].as_str().unwrap(),
+                )
+                .is_err()
+        );
+        assert_eq!(alice.snapshot().unwrap().contains(payload), false);
+        assert_eq!(
+            alice.operations("[\"work\"]").unwrap().contains(payload),
+            false
+        );
     }
 
     #[test]

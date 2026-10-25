@@ -1,0 +1,173 @@
+{
+  "kind": "browser-connections-acceptance-v1",
+  "passed": true,
+  "case": "migration",
+  "engine": "chromium",
+  "started_at": "2026-10-25T20:17:31.961Z",
+  "assertions": [
+    "Legacy fixture retains a discoverable plaintext identity seed",
+    "Lost migration COMMIT reply refuses admission until storage is reopened",
+    "Migration preserves the legacy identity and retained work",
+    "Migrated SQL identity row contains the encrypted envelope",
+    "Migration removes the old plaintext seed from current OPFS database and WAL files"
+  ],
+  "storage_scans": [
+    {
+      "phase": "legacy-closed",
+      "files": [
+        {
+          "path": "connection-check.db-wal",
+          "bytes": 0,
+          "matches": [
+            {
+              "label": "legacy_identity_bytes",
+              "count": 0
+            },
+            {
+              "label": "legacy_identity_hex",
+              "count": 0
+            }
+          ]
+        },
+        {
+          "path": "connection-check.db",
+          "bytes": 40960,
+          "matches": [
+            {
+              "label": "legacy_identity_bytes",
+              "count": 1
+            },
+            {
+              "label": "legacy_identity_hex",
+              "count": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "migrated-live",
+      "files": [
+        {
+          "path": "connection-check.db-wal",
+          "bytes": 0,
+          "matches": [
+            {
+              "label": "legacy_identity_bytes",
+              "count": 0
+            },
+            {
+              "label": "legacy_identity_hex",
+              "count": 0
+            }
+          ]
+        },
+        {
+          "path": "connection-check.db",
+          "bytes": 53248,
+          "matches": [
+            {
+              "label": "legacy_identity_bytes",
+              "count": 0
+            },
+            {
+              "label": "legacy_identity_hex",
+              "count": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "migrated-closed",
+      "files": [
+        {
+          "path": "connection-check.db-wal",
+          "bytes": 0,
+          "matches": [
+            {
+              "label": "legacy_identity_bytes",
+              "count": 0
+            },
+            {
+              "label": "legacy_identity_hex",
+              "count": 0
+            }
+          ]
+        },
+        {
+          "path": "connection-check.db",
+          "bytes": 53248,
+          "matches": [
+            {
+              "label": "legacy_identity_bytes",
+              "count": 0
+            },
+            {
+              "label": "legacy_identity_hex",
+              "count": 0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Synthetic-only identities and credentials in disposable browser profiles.",
+    "Desktop engine evidence is not a physical iPhone result.",
+    "No real transcription request is authorized; provider traffic is blocked.",
+    "No raw identity, credential, database, invitation or profile is exported."
+  ],
+  "source_hashes": {
+    "browser/checks/connection-acceptance.mjs": "b97d9c8a7dc938c6462fbff1934b5c7fae7bb5171f959d162ae6201a91f4d423",
+    "browser/checks/page.ts": "d6f31852f385e9ac4ed9d0764bc2495ccb92ada68ee7d4e0dd0ae183b6e1875c",
+    "browser/host-wasm/pkg/browser_workspace_host.d.ts": "240c1ace2f613aa3dcef34c5f5c271c5abdbf7c473f3ff45d228be208232e0d8",
+    "browser/host-wasm/pkg/browser_workspace_host.js": "10bf44ceea7834e7320be2e3654ac2b90f765cc54ce33c074950cc1f7fdce271",
+    "browser/host-wasm/pkg/browser_workspace_host_bg.wasm": "c6b05de93ed44927deeede347a0decf4250bb859bb4fb1bbf77b32c79f9fa9f4",
+    "browser/host-wasm/pkg/browser_workspace_host_bg.wasm.d.ts": "01248e35518a33f8d9a16c608870f45eb5d8c5b38c5ea46efb51ade0cdc4a1c5",
+    "browser/host-wasm/src/browser_relay.rs": "a1836021c9a1df09e422b023beed5bf9377979e7958284a3b7e0646caccca705",
+    "browser/host-wasm/src/domain.rs": "04356a0362bf004192b03816251c8ceaa9dfa81914094a5c7c6dcfcd307d826d",
+    "browser/host-wasm/src/lib.rs": "afe57e32f876b3dee835760016a1df0e44fea19fdbad43981e55d1a82fda2dfa",
+    "browser/host-wasm/src/transport.rs": "e69da69c75eee6cf48b8cb2ec63bcd199298deba9da5a99a594d1234f6392b5e",
+    "browser/host/package-lock.json": "bd39995299cbb1b4c55cddb78ff355af99be439c30611067e0c8a7e48cf17b8a",
+    "browser/host/src/connection-vault.ts": "6e386d99e97df77a02e86c9432d045c2ba17ddc20574da218354ed8517146673",
+    "browser/host/src/connections.ts": "bf9485692dfae6e148d369c6bf3fed537af6047c69c3234edd4fa3674b479af1",
+    "browser/host/src/host.ts": "7ee231960af77b648f605e2e04721bd069bf388849187005b0b3f75afbb40458",
+    "browser/host/src/identity-storage.ts": "8978ad0a80fe5e841bb06a8655085e5a16a98331f9ff8028418c3e0395779315",
+    "browser/host/src/invitation.ts": "b393ef1039a284018fa5f9114685b0be08b2e4e076cf2fb1208c20dfa454bfbf",
+    "browser/host/src/owner.ts": "ee6defd12d4f39cf0fea4bfc74e173852a9a2b19efa057e5aab35bc41333c2fb",
+    "browser/host/src/store.ts": "9d0257d993118d1b51632c4d7ec5a2a3db81a0ab649b61ad1fa20c1deecbe160",
+    "browser/host/src/transcription.ts": "59b18dd60ab04b9fe561384cc43bd06884fd089f3916b471bf3bc2f9fb02ce64",
+    "browser/host/src/types.ts": "407260116f9c6d0c4294119ff2ce78daecb614985402a082cf05f8b6609fb149",
+    "browser/host/src/worker.ts": "142b01c548bbc442af3c54f548fa6bafcc9a563139c2e972cd155af480257eaf",
+    "native/ui/src/protocol.ts": "907fb1b22243c2791995487b983de0a709da950184426b65c2a15cbacbdc8b53"
+  },
+  "fault_injection": "Disposable build throws after the actual legacy identity COMMIT, before its reply is acknowledged; production sources unchanged.",
+  "assets": {
+    "assets/audit-Dm_5MTX0.js": "d501952a7c8339a987265c60662e7d78f3baaa778a144373b9ff7ffa3107df73",
+    "assets/browser_workspace_host_bg-Cx6tSzMi.wasm": "c6b05de93ed44927deeede347a0decf4250bb859bb4fb1bbf77b32c79f9fa9f4",
+    "assets/connections-6XAxdqA3.js": "385eb8fed34d8186ab8b337a5e56e172c71bb62b460adbee2826c5ae5cb7a30a",
+    "assets/index-CmBVhYvx.js": "72b3fa5ff2fd01711178f0b670cc13129cde8b80e1e8ee08730c334bb14d2077",
+    "assets/modulepreload-polyfill-P2Xu9kJm.js": "418c206484b89b68ef5f067277831e583fc9193a62aadf4de269acaaeb12a85f",
+    "assets/owner-DJhih98j.js": "deed5f888ab8e05afcc5c85cbc5d4d67e4d8d6aec63082fb389ab9131375a666",
+    "assets/turso.wasm32-wasi-KrOvB4jh.wasm": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9",
+    "assets/worker-BOI3HrWD.js": "be1061b697cb3f9a04b9b3fd77b1b190580070efb029a01f1821f151aa5f3d28",
+    "assets/worker-C3Ftajuj.js": "f05a971994e5bf0fd25ef55f621f171c29f7e9cb2df1ccce0381376552f5bceb",
+    "audit.html": "26bbb5c2131c10aa429eadb8357229d2ec8a35e19a5f86d32d77fb14ab82c1cc",
+    "index.html": "d608184376d01e62f277946efd83bd338963d10288f0e918aab0927bfd3485d5"
+  },
+  "legacy_fixture": "synthetic legacy SQL format with actual Turso 0.8.3",
+  "migration": {
+    "identity_preserved": true,
+    "work_preserved": true,
+    "plaintext_retained": false,
+    "identity_row_bytes": 64
+  },
+  "cleanup": {
+    "browsers_closed": true,
+    "server_closed": true,
+    "profiles_removed": true
+  },
+  "source_unchanged": true,
+  "finished_at": "2026-10-25T20:17:36.191Z"
+}

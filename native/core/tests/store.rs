@@ -1,3 +1,6 @@
+mod common;
+use common::note_body;
+
 use workspace_core::{
     model::{Command, CommandReceipt},
     store::Store,
@@ -71,7 +74,7 @@ async fn saved_workspace_and_note_survive_reopening_with_the_same_identity() {
     assert_eq!(snapshot.device_id, initial.device_id);
     assert_eq!(snapshot.workspaces[0].title, "Launch review");
     assert_eq!(
-        snapshot.resources[0].heads[0].body,
+        note_body(&snapshot.resources[0].heads[0]),
         "Start with three teams."
     );
     assert!(matches!(
@@ -163,7 +166,7 @@ async fn new_member_can_carry_a_signed_grant_to_an_existing_peer_without_the_inv
     .await
     .unwrap();
     assert_eq!(
-        b.snapshot().await.unwrap().resources[0].heads[0].body,
+        note_body(&b.snapshot().await.unwrap().resources[0].heads[0]),
         "Written while inviter is offline"
     );
     assert_eq!(
@@ -214,7 +217,7 @@ async fn offline_branches_are_preserved_and_resolution_rechecks_current_heads() 
         snapshot.resources[0]
             .heads
             .iter()
-            .map(|r| r.body.as_str())
+            .map(note_body)
             .collect::<Vec<_>>(),
         vec!["Laptop wording", "Phone wording"]
     );
@@ -241,7 +244,10 @@ async fn offline_branches_are_preserved_and_resolution_rechecks_current_heads() 
     .unwrap();
     let resolved = a.snapshot().await.unwrap();
     assert_eq!(resolved.resources[0].heads.len(), 1);
-    assert_eq!(resolved.resources[0].heads[0].body, "Both choices reviewed");
+    assert_eq!(
+        note_body(&resolved.resources[0].heads[0]),
+        "Both choices reviewed"
+    );
     assert_eq!(resolved.resources[0].history.len(), 4);
     b.import(&a.device_id(), &a.operations(&workspace).await.unwrap())
         .await

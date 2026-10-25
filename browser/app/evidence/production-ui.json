@@ -1,9 +1,10 @@
 {
   "passed": true,
-  "started_at": "2026-10-25T18:36:41.175Z",
+  "started_at": "2026-10-25T20:15:38.338Z",
   "assertions": [
     "Fresh browser shows genuine empty host; service worker enables isolation without server headers.",
     "Workspace and note created through UI receive real durable host receipts.",
+    "Production startup theme observer cannot override explicit Light or Dark after an OS preference change.",
     "Phone fragment survives initial isolation reload, clears from URL, remains memory-only, and does not auto-join.",
     "Observed host stages reach the production UI through the real worker before joining completes.",
     "Explicit phone Join completes an authenticated peer exchange and imports the real note.",
@@ -21,6 +22,6 @@
     "Browser speech adapter tested separately; no microphone recognition claim.",
     "No public deployment from this test."
   ],
-  "asset_hash": "59c2d86b45d5815b95d2320d00afe4e26801e2e806d6bb284b0aebcfda5b0000",
-  "finished_at": "2026-10-25T18:37:34.210Z"
+  "asset_hash": "a920acd11b83d50672798a8399b75332ef1ab395623209f2874e1df8ab345bd0",
+  "finished_at": "2026-10-25T20:16:48.646Z"
 }

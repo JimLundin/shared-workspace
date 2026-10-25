@@ -1,0 +1,1034 @@
+{
+  "checkedDate": "2026-10-25",
+  "scope": "Unauthenticated public iframe surfaces under Toolkit production isolation headers; no repository modifications.",
+  "runtime": {
+    "dockerImage": "mcr.microsoft.com/playwright:v1.64.1-noble",
+    "playwright": "1.64.1",
+    "chromium": "156.0.8078.4",
+    "linuxWebKit": "27.2",
+    "headedChromiumDisplay": "Xvfb",
+    "freshContexts": true,
+    "authenticatedProfilesUsed": false,
+    "explicitProxyUsed": false,
+    "headerStrippingUsed": false,
+    "webSecurityDisabled": false
+  },
+  "fixture": {
+    "bind": "127.0.0.1, ephemeral port, inside Docker; no published ports",
+    "headers": {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
+      "Cross-Origin-Resource-Policy": "same-origin"
+    },
+    "source": "browser/app/scripts/worker-template.js",
+    "iframeHasNoAddedSandbox": true,
+    "ordinaryAndCredentiallessCompared": true
+  },
+  "publicHeaderObservations": [
+    {
+      "requestedUrl": "https://vscode.dev/",
+      "finalUrl": "https://vscode.dev/",
+      "status": 200,
+      "xFrameOptions": null,
+      "cspFrameAncestors": "'none'",
+      "coop": "same-origin",
+      "coep": "require-corp",
+      "corp": null
+    },
+    {
+      "requestedUrl": "https://www.microsoft365.com/launch/word",
+      "finalUrl": "https://word.cloud.microsoft/en-us/",
+      "status": 200,
+      "xFrameOptions": "DENY",
+      "cspFrameAncestors": "'self' data: https://support.office.com",
+      "coop": null,
+      "coep": null,
+      "corp": null
+    },
+    {
+      "requestedUrl": "https://www.microsoft365.com/launch/excel",
+      "finalUrl": "https://excel.cloud.microsoft/en-us/",
+      "status": 200,
+      "xFrameOptions": "DENY",
+      "cspFrameAncestors": "'self' data: https://support.office.com",
+      "coop": null,
+      "coep": null,
+      "corp": null
+    },
+    {
+      "requestedUrl": "https://word.cloud.microsoft/",
+      "finalUrl": "https://word.cloud.microsoft/en-us/",
+      "status": 200,
+      "xFrameOptions": "DENY",
+      "cspFrameAncestors": "'self' data: https://support.office.com",
+      "coop": null,
+      "coep": null,
+      "corp": null
+    },
+    {
+      "requestedUrl": "https://excel.cloud.microsoft/",
+      "finalUrl": "https://excel.cloud.microsoft/en-us/",
+      "status": 200,
+      "xFrameOptions": "DENY",
+      "cspFrameAncestors": "'self' data: https://support.office.com",
+      "coop": null,
+      "coep": null,
+      "corp": null
+    },
+    {
+      "requestedUrl": "https://embed.diagrams.net/?embed=1&proto=json&spin=1",
+      "finalUrl": "https://embed.diagrams.net/",
+      "status": 200,
+      "xFrameOptions": null,
+      "cspFrameAncestors": null,
+      "coop": null,
+      "coep": null,
+      "corp": null
+    }
+  ],
+  "initialBrowserMatrix": [
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "app": "vscode",
+      "mode": "credentialless",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": true,
+      "iframeLoadEvents": 1,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://vscode.dev/",
+          "type": "document",
+          "error": "net::ERR_BLOCKED_BY_RESPONSE"
+        }
+      ],
+      "publicDocumentResponses": [
+        {
+          "url": "https://vscode.dev/",
+          "status": 200
+        }
+      ],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "app": "word-launch",
+      "mode": "ordinary",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": true,
+      "iframeLoadEvents": 1,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://www.microsoft365.com/launch/word",
+          "type": "document",
+          "error": "net::ERR_BLOCKED_BY_RESPONSE"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "app": "vscode",
+      "mode": "ordinary",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": true,
+      "iframeLoadEvents": 1,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://vscode.dev/",
+          "type": "document",
+          "error": "net::ERR_BLOCKED_BY_RESPONSE"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "app": "word-launch",
+      "mode": "credentialless",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": true,
+      "iframeLoadEvents": 1,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://word.cloud.microsoft/en-us/",
+          "type": "document",
+          "error": "net::ERR_BLOCKED_BY_RESPONSE"
+        }
+      ],
+      "publicDocumentResponses": [
+        {
+          "url": "https://www.microsoft365.com/launch/word",
+          "status": 301
+        },
+        {
+          "url": "https://word.cloud.microsoft/",
+          "status": 301
+        },
+        {
+          "url": "https://word.cloud.microsoft/en-us/",
+          "status": 200
+        }
+      ],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "app": "excel-launch",
+      "mode": "ordinary",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": true,
+      "iframeLoadEvents": 1,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://www.microsoft365.com/launch/excel",
+          "type": "document",
+          "error": "net::ERR_BLOCKED_BY_RESPONSE"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "app": "excel-launch",
+      "mode": "credentialless",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": true,
+      "iframeLoadEvents": 1,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://excel.cloud.microsoft/en-us/",
+          "type": "document",
+          "error": "net::ERR_BLOCKED_BY_RESPONSE"
+        }
+      ],
+      "publicDocumentResponses": [
+        {
+          "url": "https://www.microsoft365.com/launch/excel",
+          "status": 301
+        },
+        {
+          "url": "https://excel.cloud.microsoft/",
+          "status": 301
+        },
+        {
+          "url": "https://excel.cloud.microsoft/en-us/",
+          "status": 200
+        }
+      ],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "app": "word-direct",
+      "mode": "ordinary",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": true,
+      "iframeLoadEvents": 1,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://word.cloud.microsoft/",
+          "type": "document",
+          "error": "net::ERR_BLOCKED_BY_RESPONSE"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "app": "word-direct",
+      "mode": "credentialless",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": true,
+      "iframeLoadEvents": 1,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://word.cloud.microsoft/en-us/",
+          "type": "document",
+          "error": "net::ERR_BLOCKED_BY_RESPONSE"
+        }
+      ],
+      "publicDocumentResponses": [
+        {
+          "url": "https://word.cloud.microsoft/",
+          "status": 301
+        },
+        {
+          "url": "https://word.cloud.microsoft/en-us/",
+          "status": 200
+        }
+      ],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "app": "excel-direct",
+      "mode": "ordinary",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": true,
+      "iframeLoadEvents": 1,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://excel.cloud.microsoft/",
+          "type": "document",
+          "error": "net::ERR_BLOCKED_BY_RESPONSE"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "app": "excel-direct",
+      "mode": "credentialless",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": true,
+      "iframeLoadEvents": 1,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://excel.cloud.microsoft/en-us/",
+          "type": "document",
+          "error": "net::ERR_BLOCKED_BY_RESPONSE"
+        }
+      ],
+      "publicDocumentResponses": [
+        {
+          "url": "https://excel.cloud.microsoft/",
+          "status": 301
+        },
+        {
+          "url": "https://excel.cloud.microsoft/en-us/",
+          "status": 200
+        }
+      ],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "app": "drawio",
+      "mode": "ordinary",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": true,
+      "iframeLoadEvents": 1,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://embed.diagrams.net/",
+          "type": "document",
+          "error": "net::ERR_BLOCKED_BY_RESPONSE"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "app": "drawio",
+      "mode": "credentialless",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": true,
+      "iframeLoadEvents": 1,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [],
+      "publicDocumentResponses": [
+        {
+          "url": "https://embed.diagrams.net/",
+          "status": 403
+        }
+      ],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "27.2",
+      "app": "vscode",
+      "mode": "credentialless",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": false,
+      "iframeLoadEvents": 0,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://vscode.dev/",
+          "type": "document",
+          "error": "Cancelled load to https://vscode.dev/ because it violates the resource's Cross-Origin-Resource-Policy response header."
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "27.2",
+      "app": "vscode",
+      "mode": "ordinary",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": false,
+      "iframeLoadEvents": 0,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://vscode.dev/",
+          "type": "document",
+          "error": "Cancelled load to https://vscode.dev/ because it violates the resource's Cross-Origin-Resource-Policy response header."
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "27.2",
+      "app": "word-launch",
+      "mode": "ordinary",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": false,
+      "iframeLoadEvents": 0,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://www.microsoft365.com/launch/word",
+          "type": "document",
+          "error": "Redirection was blocked by Cross-Origin-Embedder-Policy"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "27.2",
+      "app": "excel-launch",
+      "mode": "credentialless",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": false,
+      "iframeLoadEvents": 0,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://www.microsoft365.com/launch/excel",
+          "type": "document",
+          "error": "Redirection was blocked by Cross-Origin-Embedder-Policy"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "27.2",
+      "app": "word-launch",
+      "mode": "credentialless",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": false,
+      "iframeLoadEvents": 0,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://www.microsoft365.com/launch/word",
+          "type": "document",
+          "error": "Redirection was blocked by Cross-Origin-Embedder-Policy"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "27.2",
+      "app": "excel-launch",
+      "mode": "ordinary",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": false,
+      "iframeLoadEvents": 0,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://www.microsoft365.com/launch/excel",
+          "type": "document",
+          "error": "Redirection was blocked by Cross-Origin-Embedder-Policy"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "27.2",
+      "app": "word-direct",
+      "mode": "ordinary",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": false,
+      "iframeLoadEvents": 0,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://word.cloud.microsoft/",
+          "type": "document",
+          "error": "Redirection was blocked by Cross-Origin-Embedder-Policy"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "27.2",
+      "app": "word-direct",
+      "mode": "credentialless",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": false,
+      "iframeLoadEvents": 0,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://word.cloud.microsoft/",
+          "type": "document",
+          "error": "Redirection was blocked by Cross-Origin-Embedder-Policy"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "27.2",
+      "app": "excel-direct",
+      "mode": "ordinary",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": false,
+      "iframeLoadEvents": 0,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://excel.cloud.microsoft/",
+          "type": "document",
+          "error": "Redirection was blocked by Cross-Origin-Embedder-Policy"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "27.2",
+      "app": "excel-direct",
+      "mode": "credentialless",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": false,
+      "iframeLoadEvents": 0,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://excel.cloud.microsoft/",
+          "type": "document",
+          "error": "Redirection was blocked by Cross-Origin-Embedder-Policy"
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "27.2",
+      "app": "drawio",
+      "mode": "ordinary",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": false,
+      "iframeLoadEvents": 0,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://embed.diagrams.net/",
+          "type": "document",
+          "error": "Cancelled load to https://embed.diagrams.net/ because it violates the resource's Cross-Origin-Resource-Policy response header."
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "27.2",
+      "app": "drawio",
+      "mode": "credentialless",
+      "restore": false,
+      "isolatedBefore": true,
+      "isolatedAfter": true,
+      "sharedArrayBuffer": "function",
+      "opfsApiExposed": true,
+      "credentiallessSupported": false,
+      "iframeLoadEvents": 0,
+      "embedInit": false,
+      "embedLoad": false,
+      "editedMarkerVisible": false,
+      "restoredMarkerVisible": false,
+      "documentFailures": [
+        {
+          "url": "https://embed.diagrams.net/",
+          "type": "document",
+          "error": "Cancelled load to https://embed.diagrams.net/ because it violates the resource's Cross-Origin-Resource-Policy response header."
+        }
+      ],
+      "publicDocumentResponses": [],
+      "eventSequence": [],
+      "error": null
+    }
+  ],
+  "topLevelControls": [
+    {
+      "engine": "chromium",
+      "app": "excel-launch",
+      "status": 200,
+      "title": "Edit spreadsheets online for free | Microsoft Excel for the Web",
+      "url": "https://excel.cloud.microsoft/en-us/"
+    },
+    {
+      "engine": "chromium",
+      "app": "word-launch",
+      "status": 200,
+      "title": "Create and edit documents for free | Microsoft Word for the Web",
+      "url": "https://word.cloud.microsoft/en-us/"
+    },
+    {
+      "engine": "chromium",
+      "app": "vscode",
+      "status": 200,
+      "title": "Welcome - Workspace - Visual Studio Code",
+      "url": "https://vscode.dev/"
+    },
+    {
+      "engine": "webkit",
+      "app": "word-launch",
+      "status": 200,
+      "title": "Create and edit documents for free | Microsoft Word for the Web",
+      "url": "https://word.cloud.microsoft/en-us/"
+    },
+    {
+      "engine": "webkit",
+      "app": "excel-launch",
+      "status": 200,
+      "title": "Edit spreadsheets online for free | Microsoft Excel for the Web",
+      "url": "https://excel.cloud.microsoft/en-us/"
+    },
+    {
+      "engine": "webkit",
+      "app": "vscode",
+      "status": 200,
+      "title": "Workspace \u2014 Visual Studio Code",
+      "url": "https://vscode.dev/"
+    }
+  ],
+  "drawio": {
+    "workingUrl": "https://embed.diagrams.net/?proto=json&spin=1&ui=min&libraries=1",
+    "classification": "Interactive credentialless embed verified in headed Chromium; ordinary iframe blocked; Linux WebKit lacked credentialless support.",
+    "headlessOfficialUrlCases": [
+      {
+        "engine": "chromium",
+        "browserVersion": "156.0.8078.4",
+        "app": "drawio",
+        "mode": "ordinary",
+        "restore": false,
+        "isolatedBefore": true,
+        "isolatedAfter": true,
+        "sharedArrayBuffer": "function",
+        "opfsApiExposed": true,
+        "credentiallessSupported": true,
+        "iframeLoadEvents": 1,
+        "embedInit": false,
+        "embedLoad": false,
+        "editedMarkerVisible": false,
+        "restoredMarkerVisible": false,
+        "documentFailures": [
+          {
+            "url": "https://embed.diagrams.net/",
+            "type": "document",
+            "error": "net::ERR_BLOCKED_BY_RESPONSE"
+          }
+        ],
+        "publicDocumentResponses": [],
+        "eventSequence": [],
+        "error": null
+      },
+      {
+        "engine": "chromium",
+        "browserVersion": "156.0.8078.4",
+        "app": "drawio",
+        "mode": "credentialless",
+        "restore": false,
+        "isolatedBefore": true,
+        "isolatedAfter": true,
+        "sharedArrayBuffer": "function",
+        "opfsApiExposed": true,
+        "credentiallessSupported": true,
+        "iframeLoadEvents": 1,
+        "embedInit": false,
+        "embedLoad": false,
+        "editedMarkerVisible": false,
+        "restoredMarkerVisible": false,
+        "documentFailures": [],
+        "publicDocumentResponses": [
+          {
+            "url": "https://embed.diagrams.net/",
+            "status": 403
+          }
+        ],
+        "eventSequence": [],
+        "error": null
+      }
+    ],
+    "headlessTopLevelStatus": 403,
+    "headedTopLevelStatus": 200,
+    "standaloneProbeCases": [
+      {
+        "engine": "chromium",
+        "browserVersion": "156.0.8078.4",
+        "app": "drawio",
+        "mode": "ordinary",
+        "restore": false,
+        "isolatedBefore": true,
+        "isolatedAfter": true,
+        "sharedArrayBuffer": "function",
+        "opfsApiExposed": true,
+        "credentiallessSupported": true,
+        "iframeLoadEvents": 1,
+        "embedInit": false,
+        "embedLoad": false,
+        "editedMarkerVisible": false,
+        "restoredMarkerVisible": false,
+        "documentFailures": [
+          {
+            "url": "https://embed.diagrams.net/",
+            "type": "document",
+            "error": "net::ERR_BLOCKED_BY_RESPONSE"
+          }
+        ],
+        "publicDocumentResponses": [],
+        "eventSequence": [],
+        "error": null
+      },
+      {
+        "engine": "chromium",
+        "browserVersion": "156.0.8078.4",
+        "app": "drawio",
+        "mode": "credentialless",
+        "restore": false,
+        "isolatedBefore": true,
+        "isolatedAfter": true,
+        "sharedArrayBuffer": "function",
+        "opfsApiExposed": true,
+        "credentiallessSupported": true,
+        "iframeLoadEvents": 1,
+        "embedInit": true,
+        "embedLoad": true,
+        "editedMarkerVisible": true,
+        "restoredMarkerVisible": false,
+        "documentFailures": [],
+        "publicDocumentResponses": [
+          {
+            "url": "https://embed.diagrams.net/",
+            "status": 200
+          }
+        ],
+        "eventSequence": [
+          "init",
+          "load",
+          "autosave",
+          "save",
+          "export"
+        ],
+        "error": null,
+        "savedDocument": {
+          "file": "probe-chromium-drawio-credentialless-after.xml",
+          "event": "save",
+          "bytes": 633,
+          "sha256": "ea23cf81b0e0d8c023d67ae9bb0501bf07638f6be4151d4a953b4a237463b971",
+          "containsEditedMarker": true
+        }
+      },
+      {
+        "engine": "chromium",
+        "browserVersion": "156.0.8078.4",
+        "app": "drawio",
+        "mode": "credentialless",
+        "restore": true,
+        "isolatedBefore": true,
+        "isolatedAfter": true,
+        "sharedArrayBuffer": "function",
+        "opfsApiExposed": true,
+        "credentiallessSupported": true,
+        "iframeLoadEvents": 1,
+        "embedInit": true,
+        "embedLoad": true,
+        "editedMarkerVisible": false,
+        "restoredMarkerVisible": true,
+        "documentFailures": [],
+        "publicDocumentResponses": [
+          {
+            "url": "https://embed.diagrams.net/",
+            "status": 200
+          }
+        ],
+        "eventSequence": [
+          "init",
+          "load"
+        ],
+        "error": null
+      }
+    ],
+    "interaction": {
+      "before": "Toolkit embed before",
+      "after": "Toolkit embed after",
+      "steps": [
+        "double-click real diagram label",
+        "fill the application contenteditable editor",
+        "Control+Enter to finish editing",
+        "Control+S to request the supported save event",
+        "export xmlsvg through the supported message API",
+        "read saved XML from scratch file and load it in a fresh browser context"
+      ]
+    },
+    "saveReceipt": {
+      "file": "probe-chromium-drawio-credentialless-after.xml",
+      "event": "save",
+      "bytes": 633,
+      "sha256": "ea23cf81b0e0d8c023d67ae9bb0501bf07638f6be4151d4a953b4a237463b971",
+      "containsEditedMarker": true
+    },
+    "exportSvg": {
+      "file": "drawio-edited-export.svg",
+      "bytes": 2613,
+      "sha256": "80bbb57d47d049814340035738611e1230243167528d3ac560a568c5b4f96fc5",
+      "visibleEditedTextVerified": true
+    },
+    "restoration": {
+      "freshContext": true,
+      "freshBrowserProcess": false,
+      "savedXmlLoaded": true,
+      "editedLabelVisible": true,
+      "parentRemainedIsolated": true
+    },
+    "probeScript": {
+      "file": "probe-drawio.cjs",
+      "sha256": "ab64ef5516508f053e01f5352d5267d1e98bb18840a73394b2fd2acead42d9f2",
+      "exitCode": 0
+    }
+  },
+  "notVerified": [
+    "Physical iPhone/Safari or native WKWebView",
+    "Windows WebView2",
+    "Authenticated Word/Excel document URLs, editing, saving or account reuse",
+    "Production Toolkit Turso/OPFS writes or app restart recovery",
+    "Excalidraw or Photopea interaction"
+  ],
+  "retention": "Only public URLs, selected framing headers, engine versions, sanitized failures, controlled fixture labels and content hashes. No cookies, authorization headers, HAR, browser profile or private document data."
+}

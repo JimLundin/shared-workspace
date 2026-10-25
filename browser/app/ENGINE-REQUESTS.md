@@ -7,8 +7,9 @@ The implemented surface uses the real host for workspaces, notes, references,
 version reconciliation and scoped peer joining. Native and browser clients share
 presentation. The phone displays the same material with one reading/editing context;
 the desktop gives related material more room. Voice and typing use the same bounded
-command planner and captured destination. App/document/task surfaces will belong in
-this working context when their real adapters are available.
+command planner and captured destination. Code documents now use a real embedded CodeMirror editor and shared revisions.
+Application/document links have typed surfaces and truthful external-open actions;
+remote application control and task execution still need engine adapters.
 
 ## 1. Identify the result of joining
 
@@ -83,9 +84,9 @@ local acceptance into a claim that the desktop executed the action.
 
 ## 5. Report status the interface can honestly summarize
 
-The current UI says Saved here after a local receipt, Offline when observed, and
-Needs attention for rejected/unknown saves or unreachable peers. Details remain
-under Connections. A successful peer exchange is not proof every device has the
+The current UI keeps routine local receipts quiet and exposes connection failures
+with a Check connections action. Rejected and unknown saves remain actionable.
+Details remain under Connections. A successful peer exchange is not proof every device has the
 latest version.
 
 Request: separate local durability, observed delivery to each authorized peer, and
@@ -112,3 +113,29 @@ acceptance and update tests. Fixture tests are UI evidence; production acceptanc
 uses independent persistent browser profiles and real storage/peer exchange.
 Physical iPhone keyboard, microphone and installed-app behavior need a published
 HTTPS check. Viewport emulation does not establish those results.
+
+
+## Integrated contracts and remaining engine requests
+
+The current voice/application experiment consumes workspace-scoped OpenAI metadata,
+set/remove receipts, exact retries, provider transcription with a captured workspace
+and connection version, and peer compatibility observations. Secrets never enter
+ordinary workspace snapshots. Connection settings disclose when peers need an
+upgrade or an exchange did not finish; a local key save is not a delivery claim.
+
+Typed application/document/code revisions now share the host's history, conflict
+and receipt contract. Office and VS Code open externally; CodeMirror is an actual
+editor in the workspace. Sharing a URL does not share the vendor account or files.
+
+The next engine integration still needs host-retained drafts (including an editor
+field and selection), portable resource capabilities and correlated execution from
+section 4. Supply a causally ordered settings observation or read-after-write token
+if connection receipts and subscriptions can arrive out of order. The UI currently
+fences pending reads and retains an observation completed after a write began; it
+cannot infer ancestry between two opaque connection versions. An acknowledged
+operation and the current effective connection must remain distinct concepts.
+
+For a phone-to-desktop action, return the original workspace/resource/draft address,
+execution identity, eligible-host/capability decision, observed execution location,
+and durable result references. The phone can then show its specific pending work,
+ask for a missing decision, and open the result without inventing a remote desktop.

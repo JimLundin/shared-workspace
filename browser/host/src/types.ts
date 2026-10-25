@@ -1,5 +1,6 @@
 import { decodeReceipt, object, string, number } from '../../../native/ui/src/protocol.ts';
 import type { Command, Receipt, Snapshot, PeerState, Peer, Invite, SyncReport } from '../../../native/ui/src/protocol.ts';
+import type { SignedConnection } from './connections.ts';
 export type { Command, Receipt, Snapshot, PeerState, Peer, Invite, SyncReport };
 
 export const MAX_SCOPE = 32;
@@ -18,10 +19,17 @@ export type ImportReceipt = Readonly<{ imported: number; already_present: number
 export type Batch = Readonly<{ batch_id: string | null; operations: readonly SignedOperation[]; request?: Command; receipt?: Receipt | ImportReceipt }>;
 export type Ticket = Readonly<{ version: 1; inviter: Contact; nonce: string; workspace_ids: readonly string[]; expires_at_ms: number }>;
 export type RequestBody =
+  | Readonly<{ type: 'capabilities' }>
   | Readonly<{ type: 'pair'; nonce: string }>
+  | Readonly<{ type: 'connections_summary'; workspace_ids: readonly string[]; fingerprint: string }>
+  | Readonly<{ type: 'connections_sync'; workspace_ids: readonly string[]; records: readonly SignedConnection[] }>
   | Readonly<{ type: 'summary'; workspace_ids: readonly string[]; fingerprint: string; contacts: readonly Contact[] }>
   | Readonly<{ type: 'sync'; workspace_ids: readonly string[]; operations: readonly SignedOperation[]; contacts: readonly Contact[] }>;
 export type ReplyBody =
+  | Readonly<{ type: 'capabilities'; connections: 1 }>
+  | Readonly<{ type: 'connections_current'; workspace_ids: readonly string[] }>
+  | Readonly<{ type: 'connections_synced'; workspace_ids: readonly string[]; records: readonly SignedConnection[] }>
+  | Readonly<{ type: 'connections_needed' }>
   | Readonly<{ type: 'paired' | 'synced'; workspace_ids: readonly string[]; operations: readonly SignedOperation[]; contacts: readonly Contact[] }>
   | Readonly<{ type: 'current'; workspace_ids: readonly string[]; contacts: readonly Contact[] }>
   | Readonly<{ type: 'need_sync' | 'rejected' }>;

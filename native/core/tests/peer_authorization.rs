@@ -1,5 +1,8 @@
 //! Public-wire acceptance tests. Every exchange crosses a real Iroh connection.
 
+mod common;
+use common::note_body;
+
 use anyhow::{Context, Result, ensure};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -223,7 +226,7 @@ async fn matching_peer_summaries_omit_history_and_changed_work_requires_a_transf
         .import(&host.snapshot().await?.data.device_id, &operations)
         .await?;
     assert_eq!(
-        peer.store.snapshot().await?.resources[0].heads[0].body,
+        note_body(&peer.store.snapshot().await?.resources[0].heads[0]),
         "A new retained revision"
     );
     let current = peer

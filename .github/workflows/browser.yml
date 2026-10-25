@@ -5,12 +5,14 @@ on:
     paths:
       - 'browser/**'
       - 'native/core/src/model.rs'
+      - 'native/core/Cargo.toml'
       - 'native/ui/**'
       - '.github/workflows/browser.yml'
   pull_request:
     paths:
       - 'browser/**'
       - 'native/core/src/model.rs'
+      - 'native/core/Cargo.toml'
       - 'native/ui/**'
       - '.github/workflows/browser.yml'
   workflow_dispatch:
@@ -84,8 +86,24 @@ jobs:
           npm --prefix native/ui run check
           npm --prefix native/ui test
           npm --prefix browser/app test
+      - name: Exercise voice and application interactions
+        run: |
+          npm --prefix native/ui run test:browser
+          node browser/app/tests/provider-voice-capture.mjs
+      - name: Detect credential and recording regressions
+        run: |
+          node browser/host/tests/mutate-connections.mjs --report browser/checks/evidence/ci-connection-mutations.json
+          node browser/app/tests/provider-voice-mutations.mjs
+          cp /tmp/provider-voice-mutation-evidence.json browser/checks/evidence/ci-provider-voice-mutations.json
+          cp /tmp/provider-voice-capture-chromium-evidence.json browser/checks/evidence/ci-provider-voice-capture.json
       - name: Exercise real persistent browser peers
         run: node browser/checks/check.mjs --evidence browser/checks/evidence/ci-acceptance
+      - name: Verify credential migration and workspace-scoped exchange
+        run: |
+          node browser/checks/connection-acceptance.mjs --case migration --evidence browser/checks/evidence/ci-connection-migration
+          node browser/checks/connection-acceptance.mjs --case peers --evidence browser/checks/evidence/ci-connections
+      - name: Exchange application and code revisions across browser engines
+        run: node browser/checks/surface-acceptance.mjs --evidence browser/checks/evidence/ci-surfaces
       - name: Pair a visible Chromium inviter with WebKit
         run: node browser/checks/pairing-diagnose.mjs --laptop-engine chromium --phone-engine webkit --legacy-retry --exercise-sync --require-compact --evidence browser/checks/evidence/ci-webkit
       - name: Detect acknowledged work that was rolled back

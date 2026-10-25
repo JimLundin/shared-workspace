@@ -1,6 +1,8 @@
 import { decodeInvite, decodeReceipt, decodeSnapshot, decodeSync, decodeJoinStage, object, string, type JoinStage } from '../../../native/ui/src/protocol.ts';
 import type { Command, HostOptions, Invite, Receipt, Snapshot, SyncReport } from './types.ts';
+import { decodeConnectionPeers, decodeConnectionReceipt, decodeConnectionState, type ConnectionPeer, type ConnectionReceipt, type ConnectionState, type SetConnection, type RemoveConnection, type Transcription } from './connections.ts';
 export type { Command, HostOptions, Invite, Receipt, Snapshot, SyncReport } from './types.ts';
+export type { ConnectionPeer, ConnectionReceipt, ConnectionState, SetConnection, RemoveConnection, Transcription } from './connections.ts';
 
 type Pending = Readonly<{ resolve: (value: unknown) => void; reject: (reason: unknown) => void; progress?: (stage: JoinStage) => void }>;
 
@@ -78,6 +80,28 @@ export class BrowserHost {
   async join(ticket: string, onProgress?: (stage: JoinStage) => void): Promise<Snapshot> { return decodeSnapshot(await this.#call('join', ticket, onProgress)); }
   async sync(): Promise<SyncReport> { return decodeSync(await this.#call('sync')); }
   async setForeground(foreground: boolean): Promise<void> { await this.#call('foreground', foreground); }
+  async connection(workspaceId: string): Promise<ConnectionState> { return decodeConnectionState(await this.#call('connection', workspaceId)); }
+  async connectionPeers(workspaceId: string): Promise<readonly ConnectionPeer[]> { return decodeConnectionPeers(await this.#call('connection_peers', workspaceId)); }
+  async setConnection(input: SetConnection): Promise<ConnectionReceipt> { return decodeConnectionReceipt(await this.#call('set_connection', input)); }
+  async removeConnection(input: RemoveConnection): Promise<ConnectionReceipt> { return decodeConnectionReceipt(await this.#call('remove_connection', input)); }
+  async transcribe(input: Transcription, signal?: AbortSignal): Promise<string> {
+    if (this.#closed) throw new Error('Browser host is closed.');
+    if (signal?.aborted) throw new Error('Transcription was cancelled.');
+    const id = crypto.randomUUID();
+    const cancel = () => {
+      this.#pending.get(id)?.reject(new Error('Transcription was cancelled.'));
+      this.#pending.delete(id);
+      if (!this.#closed) this.#worker.postMessage({ id: crypto.randomUUID(), method: 'cancel_transcription', value: id });
+    };
+    signal?.addEventListener('abort', cancel, { once: true });
+    try {
+      return string(await new Promise<unknown>((resolve, reject) => {
+        this.#pending.set(id, { resolve, reject });
+        try { this.#worker.postMessage({ id, method: 'transcribe', value: input }); }
+        catch { this.#pending.delete(id); reject(new Error('The audio capture could not reach the workspace host.')); }
+      }));
+    } finally { signal?.removeEventListener('abort', cancel); }
+  }
 
   close(): Promise<void> {
     if (this.#closing) return this.#closing;

@@ -24,6 +24,11 @@ const methods = {
   },
   snapshot() { return current().snapshot(); },
   command(command: Parameters<BrowserHost['command']>[0]) { return current().command(command); },
+  connection(workspaceId: string) { return current().connection(workspaceId); },
+  connectionPeers(workspaceId: string) { return current().connectionPeers(workspaceId); },
+  setConnection(value: Parameters<BrowserHost['setConnection']>[0]) { return current().setConnection(value); },
+  removeConnection(value: Parameters<BrowserHost['removeConnection']>[0]) { return current().removeConnection(value); },
+  transcribe(value: Parameters<BrowserHost['transcribe']>[0]) { return current().transcribe(value); },
   invite(workspaceIds: readonly string[]) { return current().invite(workspaceIds); },
   async join(ticket: string) {
     joinEvents.length = 0;

@@ -188,19 +188,20 @@ async function pickerChecks(page, title) {
 }
 async function captureChecks(peer, originalTitle) {
   const { page } = peer;
-  const entry = () => page.getByRole('button', { name: /^(Type a command|Continue captured input)/ });
+  const entry = () => page.getByRole('button', { name: 'Type instead', exact: true });
   const capture = page.getByRole('dialog', { name: 'Capture', exact: true });
   await entry().click(); await modalChecks(page, 'Capture');
-  const field = page.getByLabel('Command text', { exact: true });
-  const unsupported = 'An unsupported instruction for acceptance';
+  const field = page.getByLabel('Your words', { exact: true });
+  const submit = capture.locator('#run-command');
+  const unsupported = 'Open absent acceptance application';
   await field.fill(unsupported);
-  assert(await capture.getByRole('button', { name: 'Run command →', exact: true }).isDisabled(), 'Unsupported input must not manufacture an executable command.');
+  assert(await submit.isDisabled(), 'An unavailable application must not manufacture an executable command.');
   await capture.getByRole('button', { name: 'Close dialog', exact: true }).click();
   await capture.waitFor({ state: 'hidden' });
   assert(await entry().evaluate(element => document.activeElement === element), 'Closing capture must restore focus to its dock control.');
   await entry().click(); assert.equal(await field.inputValue(), unsupported, 'Dismissal must preserve captured text.');
   const body = 'Acceptance capture remains in its original workspace.';
-  const command = 'Remember ' + body;
+  const command = body;
   await field.fill(command);
   await page.keyboard.press('Escape'); await capture.waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: /^Current workspace:/ }).click();
@@ -211,11 +212,12 @@ async function captureChecks(peer, originalTitle) {
   await currentWork(page, otherTitle, originalTitle);
   await entry().click();
   assert.equal(await field.inputValue(), command, 'Navigation must retain the addressed draft.');
-  assert(await capture.getByRole('button', { name: 'Run command →', exact: true }).isDisabled(), 'A draft from another workspace must not execute in the current workspace.');
+  assert(await submit.isDisabled(), 'A draft from another workspace must not execute in the current workspace.');
   await capture.getByRole('button', { name: 'Return to ' + originalTitle, exact: true }).click();
   assert.equal(await field.inputValue(), command);
-  assert(!await capture.getByRole('button', { name: 'Run command →', exact: true }).isDisabled(), 'Returning to the addressed workspace must permit the supported command.');
-  await capture.getByRole('button', { name: 'Run command →', exact: true }).click();
+  assert(!await submit.isDisabled(), 'Returning to the addressed workspace must permit saving the note.');
+  assert.equal(await submit.innerText(), 'Save as note', 'Free input must visibly propose a note without requiring a command prefix.');
+  await submit.click();
   await capture.waitFor({ state: 'hidden' });
   await currentWork(page, originalTitle, otherTitle);
   const allWork = page.getByRole('button', { name: /All work/ });
@@ -267,7 +269,8 @@ try {
   const initialContent = 'Public smoke: initial note retained.';
   const joinerContent = 'Public smoke: revision from the joining device.';
   const inviterContent = 'Public smoke: revision returned by the inviting device.';
-  await inviter.page.getByRole('button', { name: 'Add a note', exact: true }).click();
+  await inviter.page.getByRole('button', { name: 'Add to workspace', exact: true }).click();
+  await inviter.page.getByRole('dialog', { name: 'Add to workspace', exact: true }).locator('[data-action="new-note"]').click();
   const noteTitle = 'Public smoke note';
   await inviter.page.getByLabel('Title', { exact: true }).fill(noteTitle);
   await inviter.page.getByLabel('Content', { exact: true }).fill(initialContent);

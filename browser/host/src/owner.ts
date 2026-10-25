@@ -2,6 +2,8 @@ import init, { BrowserEndpoint } from '../../host-wasm/pkg/browser_workspace_hos
 import { object, string, number, type JoinStage } from '../../../native/ui/src/protocol.ts';
 import { BrowserStore } from './store.ts';
 import { encodeTicket, decodeTicket } from './invitation.ts';
+import { connectionError, connectionRecords, type ConnectionPeer, type ConnectionReceipt, type ConnectionState, type RemoveConnection, type SetConnection, type Transcription } from './connections.ts';
+import { transcribe } from './transcription.ts';
 import {
   MAX_MESSAGE_BYTES, MAX_SCOPE, bytes, fields, hashNonce, hex, json, parse,
   randomHex, requireThat, safeError, sameScope, scope, signedOperations,
@@ -34,6 +36,8 @@ export class HostOwner {
   #syncing: Promise<SyncReport> | null = null;
   #timer: ReturnType<typeof setInterval> | undefined;
   readonly #observations = new Map<string, PeerState>();
+  readonly #uploads = new Set<AbortController>();
+  readonly #connectionObservations = new Map<string, Map<string, ConnectionPeer['status']>>();
 
   private constructor(store: BrowserStore, options: HostOptions) {
     this.#store = store;
@@ -119,17 +123,34 @@ export class HostOwner {
   }
 
   async #envelope(payload: string, authenticatedPeer: string): Promise<Envelope<unknown>> {
-    requireThat(bytes(payload) <= MAX_MESSAGE_BYTES, 'Peer message exceeds 8 MiB.');
-    const packet = fields(parse(payload), ['version', 'id', 'contact', 'body']);
-    requireThat(packet.version === 1, 'Unsupported peer protocol.');
-    const record = await this.#store.contact(packet.contact);
-    requireThat(record.id === hex(authenticatedPeer), 'Claimed contact differs from authenticated peer.');
-    return { version: 1, id: hex(packet.id), contact: contactFromRecord(record), body: packet.body };
+    try {
+      requireThat(bytes(payload) <= MAX_MESSAGE_BYTES, 'Peer message exceeds 8 MiB.');
+      const packet = fields(parse(payload), ['version', 'id', 'contact', 'body']);
+      requireThat(packet.version === 1, 'Unsupported peer protocol.');
+      const record = await this.#store.contact(packet.contact);
+      requireThat(record.id === hex(authenticatedPeer), 'Claimed contact differs from authenticated peer.');
+      return { version: 1, id: hex(packet.id), contact: contactFromRecord(record), body: packet.body };
+    } catch { throw new Error('Invalid peer message.'); }
   }
 
   async #replyBody(value: unknown): Promise<ReplyBody> {
     const result = object(value);
     switch (result.type) {
+      case 'capabilities':
+        fields(result, ['type', 'connections']);
+        requireThat(result.connections === 1, 'Unsupported connection capability.');
+        return { type: 'capabilities', connections: 1 };
+      case 'connections_needed':
+        fields(result, ['type']);
+        return { type: 'connections_needed' };
+      case 'connections_current':
+        fields(result, ['type', 'workspace_ids']);
+        return { type: 'connections_current', workspace_ids: scope(result.workspace_ids) };
+      case 'connections_synced': {
+        fields(result, ['type', 'workspace_ids', 'records']);
+        const selected = scope(result.workspace_ids);
+        return { type: 'connections_synced', workspace_ids: selected, records: connectionRecords(result.records, selected) };
+      }
       case 'need_sync': case 'rejected':
         fields(result, ['type']);
         return { type: result.type };
@@ -177,6 +198,25 @@ export class HostOwner {
     const body = object(request.body);
     const peer = await this.#store.contact(request.contact);
     switch (body.type) {
+      case 'capabilities':
+        fields(body, ['type']);
+        return { type: 'capabilities', connections: 1 };
+      case 'connections_summary': {
+        fields(body, ['type', 'workspace_ids', 'fingerprint']);
+        const selected = scope(body.workspace_ids);
+        await this.#authorize(peerId, selected);
+        if (await this.#store.connectionFingerprint(peerId, selected) !== hex(body.fingerprint)) return { type: 'connections_needed' };
+        this.#observeConnections(peerId, selected, 'synced');
+        return { type: 'connections_current', workspace_ids: selected };
+      }
+      case 'connections_sync': {
+        fields(body, ['type', 'workspace_ids', 'records']);
+        const selected = scope(body.workspace_ids);
+        await this.#authorize(peerId, selected);
+        await this.#store.importConnections(peerId, selected, body.records);
+        this.#invalidateConnections(selected);
+        return { type: 'connections_synced', workspace_ids: selected, records: await this.#store.exportConnections(peerId, selected) };
+      }
       case 'pair': {
         fields(body, ['type', 'nonce']);
         const selected = await this.#store.acceptInvite(await hashNonce(hex(body.nonce)), peer, Date.now());
@@ -223,6 +263,54 @@ export class HostOwner {
     return receipt;
   }
 
+  connection(workspace: string): Promise<ConnectionState> { return this.#store.connection(workspace); }
+
+  async connectionPeers(workspace: string): Promise<readonly ConnectionPeer[]> {
+    await this.#store.connection(workspace); // Requires local membership too.
+    const result: ConnectionPeer[] = [];
+    for (const peer of await this.#store.peers()) {
+      if ((await this.#store.allowed(peer.id)).includes(workspace)) result.push({ peer_id: peer.id, status: this.#connectionObservations.get(workspace)?.get(peer.id) ?? 'unknown' });
+    }
+    return result;
+  }
+
+  #observeConnections(peer: string, selected: readonly string[], status: ConnectionPeer['status']): void {
+    for (const workspace of selected) {
+      let observations = this.#connectionObservations.get(workspace);
+      if (!observations) { observations = new Map(); this.#connectionObservations.set(workspace, observations); }
+      observations.set(peer, status);
+    }
+  }
+
+  #invalidateConnections(selected: readonly string[]): void {
+    for (const workspace of selected) this.#connectionObservations.delete(workspace);
+  }
+
+  async setConnection(input: SetConnection): Promise<ConnectionReceipt> {
+    const receipt = await this.#store.setConnection(input);
+    if (!receipt.replayed) this.#invalidateConnections([receipt.state.workspace_id]);
+    this.#wake();
+    return receipt;
+  }
+
+  async removeConnection(input: RemoveConnection): Promise<ConnectionReceipt> {
+    const receipt = await this.#store.removeConnection(input);
+    if (!receipt.replayed) this.#invalidateConnections([receipt.state.workspace_id]);
+    this.#wake();
+    return receipt;
+  }
+
+  async transcribe(input: Transcription, signal: AbortSignal): Promise<string> {
+    if (this.#closed) throw connectionError('The workspace host is closed.');
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    signal.addEventListener('abort', cancel, { once: true });
+    if (signal.aborted) controller.abort();
+    this.#uploads.add(controller);
+    try { return await transcribe(input, (workspace, version) => this.#store.connectionCredential(workspace, version), controller.signal); }
+    finally { signal.removeEventListener('abort', cancel); this.#uploads.delete(controller); }
+  }
+
   async invite(workspaceIds: readonly string[]): Promise<Invite> {
     const endpoint = this.#client(), selected = scope(workspaceIds);
     const nonce = randomHex(), expiry = Date.now() + 900_000;
@@ -247,6 +335,7 @@ export class HostOwner {
     progress?.('saving_workspace');
     await this.#store.bootstrap(await this.#store.contact(reply.contact), selected, reply.body.operations);
     await this.#retain(selected, reply.body.contacts);
+    await this.#syncConnections(inviter, selected);
     this.#wake();
     return this.snapshot();
   }
@@ -264,6 +353,7 @@ export class HostOwner {
         requireThat(sameScope(summary.body.workspace_ids, selected), 'Summary reply changed the selected workspaces.');
         await this.#store.savePeer(await this.#store.contact(summary.contact));
         await this.#retain(selected, summary.body.contacts);
+        await this.#syncConnections(peer, selected);
         continue;
       }
       requireThat(summary.body.type === 'need_sync' || summary.body.type === 'rejected', 'Invalid synchronization summary.');
@@ -273,8 +363,39 @@ export class HostOwner {
       imported += (await this.#store.import(peer.id, reply.body.operations)).imported;
       await this.#store.savePeer(await this.#store.contact(reply.contact));
       await this.#retain(selected, reply.body.contacts);
+      await this.#syncConnections(peer, selected);
     }
     return imported;
+  }
+
+  async #syncConnections(peer: PeerRecord, selected: readonly string[]): Promise<void> {
+    try {
+      const fingerprint = await this.#store.connectionFingerprint(peer.id, selected);
+      // Unknown requests were rejected by the original note-only protocol. Only
+      // this scope-free, non-secret probe may classify that reply as unsupported.
+      const capabilities = await this.#exchange(peer, { type: 'capabilities' });
+      if (capabilities.body.type === 'rejected') {
+        this.#observeConnections(peer.id, selected, 'upgrade_required');
+        return;
+      }
+      requireThat(capabilities.body.type === 'capabilities', 'Invalid connection capability reply.');
+      const summary = await this.#exchange(peer, { type: 'connections_summary', workspace_ids: selected, fingerprint });
+      if (summary.body.type === 'connections_current') {
+        requireThat(sameScope(summary.body.workspace_ids, selected), 'Connection summary changed workspace scope.');
+        const unchanged = await this.#store.connectionFingerprint(peer.id, selected) === fingerprint;
+        this.#observeConnections(peer.id, selected, unchanged ? 'synced' : 'unknown');
+        return;
+      }
+      requireThat(summary.body.type === 'connections_needed', 'Connection summary was rejected.');
+      const response = await this.#exchange(peer, { type: 'connections_sync', workspace_ids: selected, records: await this.#store.exportConnections(peer.id, selected) });
+      requireThat(response.body.type === 'connections_synced' && sameScope(response.body.workspace_ids, selected), 'Connection synchronization changed workspace scope.');
+      const complete = await this.#store.importConnections(peer.id, selected, response.body.records);
+      this.#invalidateConnections(selected);
+      this.#observeConnections(peer.id, selected, complete ? 'synced' : 'unknown');
+    } catch {
+      this.#observeConnections(peer.id, selected, 'unreachable');
+      throw connectionError('Workspace connection synchronization could not complete. It will retry when devices reconnect.');
+    }
   }
 
   sync(): Promise<SyncReport> {
@@ -325,6 +446,7 @@ export class HostOwner {
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
+    for (const upload of this.#uploads) upload.abort();
     this.#foreground = false;
     this.#generation++;
     clearInterval(this.#timer);

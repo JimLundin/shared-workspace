@@ -23,6 +23,21 @@ pub enum Command {
         title: String,
         body: String,
     },
+    CreateSurface {
+        operation_id: String,
+        workspace_id: String,
+        resource_id: String,
+        title: String,
+        surface: Surface,
+    },
+    EditSurface {
+        operation_id: String,
+        workspace_id: String,
+        resource_id: String,
+        expected_heads: Vec<String>,
+        title: String,
+        surface: Surface,
+    },
     AddPlacement {
         operation_id: String,
         workspace_id: String,
@@ -59,12 +74,89 @@ pub enum CommandReceipt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Revision {
+pub struct NoteRevision {
     pub id: String,
     pub author: String,
     pub title: String,
     pub body: String,
     pub parents: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WebApplication {
+    Word,
+    Excel,
+    Powerpoint,
+    Vscode,
+    Diagrams,
+    Website,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeLanguage {
+    Plaintext,
+    Markdown,
+    Javascript,
+    Typescript,
+    Python,
+    Rust,
+    Json,
+    Html,
+    Css,
+}
+
+/// A shared target or owned code document. Web-app sessions remain device-local.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Surface {
+    Application {
+        application: WebApplication,
+        url: String,
+    },
+    Document {
+        application: WebApplication,
+        url: String,
+    },
+    CodeDocument {
+        language: CodeLanguage,
+        text: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SurfaceRevision {
+    pub id: String,
+    pub author: String,
+    pub title: String,
+    pub surface: Surface,
+    pub parents: Vec<String>,
+}
+
+/// Keep the original note JSON shape while requiring exactly one payload kind.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Revision {
+    Note(NoteRevision),
+    Surface(SurfaceRevision),
+}
+
+impl Revision {
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Note(revision) => &revision.id,
+            Self::Surface(revision) => &revision.id,
+        }
+    }
+
+    pub fn parents(&self) -> &[String] {
+        match self {
+            Self::Note(revision) => &revision.parents,
+            Self::Surface(revision) => &revision.parents,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -123,6 +215,17 @@ pub enum Action {
         title: String,
         body: String,
     },
+    CreateSurface {
+        resource_id: String,
+        title: String,
+        surface: Surface,
+    },
+    EditSurface {
+        resource_id: String,
+        expected_heads: Vec<String>,
+        title: String,
+        surface: Surface,
+    },
     AddPlacement {
         resource_id: String,
         source_workspace_id: String,
@@ -173,6 +276,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub const MAX_OPERATIONS: usize = 4096;
 pub const MAX_DOCUMENT_BYTES: usize = 128 * 1024;
+pub const MAX_SURFACE_URL_BYTES: usize = 8192;
 pub const MAX_HISTORY_BYTES: usize = 7 * 1024 * 1024;
 pub const MAX_DEVICE_NAME_BYTES: usize = 120;
 pub const MAX_WORKSPACE_SCOPE: usize = 32;
@@ -222,6 +326,33 @@ fn validate_body(value: &str) -> Result<()> {
     Ok(())
 }
 
+impl Surface {
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::Application { url, .. } | Self::Document { url, .. } => {
+                ensure!(
+                    url.len() <= MAX_SURFACE_URL_BYTES
+                        && !url
+                            .chars()
+                            .any(|c| c.is_control() || c.is_whitespace() || c == '\u{feff}')
+                        && !url.contains('\\'),
+                    "invalid application URL"
+                );
+                let parsed = url::Url::parse(url).context("invalid application URL")?;
+                ensure!(
+                    parsed.scheme() == "https"
+                        && parsed.host_str().is_some()
+                        && parsed.username().is_empty()
+                        && parsed.password().is_none(),
+                    "application URL must use HTTPS without embedded credentials"
+                );
+            }
+            Self::CodeDocument { text, .. } => validate_body(text)?,
+        }
+        Ok(())
+    }
+}
+
 fn validate_list(values: &[String], maximum: usize) -> Result<()> {
     ensure!(values.len() <= maximum, "too many identities");
     let mut seen = BTreeSet::new();
@@ -246,6 +377,16 @@ impl Command {
                 ..
             }
             | Self::EditResource {
+                operation_id,
+                workspace_id,
+                ..
+            }
+            | Self::CreateSurface {
+                operation_id,
+                workspace_id,
+                ..
+            }
+            | Self::EditSurface {
                 operation_id,
                 workspace_id,
                 ..
@@ -293,6 +434,32 @@ impl Command {
                 );
                 validate_title(title)?;
                 validate_body(body)?;
+            }
+            Self::CreateSurface {
+                resource_id,
+                title,
+                surface,
+                ..
+            } => {
+                validate_id(resource_id)?;
+                validate_title(title)?;
+                surface.validate()?;
+            }
+            Self::EditSurface {
+                resource_id,
+                expected_heads,
+                title,
+                surface,
+                ..
+            } => {
+                validate_id(resource_id)?;
+                validate_list(expected_heads, 64)?;
+                ensure!(
+                    !expected_heads.is_empty(),
+                    "an edit requires a base revision"
+                );
+                validate_title(title)?;
+                surface.validate()?;
             }
             Self::AddPlacement {
                 resource_id,
@@ -375,6 +542,27 @@ impl SignedOperation {
                 validate_title(title)?;
                 validate_body(body)?;
             }
+            Action::CreateSurface {
+                resource_id,
+                title,
+                surface,
+            } => {
+                validate_id(resource_id)?;
+                validate_title(title)?;
+                surface.validate()?;
+            }
+            Action::EditSurface {
+                resource_id,
+                expected_heads,
+                title,
+                surface,
+            } => {
+                validate_id(resource_id)?;
+                validate_list(expected_heads, 64)?;
+                ensure!(!expected_heads.is_empty(), "edit has no base");
+                validate_title(title)?;
+                surface.validate()?;
+            }
             Action::AddPlacement {
                 resource_id,
                 source_workspace_id,
@@ -404,13 +592,92 @@ pub(crate) struct Projection {
 }
 
 fn revision_heads(revisions: impl Iterator<Item = Revision>) -> Vec<Revision> {
-    let revisions: BTreeMap<_, _> = revisions.map(|r| (r.id.clone(), r)).collect();
-    let parents: BTreeSet<_> = revisions.values().flat_map(|r| r.parents.iter()).collect();
+    let revisions: BTreeMap<_, _> = revisions.map(|r| (r.id().to_string(), r)).collect();
+    let parents: BTreeSet<_> = revisions
+        .values()
+        .flat_map(|r| r.parents().iter().map(String::as_str))
+        .collect();
     revisions
         .values()
-        .filter(|r| !parents.contains(&r.id))
+        .filter(|r| !parents.contains(r.id()))
         .cloned()
         .collect()
+}
+
+fn create_resource(
+    projection: &mut Projection,
+    operation: &Operation,
+    resource_id: &str,
+    revision: Revision,
+) -> Result<()> {
+    ensure!(
+        !projection.resources.contains_key(resource_id),
+        "resource has conflicting origins"
+    );
+    projection.resources.insert(
+        resource_id.to_string(),
+        ResourceSnapshot {
+            id: resource_id.to_string(),
+            workspace_id: operation.workspace_id.clone(),
+            heads: vec![],
+            history: vec![revision],
+        },
+    );
+    projection
+        .placement_tags
+        .entry((
+            operation.workspace_id.clone(),
+            Placement {
+                resource_id: resource_id.to_string(),
+                source_workspace_id: operation.workspace_id.clone(),
+            },
+        ))
+        .or_default()
+        .insert(operation.id.clone());
+    Ok(())
+}
+
+fn edit_resource(
+    projection: &mut Projection,
+    operation: &Operation,
+    resource_id: &str,
+    past: &BTreeSet<String>,
+    revision: Revision,
+) -> Result<()> {
+    let resource = projection
+        .resources
+        .get_mut(resource_id)
+        .context("edited resource is absent")?;
+    ensure!(
+        resource.workspace_id == operation.workspace_id,
+        "resource belongs to another workspace"
+    );
+    let same_kind = resource.history.iter().all(|known| {
+        matches!(
+            (known, &revision),
+            (Revision::Note(_), Revision::Note(_)) | (Revision::Surface(_), Revision::Surface(_))
+        )
+    });
+    ensure!(
+        same_kind,
+        "an edit cannot change a note into an application surface or the reverse"
+    );
+    let known = resource
+        .history
+        .iter()
+        .filter(|r| past.contains(r.id()))
+        .cloned();
+    let expected: BTreeSet<_> = revision.parents().iter().cloned().collect();
+    let actual: BTreeSet<_> = revision_heads(known)
+        .into_iter()
+        .map(|r| r.id().to_string())
+        .collect();
+    ensure!(
+        !actual.is_empty() && expected == actual,
+        "edit does not name its causal resource heads"
+    );
+    resource.history.push(revision);
+    Ok(())
 }
 
 /// Validate the signed causal history and derive order-independent views.
@@ -508,36 +775,18 @@ pub(crate) fn project(operations: &[SignedOperation]) -> Result<Projection> {
                 title,
                 body,
             } => {
-                ensure!(
-                    !result.resources.contains_key(resource_id),
-                    "resource has conflicting origins"
-                );
-                result.resources.insert(
-                    resource_id.clone(),
-                    ResourceSnapshot {
-                        id: resource_id.clone(),
-                        workspace_id: op.workspace_id.clone(),
-                        heads: vec![],
-                        history: vec![Revision {
-                            id: id.clone(),
-                            author: op.author.clone(),
-                            title: title.clone(),
-                            body: body.clone(),
-                            parents: vec![],
-                        }],
-                    },
-                );
-                result
-                    .placement_tags
-                    .entry((
-                        op.workspace_id.clone(),
-                        Placement {
-                            resource_id: resource_id.clone(),
-                            source_workspace_id: op.workspace_id.clone(),
-                        },
-                    ))
-                    .or_default()
-                    .insert(id.clone());
+                create_resource(
+                    &mut result,
+                    op,
+                    resource_id,
+                    Revision::Note(NoteRevision {
+                        id: id.clone(),
+                        author: op.author.clone(),
+                        title: title.clone(),
+                        body: body.clone(),
+                        parents: vec![],
+                    }),
+                )?;
             }
             Action::EditResource {
                 resource_id,
@@ -545,36 +794,57 @@ pub(crate) fn project(operations: &[SignedOperation]) -> Result<Projection> {
                 title,
                 body,
             } => {
-                let resource = result
-                    .resources
-                    .get_mut(resource_id)
-                    .ok_or_else(|| anyhow::anyhow!("edited resource is absent"))?;
-                ensure!(
-                    resource.workspace_id == op.workspace_id,
-                    "resource belongs to another workspace"
-                );
-                let known: Vec<Revision> = resource
-                    .history
-                    .iter()
-                    .filter(|r| past.contains(&r.id))
-                    .cloned()
-                    .collect();
-                let expected: BTreeSet<_> = expected_heads.iter().cloned().collect();
-                let actual: BTreeSet<_> = revision_heads(known.into_iter())
-                    .into_iter()
-                    .map(|r| r.id)
-                    .collect();
-                ensure!(
-                    !actual.is_empty() && expected == actual,
-                    "edit does not name its causal resource heads"
-                );
-                resource.history.push(Revision {
-                    id: id.clone(),
-                    author: op.author.clone(),
-                    title: title.clone(),
-                    body: body.clone(),
-                    parents: expected_heads.clone(),
-                });
+                edit_resource(
+                    &mut result,
+                    op,
+                    resource_id,
+                    &past,
+                    Revision::Note(NoteRevision {
+                        id: id.clone(),
+                        author: op.author.clone(),
+                        title: title.clone(),
+                        body: body.clone(),
+                        parents: expected_heads.clone(),
+                    }),
+                )?;
+            }
+            Action::CreateSurface {
+                resource_id,
+                title,
+                surface,
+            } => {
+                create_resource(
+                    &mut result,
+                    op,
+                    resource_id,
+                    Revision::Surface(SurfaceRevision {
+                        id: id.clone(),
+                        author: op.author.clone(),
+                        title: title.clone(),
+                        surface: surface.clone(),
+                        parents: vec![],
+                    }),
+                )?;
+            }
+            Action::EditSurface {
+                resource_id,
+                expected_heads,
+                title,
+                surface,
+            } => {
+                edit_resource(
+                    &mut result,
+                    op,
+                    resource_id,
+                    &past,
+                    Revision::Surface(SurfaceRevision {
+                        id: id.clone(),
+                        author: op.author.clone(),
+                        title: title.clone(),
+                        surface: surface.clone(),
+                        parents: expected_heads.clone(),
+                    }),
+                )?;
             }
             Action::AddPlacement {
                 resource_id,
@@ -605,6 +875,10 @@ pub(crate) fn project(operations: &[SignedOperation]) -> Result<Projection> {
                     ensure!(past.contains(add), "removal names an unobserved placement");
                     let matches = match &done[add].operation.action {
                         Action::CreateResource {
+                            resource_id: origin,
+                            ..
+                        }
+                        | Action::CreateSurface {
                             resource_id: origin,
                             ..
                         } => origin == resource_id && source_workspace_id == &op.workspace_id,
@@ -656,7 +930,7 @@ pub(crate) fn project(operations: &[SignedOperation]) -> Result<Projection> {
             .collect();
     }
     for resource in result.resources.values_mut() {
-        resource.history.sort_by(|a, b| a.id.cmp(&b.id));
+        resource.history.sort_by(|a, b| a.id().cmp(b.id()));
         resource.heads = revision_heads(resource.history.iter().cloned());
     }
     Ok(result)
@@ -723,11 +997,24 @@ pub(crate) fn prepare_command(
             title: title.clone(),
             body: body.clone(),
         },
+        Command::CreateSurface {
+            resource_id,
+            title,
+            surface,
+            ..
+        } => Action::CreateSurface {
+            resource_id: resource_id.clone(),
+            title: title.clone(),
+            surface: surface.clone(),
+        },
         Command::EditResource {
             resource_id,
             expected_heads,
-            title,
-            body,
+            ..
+        }
+        | Command::EditSurface {
+            resource_id,
+            expected_heads,
             ..
         } => {
             let resource = projection
@@ -738,7 +1025,7 @@ pub(crate) fn prepare_command(
                 resource.workspace_id == workspace_id,
                 "resource belongs to another workspace"
             );
-            let actual: Vec<_> = resource.heads.iter().map(|r| r.id.clone()).collect();
+            let actual: Vec<_> = resource.heads.iter().map(|r| r.id().to_string()).collect();
             let mut expected = expected_heads.clone();
             expected.sort();
             if expected != actual {
@@ -748,11 +1035,20 @@ pub(crate) fn prepare_command(
                     actual_heads: actual,
                 }));
             }
-            Action::EditResource {
-                resource_id: resource_id.clone(),
-                expected_heads: expected,
-                title: title.clone(),
-                body: body.clone(),
+            match command {
+                Command::EditResource { title, body, .. } => Action::EditResource {
+                    resource_id: resource_id.clone(),
+                    expected_heads: expected,
+                    title: title.clone(),
+                    body: body.clone(),
+                },
+                Command::EditSurface { title, surface, .. } => Action::EditSurface {
+                    resource_id: resource_id.clone(),
+                    expected_heads: expected,
+                    title: title.clone(),
+                    surface: surface.clone(),
+                },
+                _ => unreachable!("only edit commands enter resource revision preparation"),
             }
         }
         Command::AddPlacement {

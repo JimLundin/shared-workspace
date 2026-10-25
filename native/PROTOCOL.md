@@ -41,6 +41,8 @@ validated at the native interface; use UUIDs from the shell/UI.
 {"type":"create_workspace","operation_id":"uuid","workspace_id":"uuid","title":"Launch review"}
 {"type":"create_resource","operation_id":"uuid","workspace_id":"uuid","resource_id":"uuid","title":"Brief","body":"Text"}
 {"type":"edit_resource","operation_id":"uuid","workspace_id":"uuid","resource_id":"uuid","expected_heads":["revision-id"],"title":"Brief","body":"Revised text"}
+{"type":"create_surface","operation_id":"uuid","workspace_id":"uuid","resource_id":"uuid","title":"script.py","surface":{"type":"code_document","language":"python","text":"print(42)\n"}}
+{"type":"edit_surface","operation_id":"uuid","workspace_id":"uuid","resource_id":"uuid","expected_heads":["revision-id"],"title":"script.py","surface":{"type":"code_document","language":"python","text":"print(43)\n"}}
 {"type":"add_placement","operation_id":"uuid","workspace_id":"destination-id","resource_id":"resource-id","source_workspace_id":"origin-id"}
 {"type":"remove_placement","operation_id":"uuid","workspace_id":"destination-id","resource_id":"resource-id","source_workspace_id":"origin-id"}
 ```
@@ -48,6 +50,14 @@ validated at the native interface; use UUIDs from the shell/UI.
 An edit with all observed head IDs resolves a conflict. A stale edit returns a
 conflict rather than silently replacing unobserved material. Removing a placement
 never deletes a resource. References do not grant access to the original work.
+
+Application/document surfaces use the same resource IDs, placements, signed
+history and receipts as notes. A revision contains either the legacy `body`
+field or a typed `surface` payload, never both. Surface targets can identify an
+application, an external document or editable shared code text. The
+[surface interface](../docs/shared-application-surfaces.md) specifies those
+variants, validation and older-host compatibility. Vendor application sessions
+and document permissions are not transferred with a link.
 
 Receipts:
 

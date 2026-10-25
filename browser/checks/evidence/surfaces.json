@@ -1,0 +1,147 @@
+{
+  "kind": "browser-surface-acceptance-v1",
+  "passed": true,
+  "started_at": "2026-10-25T20:15:48.055Z",
+  "scope": "Current BrowserHost facade, real Turso OPFS and Iroh WASM in separate persistent browser profiles.",
+  "engine_names": [
+    "chromium",
+    "webkit"
+  ],
+  "assertions": [
+    "Inviter-isolated-0",
+    "Joining-peer-isolated-1",
+    "independent-device-identities",
+    "create-work-committed",
+    "create-code-committed",
+    "create-word-committed",
+    "create-note-committed",
+    "joined-peer-has-code-text",
+    "joined-peer-has-exact-office-target",
+    "legacy-note-shape-preserved",
+    "peer-code-edit-committed",
+    "joining-peer-code-edit-reached-inviter",
+    "office-target-edit-committed",
+    "updated-office-target-reached-peer",
+    "Inviter-isolated-2",
+    "Joining-peer-isolated-3",
+    "browser-reopen-retains-identities",
+    "browser-reopen-retains-all-surface-revisions",
+    "browser-reopen-retains-operation-counts",
+    "both-endpoints-paused-before-branching",
+    "offline-code-base-matches",
+    "inviter-offline-code-committed",
+    "peer-offline-code-committed",
+    "both-concurrent-code-branches-retained",
+    "code-history-retains-create-peer-edit-and-both-branches",
+    "stale-code-edit-is-conflict",
+    "stale-edit-did-not-commit",
+    "Joining-peer-isolated-4",
+    "both-code-branches-survive-browser-reopen",
+    "resolve-code-committed",
+    "reviewed-code-resolution-reaches-both-peers",
+    "resolution-retains-all-earlier-revisions",
+    "reopened-code-request-replays-without-overwrite",
+    "office-and-note-remain-after-code-reconciliation"
+  ],
+  "stages": [
+    {
+      "name": "disposable-build",
+      "elapsed_ms": 3143
+    },
+    {
+      "name": "open-real-hosts",
+      "elapsed_ms": 12973
+    },
+    {
+      "name": "create-code-office-and-note",
+      "elapsed_ms": 2125
+    },
+    {
+      "name": "peer-edits-and-app-target-edit",
+      "elapsed_ms": 4020
+    },
+    {
+      "name": "full-browser-reopen",
+      "elapsed_ms": 3895
+    },
+    {
+      "name": "offline-branches-converge-and-persist",
+      "elapsed_ms": 17091
+    }
+  ],
+  "launches": [
+    {
+      "peer": "Inviter",
+      "engine": "chromium",
+      "version": "156.0.8078.4"
+    },
+    {
+      "peer": "Joining-peer",
+      "engine": "webkit",
+      "version": "27.2"
+    },
+    {
+      "peer": "Inviter",
+      "engine": "chromium",
+      "version": "156.0.8078.4"
+    },
+    {
+      "peer": "Joining-peer",
+      "engine": "webkit",
+      "version": "27.2"
+    },
+    {
+      "peer": "Joining-peer",
+      "engine": "webkit",
+      "version": "27.2"
+    }
+  ],
+  "limits": [
+    "No physical iPhone Safari result.",
+    "No production UI interaction result.",
+    "Office targets are shared links; no Office login, embedded editor or vendor document write is claimed."
+  ],
+  "source_hashes": {
+    "browser/checks/index.html": "a1549648b7fcd7b246ae9b5194f2564de6316611086132cf80b2337e018d371d",
+    "browser/checks/page.ts": "d6f31852f385e9ac4ed9d0764bc2495ccb92ada68ee7d4e0dd0ae183b6e1875c",
+    "browser/checks/surface-acceptance.mjs": "3c707c1c6ca52cad69e2af8db39f7605212b5dfd4b9f721d38a94fc3759202a7",
+    "browser/host-wasm/Cargo.lock": "502c19125f05f69e707d7069cd004759390290e5ffd9c67428ac0507c3c32e52",
+    "browser/host-wasm/Cargo.toml": "c33c3218771e545656c0c9ae44e724b344d08e2b806d698fe43ec707fe9f88b7",
+    "browser/host-wasm/pkg/browser_workspace_host.d.ts": "240c1ace2f613aa3dcef34c5f5c271c5abdbf7c473f3ff45d228be208232e0d8",
+    "browser/host-wasm/pkg/browser_workspace_host.js": "10bf44ceea7834e7320be2e3654ac2b90f765cc54ce33c074950cc1f7fdce271",
+    "browser/host-wasm/pkg/browser_workspace_host_bg.wasm": "c6b05de93ed44927deeede347a0decf4250bb859bb4fb1bbf77b32c79f9fa9f4",
+    "browser/host-wasm/pkg/browser_workspace_host_bg.wasm.d.ts": "01248e35518a33f8d9a16c608870f45eb5d8c5b38c5ea46efb51ade0cdc4a1c5",
+    "browser/host-wasm/src/browser_relay.rs": "a1836021c9a1df09e422b023beed5bf9377979e7958284a3b7e0646caccca705",
+    "browser/host-wasm/src/domain.rs": "04356a0362bf004192b03816251c8ceaa9dfa81914094a5c7c6dcfcd307d826d",
+    "browser/host-wasm/src/lib.rs": "afe57e32f876b3dee835760016a1df0e44fea19fdbad43981e55d1a82fda2dfa",
+    "browser/host-wasm/src/transport.rs": "e69da69c75eee6cf48b8cb2ec63bcd199298deba9da5a99a594d1234f6392b5e",
+    "browser/host/src/connection-vault.ts": "6e386d99e97df77a02e86c9432d045c2ba17ddc20574da218354ed8517146673",
+    "browser/host/src/connections.ts": "bf9485692dfae6e148d369c6bf3fed537af6047c69c3234edd4fa3674b479af1",
+    "browser/host/src/host.ts": "7ee231960af77b648f605e2e04721bd069bf388849187005b0b3f75afbb40458",
+    "browser/host/src/identity-storage.ts": "8978ad0a80fe5e841bb06a8655085e5a16a98331f9ff8028418c3e0395779315",
+    "browser/host/src/invitation.ts": "b393ef1039a284018fa5f9114685b0be08b2e4e076cf2fb1208c20dfa454bfbf",
+    "browser/host/src/owner.ts": "ee6defd12d4f39cf0fea4bfc74e173852a9a2b19efa057e5aab35bc41333c2fb",
+    "browser/host/src/store.ts": "9d0257d993118d1b51632c4d7ec5a2a3db81a0ab649b61ad1fa20c1deecbe160",
+    "browser/host/src/transcription.ts": "59b18dd60ab04b9fe561384cc43bd06884fd089f3916b471bf3bc2f9fb02ce64",
+    "browser/host/src/types.ts": "407260116f9c6d0c4294119ff2ce78daecb614985402a082cf05f8b6609fb149",
+    "browser/host/src/worker.ts": "142b01c548bbc442af3c54f548fa6bafcc9a563139c2e972cd155af480257eaf",
+    "native/core/src/model.rs": "960f6cceb56535300c9beba12f2d1da7e7f468bb6042089c9471d0c37e8ec0cb",
+    "native/ui/src/protocol.ts": "907fb1b22243c2791995487b983de0a709da950184426b65c2a15cbacbdc8b53"
+  },
+  "asset_hashes": {
+    "assets/browser_workspace_host_bg-Cx6tSzMi.wasm": "c6b05de93ed44927deeede347a0decf4250bb859bb4fb1bbf77b32c79f9fa9f4",
+    "assets/connections-6XAxdqA3.js": "385eb8fed34d8186ab8b337a5e56e172c71bb62b460adbee2826c5ae5cb7a30a",
+    "assets/index-v6FJDjfF.js": "566fa446aea2fa3dcf7313d156f56253f57d72fbeae3b52ed8aa20fbd4c284ad",
+    "assets/owner-CdDYhZ36.js": "a2193168474b6b63dfcf4f1209f763392f63ca26dd0c531dded741bb285a4b4e",
+    "assets/turso.wasm32-wasi-KrOvB4jh.wasm": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9",
+    "assets/worker-BvJiDD0i.js": "3020e4ab19d7a5dab130c60eab351249e48fda77513656f9999eb4aea4710675",
+    "assets/worker-C3Ftajuj.js": "f05a971994e5bf0fd25ef55f621f171c29f7e9cb2df1ccce0381376552f5bceb",
+    "index.html": "223cf1b7c82819761217582bfecfb51392956def1a5e8a7b4ad0ca5f6ed92b12"
+  },
+  "reopen_without_explicit_host_flush": true,
+  "contexts_closed": true,
+  "static_server_closed": true,
+  "source_unchanged": true,
+  "disposable_build_and_profiles_removed": true,
+  "finished_at": "2026-10-25T20:16:34.583Z"
+}

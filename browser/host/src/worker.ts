@@ -2,12 +2,14 @@
 import { object, string, type JoinStage } from '../../../native/ui/src/protocol.ts';
 import { requireThat, safeError, type Command, type HostOptions } from './types.ts';
 import type { HostOwner } from './owner.ts';
+import { connectionFailure, type SetConnection, type RemoveConnection, type Transcription } from './connections.ts';
 
 declare const self: DedicatedWorkerGlobalScope;
 let owner: HostOwner | undefined;
 let opening = false;
 let releaseLock: (() => void) | undefined;
 let lockTask: Promise<void> | undefined;
+const uploads = new Map<string, AbortController>();
 
 async function open(options: HostOptions): Promise<void> {
   requireThat(!opening && !owner, 'Browser host is already open.');
@@ -28,7 +30,7 @@ async function open(options: HostOptions): Promise<void> {
   });
 }
 
-async function dispatch(method: string, value: unknown, progress: (stage: JoinStage) => void): Promise<unknown> {
+async function dispatch(method: string, value: unknown, progress: (stage: JoinStage) => void, id: string): Promise<unknown> {
   if (method === 'open') {
     const options = object(value);
     await open({
@@ -41,6 +43,17 @@ async function dispatch(method: string, value: unknown, progress: (stage: JoinSt
   }
   requireThat(owner, 'Browser host is not open.');
   switch (method) {
+    case 'connection': return owner.connection(string(value));
+    case 'connection_peers': return owner.connectionPeers(string(value));
+    case 'set_connection': return owner.setConnection(value as SetConnection);
+    case 'remove_connection': return owner.removeConnection(value as RemoveConnection);
+    case 'transcribe': {
+      const controller = new AbortController();
+      uploads.set(id, controller);
+      try { return await owner.transcribe(value as Transcription, controller.signal); }
+      finally { uploads.delete(id); }
+    }
+    case 'cancel_transcription': uploads.get(string(value))?.abort(); return;
     case 'snapshot': return owner.snapshot();
     case 'command': return owner.command(value as Command); // Rust validates the command at the typed boundary.
     case 'invite':
@@ -65,8 +78,8 @@ async function dispatch(method: string, value: unknown, progress: (stage: JoinSt
 
 self.addEventListener('message', (event: MessageEvent<unknown>) => {
   const message = object(event.data), id = string(message.id), method = string(message.method);
-  void dispatch(method, message.value, stage => self.postMessage({ id, type: 'join_progress', stage })).then(
+  void dispatch(method, message.value, stage => self.postMessage({ id, type: 'join_progress', stage }), id).then(
     value => self.postMessage({ id, ok: true, value }),
-    error => self.postMessage({ id, ok: false, error: safeError(error) }),
+    error => self.postMessage({ id, ok: false, error: ['connection', 'connection_peers', 'set_connection', 'remove_connection', 'transcribe', 'cancel_transcription'].includes(method) ? connectionFailure(error) : safeError(error) }),
   );
 });

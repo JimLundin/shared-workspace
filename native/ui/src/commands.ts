@@ -1,9 +1,10 @@
+import { surfacePreset, type SurfacePresetId } from './surfaces.ts';
 import type { Snapshot } from './protocol.ts';
 import type { Route } from './session.ts';
 import { titleOf } from './session.ts';
 export type Address = Readonly<{ workspaceId: string | null; workspaceTitle: string; resourceId: string | null; resourceTitle: string | null; heads: readonly string[] }>;
 export type CommandDraft = Readonly<{ text: string; address: Address; source: 'typed' | 'voice' }>;
-export type Intent = Readonly<{ type: 'navigate'; route: Route }> | Readonly<{ type: 'open'; workspaceId: string; resourceId: string }> | Readonly<{ type: 'new_note'; workspaceId: string }> | Readonly<{ type: 'capture'; workspaceId: string; body: string }> | Readonly<{ type: 'create_workspace'; title: string }> | Readonly<{ type: 'close'; resourceId: string }> | Readonly<{ type: 'sync' }>;
+export type Intent = Readonly<{ type: 'navigate'; route: Route }> | Readonly<{ type: 'open'; workspaceId: string; resourceId: string }> | Readonly<{ type: 'new_note'; workspaceId: string }> | Readonly<{ type: 'capture'; workspaceId: string; body: string }> | Readonly<{ type: 'create_workspace'; title: string }> | Readonly<{ type: 'close'; resourceId: string }> | Readonly<{ type: 'surface'; workspaceId:string; preset:SurfacePresetId }> | Readonly<{ type: 'sync' }>;
 export type Plan = Readonly<{ type: 'empty' }> | Readonly<{ type: 'unavailable'; reason: string }> | Readonly<{ type: 'ready'; label: string; intent: Intent }>;
 export function captureAddress(snapshot: Snapshot, route: Route, focused: string | null): Address {
   const workspace = route.type === 'workspace' ? snapshot.workspaces.find(w => w.id === route.id) : undefined;
@@ -30,11 +31,15 @@ export function commandPlan(snapshot: Snapshot, route: Route, draft: CommandDraf
     if (workspaces.length > 1) return unavailable('Several workspaces have that name. Choose one in navigation.');
     if (workspaces[0]) return ready('Open '+workspaces[0].title, { type: 'navigate', route: { type: 'workspace', id: workspaces[0].id } });
     const resources = snapshot.resources.filter(r => r.heads.length === 1 && r.heads[0]?.title.toLocaleLowerCase() === open[1]);
-    if (resources.length > 1) return unavailable('Several notes have that title. Open the intended note from its workspace.');
+    if (resources.length > 1) return unavailable('Several items have that title. Open the intended item from its workspace.');
     const resource = resources[0], workspace = resource ? snapshot.workspaces.find(w => w.id === currentId && w.placements.some(p => p.resource_id === resource.id)) ?? snapshot.workspaces.find(w => w.placements.some(p => p.resource_id === resource.id)) : undefined;
     if (resource && workspace) return ready('Open '+titleOf(resource), { type: 'open', workspaceId: workspace.id, resourceId: resource.id });
-    return unavailable('No available workspace or note matches that name.');
+    const aliases:Readonly<Record<string,SurfacePresetId>>={'word':'word','microsoft word':'word','excel':'excel','microsoft excel':'excel','powerpoint':'powerpoint','power point':'powerpoint','vs code':'vscode','visual studio code':'vscode','code':'code','code document':'code','diagrams':'diagrams'};
+    const preset=Object.hasOwn(aliases,open[1])?aliases[open[1]]:undefined;
+    if(preset)return currentId?ready('Add '+surfacePreset(preset)!.title+' to '+draft.address.workspaceTitle,{type:'surface',workspaceId:currentId,preset}):unavailable('Choose a workspace for this application.');
+    return unavailable('No available workspace or item matches that name.');
   }
+  if(/^(?:create |make |a )?new code document$/.test(normalized))return currentId?ready('Open a code editor in '+draft.address.workspaceTitle,{type:'surface',workspaceId:currentId,preset:'code'}):unavailable('Choose a workspace for this document.');
   const namedNote = /^note in (.+?):\s*(.+)$/is.exec(text);
   if (namedNote?.[1] && namedNote[2]?.trim()) {
     const workspaces = snapshot.workspaces.filter(w => w.title.toLocaleLowerCase() === namedNote[1]!.trim().toLocaleLowerCase());
@@ -43,5 +48,5 @@ export function commandPlan(snapshot: Snapshot, route: Route, draft: CommandDraf
   }
   const note = /^(?:remember|note|take a note)[: ,]+(.+)$/is.exec(text);
   if (note?.[1]?.trim()) return currentId ? ready('Save a note in '+draft.address.workspaceTitle, { type: 'capture', workspaceId: currentId, body: note[1].trim() }) : unavailable('Choose a workspace, or say “Note in [workspace name]: [your note]”.');
-  return unavailable('This host currently supports workspace navigation, notes, and peer exchange. Use one of the phrases shown below.');
+  return currentId ? ready('Save note in '+draft.address.workspaceTitle,{type:'capture',workspaceId:currentId,body:text}) : unavailable('Choose a workspace for this note, or name one to create.');
 }

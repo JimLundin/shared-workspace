@@ -646,6 +646,39 @@ fn command_matches(command: &Command, action: &Action) -> bool {
     match (command, action) {
         (Command::CreateWorkspace { title: a, .. }, Action::CreateWorkspace { title: b }) => a == b,
         (
+            Command::CreateSurface {
+                resource_id: ar,
+                title: at,
+                surface: a,
+                ..
+            },
+            Action::CreateSurface {
+                resource_id: br,
+                title: bt,
+                surface: b,
+            },
+        ) => ar == br && at == bt && a == b,
+        (
+            Command::EditSurface {
+                resource_id: ar,
+                title: at,
+                surface: a,
+                expected_heads: ah,
+                ..
+            },
+            Action::EditSurface {
+                resource_id: br,
+                title: bt,
+                surface: b,
+                expected_heads: bh,
+            },
+        ) => {
+            ar == br
+                && at == bt
+                && a == b
+                && ah.iter().collect::<BTreeSet<_>>() == bh.iter().collect::<BTreeSet<_>>()
+        }
+        (
             Command::CreateResource {
                 resource_id: ar,
                 title: at,

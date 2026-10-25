@@ -7112,6 +7112,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "turso",
+ "url",
 ]
 
 [[package]]

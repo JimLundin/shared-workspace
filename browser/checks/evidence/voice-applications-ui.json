@@ -1,0 +1,271 @@
+{
+  "passed": true,
+  "target": "http://127.0.0.1:37545/shared-workspace/",
+  "timestamp": "2026-10-25T20:21:58.066Z",
+  "observations": [
+    {
+      "device": "inviter",
+      "engine": "chromium",
+      "version": "156.0.8078.4",
+      "profile": "fresh-persistent"
+    },
+    {
+      "stage": "inviter-startup",
+      "device": "inviter",
+      "startup_ms": 1159,
+      "isolated": true,
+      "current_workspace_ready": true
+    },
+    {
+      "stage": "create-note",
+      "engine": "chromium",
+      "dialog": "Switch workspace",
+      "native_modal": true,
+      "backdrop": "rgba(24, 37, 30, 0.76)",
+      "corners_blocked": true,
+      "background_cannot_focus": true,
+      "in_viewport": true,
+      "focusable_count": 8,
+      "chrome_focus_transitions": [
+        {
+          "inside": false,
+          "active_tag": "BODY",
+          "document_has_focus": false,
+          "returned_to_dialog": true
+        }
+      ],
+      "refresh_focus_checked": true
+    },
+    {
+      "stage": "create-invitation",
+      "engine": "chromium",
+      "dialog": "Share workspace",
+      "native_modal": true,
+      "backdrop": "rgba(24, 37, 30, 0.76)",
+      "corners_blocked": true,
+      "background_cannot_focus": true,
+      "in_viewport": true,
+      "focusable_count": 3,
+      "chrome_focus_transitions": [
+        {
+          "inside": false,
+          "active_tag": "BODY",
+          "document_has_focus": false,
+          "returned_to_dialog": true
+        },
+        {
+          "inside": false,
+          "active_tag": "BODY",
+          "document_has_focus": false,
+          "returned_to_dialog": true
+        }
+      ],
+      "refresh_focus_checked": false
+    },
+    {
+      "stage": "create-invitation",
+      "ticket_initially_hidden": true,
+      "disclosure_opened": true
+    },
+    {
+      "stage": "create-invitation",
+      "ticket_characters": 234,
+      "inviter_visible": "visible"
+    },
+    {
+      "device": "joiner",
+      "engine": "webkit",
+      "version": "27.2",
+      "profile": "fresh-persistent"
+    },
+    {
+      "stage": "joiner-startup",
+      "device": "joiner",
+      "startup_ms": 1729,
+      "isolated": true,
+      "current_workspace_ready": true
+    },
+    {
+      "stage": "joiner-startup",
+      "engine": "webkit",
+      "dialog": "Join workspaces",
+      "native_modal": true,
+      "backdrop": "rgba(24, 37, 30, 0.76)",
+      "corners_blocked": true,
+      "background_cannot_focus": true,
+      "in_viewport": true,
+      "focusable_count": 4,
+      "chrome_focus_transitions": [
+        {
+          "inside": false,
+          "active_tag": "BODY",
+          "document_has_focus": false,
+          "returned_to_dialog": true
+        }
+      ],
+      "refresh_focus_checked": false
+    },
+    {
+      "stage": "joiner-startup",
+      "ticket_preserved": true,
+      "inviter_visible": "visible"
+    },
+    {
+      "stage": "join-selected-workspaces",
+      "elapsed_ms": 1979,
+      "joined": true,
+      "inviter_visible": "visible"
+    },
+    {
+      "stage": "verify-imported-note",
+      "engine": "webkit",
+      "dialog": "Switch workspace",
+      "native_modal": true,
+      "backdrop": "rgba(24, 37, 30, 0.76)",
+      "corners_blocked": true,
+      "background_cannot_focus": true,
+      "in_viewport": true,
+      "focusable_count": 8,
+      "chrome_focus_transitions": [
+        {
+          "inside": false,
+          "active_tag": "BODY",
+          "document_has_focus": false,
+          "returned_to_dialog": true
+        }
+      ],
+      "refresh_focus_checked": true
+    },
+    {
+      "stage": "capture-and-mobile-journeys",
+      "engine": "webkit",
+      "dialog": "Capture",
+      "native_modal": true,
+      "backdrop": "rgba(24, 37, 30, 0.76)",
+      "corners_blocked": true,
+      "background_cannot_focus": true,
+      "in_viewport": true,
+      "focusable_count": 6,
+      "chrome_focus_transitions": [
+        {
+          "inside": false,
+          "active_tag": "BODY",
+          "document_has_focus": false,
+          "returned_to_dialog": true
+        }
+      ],
+      "refresh_focus_checked": false
+    },
+    {
+      "stage": "capture-and-mobile-journeys",
+      "engine": "webkit",
+      "dialog": "Capture",
+      "native_modal": true,
+      "backdrop": "rgba(24, 37, 30, 0.76)",
+      "corners_blocked": true,
+      "background_cannot_focus": true,
+      "in_viewport": true,
+      "focusable_count": 6,
+      "chrome_focus_transitions": [
+        {
+          "inside": false,
+          "active_tag": "BODY",
+          "document_has_focus": false,
+          "returned_to_dialog": true
+        }
+      ],
+      "refresh_focus_checked": false
+    },
+    {
+      "stage": "capture-and-mobile-journeys",
+      "engine": "webkit",
+      "dialog": "Capture",
+      "native_modal": true,
+      "backdrop": "rgba(24, 37, 30, 0.76)",
+      "corners_blocked": true,
+      "background_cannot_focus": true,
+      "in_viewport": true,
+      "focusable_count": 9,
+      "chrome_focus_transitions": [
+        {
+          "inside": false,
+          "active_tag": "BODY",
+          "document_has_focus": false,
+          "returned_to_dialog": true
+        }
+      ],
+      "refresh_focus_checked": false
+    },
+    {
+      "stage": "complete",
+      "joined": true,
+      "initial_note": true,
+      "joiner_edit": true,
+      "inviter_edit": true
+    }
+  ],
+  "joined": true,
+  "transfers": {
+    "initial_note": true,
+    "joiner_edit": true,
+    "inviter_edit": true
+  },
+  "assertions": [
+    "Fresh startup provides Create and Join; created work opens without a mode choice or persistent workspace navigation.",
+    "Picker is on demand; its top-layer modal covers the viewport, contains focus, and closes with Escape and Back.",
+    "Explicit Join opens the single newly received workspace and its actual note without extra navigation.",
+    "Picker is on demand; its top-layer modal covers the viewport, contains focus, and closes with Escape and Back.",
+    "Direct reader edits save through durable host receipts and converge over real Iroh in both directions.",
+    "Typed capture survives dismissal and workspace changes, executes only at its original address, and sharing retains explicit scope.",
+    "Narrow, reduced-height and landscape layouts keep work and capture dialogs reachable; this is not physical keyboard evidence.",
+    "Reload resumes the current workspace and retained note, ready for direct reading and editing."
+  ],
+  "join_status": [
+    "Connected. Your shared work is saved here."
+  ],
+  "relay_routes": [
+    {
+      "device": "inviter",
+      "origin": "wss://euc1-1.relay.n0.iroh.link",
+      "created": true,
+      "sent_frames": 459,
+      "received_frames": 505,
+      "failed": false,
+      "closed": false
+    },
+    {
+      "device": "joiner",
+      "origin": "wss://euc1-1.relay.n0.iroh.link",
+      "created": true,
+      "sent_frames": 503,
+      "received_frames": 0,
+      "failed": false,
+      "closed": false
+    }
+  ],
+  "harness_sha256": "0e69d91b5bcab720c2dc7e1682269d1a1d15413664e25741f9c773c17cd2fa4a",
+  "served_assets": {
+    "apple-touch-icon.png": "591a59da78b2396efb648dda50074fef5ebec80c2aafded3a342192af3c2ec72",
+    "assets/browser_workspace_host_bg-Cx6tSzMi.wasm": "c6b05de93ed44927deeede347a0decf4250bb859bb4fb1bbf77b32c79f9fa9f4",
+    "assets/connections-6XAxdqA3.js": "385eb8fed34d8186ab8b337a5e56e172c71bb62b460adbee2826c5ae5cb7a30a",
+    "assets/host-CsqSxEnT.js": "2396bd23b4789ca95758c6caea4823ee1980f5ce50a9edc4e643dea2651e425e",
+    "assets/index-CmbAyo7_.js": "48e567529b920692e3d3e2a1e2cca9ad0750a051d80ad9bc011a1935d67a00fa",
+    "assets/index-Dp2WxMqt.css": "a531a725885ef9b910f955927244bcab8db510ada82f7853778a4551b084ef9f",
+    "assets/owner-Dc8WdTIz.js": "1079b945b7ed63a7d63d4789dddc5bf2b554670ccc0a2a4b58e29a5cb4edd2a4",
+    "assets/turso.wasm32-wasi-KrOvB4jh.wasm": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9",
+    "assets/worker-Bfsof83k.js": "7d1f72460241b3c8cdef32223aabe02deabd79a93a20feed51c3a1d3a9391239",
+    "assets/worker-C3Ftajuj.js": "f05a971994e5bf0fd25ef55f621f171c29f7e9cb2df1ccce0381376552f5bceb",
+    "icon-192.png": "841596d8b1eab5e9d32c1133f8c3015deca2b43a337added3e6a99fddb172b1a",
+    "icon-512.png": "e6373e072af6d9b599f93ee68fc2b42117f61b2bbf2360b4fd2ae7db613a24a3",
+    "icon.svg": "e6cb3267d20a3428749d5318793bbbaeee5d313c8a7990fd4a4dd00b97ce0a28",
+    "index.html": "c1f5668e10a2072d9da84136e757614638177539e6e8ac7f8e6a14581373a9b1",
+    "manifest.webmanifest": "3c784dd35c1c6a1188ffc5dd3228fde0ad36991a5ca12898e74ba9bf09b94af8",
+    "sw.js": "33af7371ec95151dc6285f0e1c25bc7c7116ca11bd682f97c6e28b3a4cc8102c"
+  },
+  "cleanup": {
+    "contexts_closed": true,
+    "profiles_removed": true,
+    "static_server_closed": true
+  },
+  "scope": "Served production UI, separate browser engines and fresh temporary persistent profiles, real Iroh pairing and bidirectional note edits, current-work/modal/capture journeys; Linux WebKit with resized viewports is not physical iPhone touch, keyboard, or microphone evidence. No screenshots, traces, profiles, databases, seeds, or invitation values are exported."
+}

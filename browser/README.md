@@ -24,9 +24,11 @@ pairs browsers with browsers.
 
 ## Shared state and local ownership
 
-Workspaces, notes, resource revisions and signed membership history are shared.
-Browser identity, login sessions, microphone state and the current view remain
-local. Each browser profile and website origin has its own actual Turso Database
+Workspaces, notes, application/document references, code documents, resource
+revisions and signed membership history are shared. A workspace can also have an
+OpenAI transcription connection, shared with its enrolled devices and members.
+Browser identity, application login sessions, microphone state, appearance and
+the current view remain local. Each browser profile and website origin has its own actual Turso Database
 store in OPFS. One tab owns that store through a Web Lock; another tab must not
 take the lock or rotate the identity.
 
@@ -57,11 +59,29 @@ reconciles retained work; this is not an always-running background phone agent.
 The browser controls storage retention, and deleting website data deletes that
 local identity and copy. Keep another paired copy of important work.
 
-Voice input is started explicitly and produces an editable command. Availability
-and speech processing depend on the browser; typing and keyboard dictation
-remain available. Application embedding is subject to the target website's
-frame and login policies. Native document-hosting experiments do not establish
-that Office can be embedded in this public website.
+The microphone is the primary input. It records on explicit request and sends the
+finished clip to OpenAI using the captured workspace's connection. The transcript
+can become a note, enter the original draft, or propose a supported command for
+review. Configure a direct OpenAI API key through the private connection settings;
+the app does not reuse the desktop assistant's work-gateway credential. Device
+speech is an explicit fallback. See [provider dictation](../docs/provider-dictation.md)
+for capture limits and the distinction between tested Chromium behavior and
+unverified physical iPhone recording.
+
+Connection records are signed and encrypted locally, and travel only to enrolled
+peers in their workspace. Concurrent changes require resolution. Removing a
+connection does not revoke its key at OpenAI. Sharing a workspace also shares the
+ability to use and change its connection; service account login cookies are not
+copied. This is a trusted-browser-origin model, not protection from malicious code
+running in that origin. See the [connection contract](host/CONNECTIONS-CONTRACT.md).
+
+CodeMirror provides a real editor inside the workspace; saved text, language and
+history synchronize. It provides no terminal or code execution. Office and
+vscode.dev prevent ordinary browser embedding, so their cards open the service or
+document in a browser tab. The service still owns document access and sign-in.
+See [application surfaces](../docs/shared-application-surfaces.md) for the actual
+embedding evidence. Older clients must update before synchronizing new surface
+operations; existing signed note history is preserved.
 
 Turso 0.8.3 requests **250 MiB of initial WASM linear memory**, not 250 MiB of
 additional resident RAM. The [runtime audit](storage-probe/memory-audit-20261025/README.md)

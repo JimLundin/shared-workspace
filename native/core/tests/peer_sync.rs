@@ -1,3 +1,6 @@
+mod common;
+use common::note_body;
+
 use anyhow::Context;
 use tempfile::tempdir;
 use workspace_core::{Command, Host, NetworkMode};
@@ -94,7 +97,7 @@ async fn paired_hosts_keep_concurrent_writing_across_real_connections() -> anyho
     let invitation = left.create_invite(vec!["launch".into()], 600).await?;
     right.join(invitation.ticket).await?;
     assert_eq!(
-        right.snapshot().await?.data.resources[0].heads[0].body,
+        note_body(&right.snapshot().await?.data.resources[0].heads[0]),
         "Original"
     );
 
@@ -123,8 +126,8 @@ async fn paired_hosts_keep_concurrent_writing_across_real_connections() -> anyho
     let merged = right.snapshot().await?;
     let heads = &merged.data.resources[0].heads;
     assert_eq!(heads.len(), 2, "Both offline proposals must survive");
-    assert!(heads.iter().any(|head| head.body == "Phone writing"));
-    assert!(heads.iter().any(|head| head.body == "Laptop writing"));
+    assert!(heads.iter().any(|head| note_body(head) == "Phone writing"));
+    assert!(heads.iter().any(|head| note_body(head) == "Laptop writing"));
     assert_eq!(left.snapshot().await?.data.resources, merged.data.resources);
     let identity = right.snapshot().await?.data.device_id;
     right.shutdown().await?;
@@ -169,13 +172,8 @@ async fn new_member_reaches_an_existing_peer_after_inviter_stops() -> anyhow::Re
     .await?;
     c.sync().await?;
     let b_state = b.snapshot().await?;
-    assert!(
-        b_state
-            .data
-            .resources
-            .iter()
-            .any(|r| r.id == "phone-note" && r.heads[0].body == "Phone and desktop carry on")
-    );
+    assert!(b_state.data.resources.iter().any(|r| r.id == "phone-note"
+        && note_body(&r.heads[0]) == "Phone and desktop carry on"));
     let c_id = c.snapshot().await?.data.device_id;
     assert!(b_state.peers.iter().any(|p| p.id == c_id));
     c.shutdown().await?;

@@ -6,7 +6,7 @@ body { height: 100dvh; }
 #browser-controls:empty::before { content: 'This app is up to date. Your saved work is available on this device.'; font-size: .875rem; color: var(--muted); line-height: 1.7; }
 #browser-controls { display: grid; gap: 12px; }
 #browser-controls>button { min-height: 48px; text-align: left; }
-#browser-controls>button[data-update] { background: var(--accent); color: white; }
+#browser-controls>button[data-update] { background: var(--accent); color: var(--on-accent); }
 .browser-notice { padding: 28px; }
 .browser-notice p { font-size: .9375rem; }
 .browser-notice button { margin: 8px 8px 0 0; }

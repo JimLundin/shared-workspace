@@ -7,8 +7,9 @@ async function createWorkspace(page:Page,title='Launch work',first=true){
   await expect(page.getByRole('button',{name:'Current workspace: '+title})).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
+async function startNote(page:Page){await page.getByRole('button',{name:'Add to workspace',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:/^Note /}).click()}
 async function createNote(page:Page,title='Launch brief',body='The launch starts with three pilot teams.'){
-  await page.getByRole('button',{name:'Add a note',exact:true}).click();
+  await startNote(page);
   await page.getByLabel('Title',{exact:true}).fill(title);await page.getByLabel('Content',{exact:true}).fill(body);
   await page.getByRole('button',{name:'Save note',exact:true}).click();
   await expect(page.locator('.editor')).toHaveCount(0);await expect(page.getByRole('button',{name:'Open '+title,exact:true})).toBeVisible();
@@ -58,32 +59,32 @@ test('late revision preserves local edit and requires explicit reconciliation',a
 test('known rejection and network loss retain editable input with honest local save',async({page})=>{
   await createWorkspace(page);await createNote(page);await openNote(page);await page.getByRole('button',{name:'Edit',exact:true}).click();await page.getByLabel('Title',{exact:true}).fill('Rejected title');await page.evaluate(()=>window.fixture.rejectNext());await page.getByRole('button',{name:'Save note',exact:true}).click();
   await expect(page.locator('.status-message')).toContainText('Change not saved');await expect(page.getByRole('button',{name:'Retry this change'})).toHaveCount(0);await expect(page.getByLabel('Title',{exact:true})).toHaveValue('Rejected title');
-  await page.getByLabel('Title',{exact:true}).fill('Corrected title');await page.evaluate(()=>window.fixture.offline());await page.getByRole('button',{name:'Save note',exact:true}).click();await expect(page.locator('.editor')).toHaveCount(0);await expect(page.locator('.paper h2')).toHaveText('Corrected title');await expect(page.locator('.connection-status')).toContainText('Offline');
+  await page.getByLabel('Title',{exact:true}).fill('Corrected title');await page.evaluate(()=>window.fixture.offline());await page.getByRole('button',{name:'Save note',exact:true}).click();await expect(page.locator('.editor')).toHaveCount(0);await expect(page.locator('.paper h2')).toHaveText('Corrected title');await expect(page.locator('.topbar')).not.toContainText('Saved here');await expect(page.getByRole('button',{name:'Check connections'})).toBeVisible();
 });
 
 test('typed capture keeps workspace across navigation and failed receipt retry cannot duplicate it',async({page})=>{
   await createWorkspace(page);await createWorkspace(page,'Private',false);await switchTo(page,'Launch work');
-  await page.getByRole('button',{name:'Type a command',exact:true}).click();await page.getByLabel('Command text',{exact:true}).fill('Remember the pilot decision');await page.getByRole('button',{name:'Close dialog'}).click();await switchTo(page,'Private');
-  await page.getByRole('button',{name:'Continue captured input',exact:false}).click();await expect(page.getByLabel('Command text',{exact:true})).toHaveValue('Remember the pilot decision');await expect(page.getByRole('button',{name:'Run command →'})).toBeDisabled();await page.getByRole('button',{name:'Return to Launch work'}).click();
-  await page.evaluate(()=>window.fixture.loseReceipt());await page.getByRole('button',{name:'Run command →'}).click();await page.getByRole('dialog').getByRole('button',{name:'Retry this change'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button',{name:'Type instead',exact:true}).click();await page.getByLabel('Your words',{exact:true}).fill('Remember the pilot decision');await page.getByRole('button',{name:'Close dialog'}).click();await switchTo(page,'Private');
+  await page.getByRole('button',{name:'Review capture',exact:false}).click();await expect(page.getByLabel('Your words',{exact:true})).toHaveValue('Remember the pilot decision');await expect(page.locator('#run-command')).toBeDisabled();await page.getByRole('button',{name:'Return to Launch work'}).click();
+  await page.evaluate(()=>window.fixture.loseReceipt());await page.locator('#run-command').click();await page.getByRole('dialog').getByRole('button',{name:'Retry this change'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
   const commands=await page.evaluate(()=>window.fixture.commands());expect(commands.at(-1)).toEqual(commands.at(-2));expect(await page.evaluate(()=>window.fixture.resources().length)).toBe(1);
-  await page.getByRole('button',{name:'Type a command',exact:false}).click();await expect(page.getByLabel('Command text')).toHaveValue('');
+  await page.getByRole('button',{name:'Type instead',exact:false}).click();await expect(page.getByLabel('Your words')).toHaveValue('');
 });
 
 test('voice transcript stays addressed and cancelled late speech cannot overwrite newer input',async({page})=>{
   await createWorkspace(page);await createWorkspace(page,'Private',false);await switchTo(page,'Launch work');
   await page.evaluate(()=>document.addEventListener('focusin',event=>{if((event.target as HTMLElement).id==='command-text')document.documentElement.dataset.commandFocusSeen='true'}));
-  await page.getByRole('button',{name:'Speak a command',exact:true}).click();expect(await page.locator('html').getAttribute('data-command-focus-seen')).toBeNull();await page.evaluate(()=>window.fixture.speech('Remember a spoken thought'));
+  await page.getByRole('button',{name:'Speak',exact:true}).click();expect(await page.locator('html').getAttribute('data-command-focus-seen')).toBeNull();await page.evaluate(()=>window.fixture.speech('Remember a spoken thought'));
   await expect(page.getByLabel('Spoken transcript · editable')).toHaveValue('Remember a spoken thought');await page.getByRole('button',{name:'Close dialog'}).click();await switchTo(page,'Private');
-  await page.evaluate(()=>window.fixture.speech('Late voice must not replace the thought',0));await page.getByRole('button',{name:/Continue captured input/}).click();await expect(page.getByLabel('Spoken transcript · editable')).toHaveValue('Remember a spoken thought');await expect(page.getByRole('button',{name:'Run command →'})).toBeDisabled();
-  await page.getByRole('button',{name:'Return to Launch work'}).click();await page.getByRole('button',{name:'Run command →'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect((await page.evaluate(()=>window.fixture.resources()))[0]?.heads[0]?.body).toBe('a spoken thought');
-  await page.evaluate(()=>window.fixture.failSpeech());await page.getByRole('button',{name:'Speak a command',exact:true}).click();await expect(page.locator('.voice-status')).toContainText('Type your command');await page.getByLabel('Command text').fill('Remember typed fallback');await page.getByRole('button',{name:'Run command →'}).click();expect(await page.evaluate(()=>window.fixture.resources().length)).toBe(2);
+  await page.evaluate(()=>window.fixture.speech('Late voice must not replace the thought',0));await page.getByRole('button',{name:'Review capture'}).click();await expect(page.getByLabel('Spoken transcript · editable')).toHaveValue('Remember a spoken thought');await expect(page.locator('#run-command')).toBeDisabled();
+  await page.getByRole('button',{name:'Return to Launch work'}).click();await page.locator('#run-command').click();await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.evaluate(()=>{const h=window.fixture.resources()[0]?.heads[0];return h&&'body' in h?h.body:null})).toBe('a spoken thought');
+  await page.evaluate(()=>window.fixture.failSpeech());await page.getByRole('button',{name:'Speak',exact:true}).click();await expect(page.locator('.voice-status')).toContainText('Type your command');await page.getByRole('dialog').getByRole('button',{name:'Type instead',exact:true}).click();await page.getByLabel('Your words').fill('Remember typed fallback');await page.locator('#run-command').click();expect(await page.evaluate(()=>window.fixture.resources().length)).toBe(2);
 });
 
 test('unfinished editor survives workspace switch and cannot be replaced by a new note',async({page})=>{
-  await createWorkspace(page);await createWorkspace(page,'Private',false);await switchTo(page,'Launch work');await page.getByRole('button',{name:'Add a note',exact:true}).click();await page.getByLabel('Title',{exact:true}).fill('Unfinished');await page.getByLabel('Content',{exact:true}).fill('Keep this thought');
-  await switchTo(page,'Private');await page.getByRole('button',{name:'Add a note',exact:true}).click();await expect(page.getByLabel('Content',{exact:true})).toHaveValue('Keep this thought');await expect(page.getByRole('button',{name:'Current workspace: Launch work'})).toBeVisible();
+  await createWorkspace(page);await createWorkspace(page,'Private',false);await switchTo(page,'Launch work');await startNote(page);await page.getByLabel('Title',{exact:true}).fill('Unfinished');await page.getByLabel('Content',{exact:true}).fill('Keep this thought');
+  await switchTo(page,'Private');await startNote(page);await expect(page.getByLabel('Content',{exact:true})).toHaveValue('Keep this thought');await expect(page.getByRole('button',{name:'Current workspace: Launch work'})).toBeVisible();
   await page.getByRole('button',{name:'Keep draft & go back'}).click();await page.getByRole('button',{name:'Continue edit'}).click();await expect(page.getByLabel('Title',{exact:true})).toHaveValue('Unfinished');
 });
 
@@ -112,7 +113,7 @@ test('multiple joined spaces offer only received work, repeated grant asks inste
 test('dialogs are top layer, trap focus, preserve background scroll and restore focus on Escape/Back',async({page})=>{
   await page.setViewportSize({width:390,height:620});await createWorkspace(page);for(let i=0;i<3;i++)await createNote(page,'Note '+i,'Text');
   await page.locator('.main').evaluate(el=>el.scrollTop=180);const scroll=await page.locator('.main').evaluate(el=>el.scrollTop);
-  const trigger=page.getByRole('button',{name:/Current workspace:/});await trigger.click();await expect(page.locator('dialog:modal')).toHaveCount(1);await page.locator('[data-action=new-note]').evaluate(el=>(el as HTMLElement).focus());expect(await page.evaluate(()=>!!document.activeElement?.closest('dialog'))).toBe(true);
+  const trigger=page.getByRole('button',{name:/Current workspace:/});await trigger.click();await expect(page.locator('dialog:modal')).toHaveCount(1);await page.locator('[data-action=add]').evaluate(el=>(el as HTMLElement).focus());expect(await page.evaluate(()=>!!document.activeElement?.closest('dialog'))).toBe(true);
   const close=page.getByRole('button',{name:'Close dialog'});await close.focus();await page.evaluate(()=>window.fixture.refresh());await expect(close).toBeFocused();
   for(let i=0;i<12;i++)await page.keyboard.press('Tab');expect(await page.evaluate(()=>!!document.activeElement?.closest('dialog'))).toBe(true);
   await page.keyboard.press('Escape');await expect(trigger).toBeFocused();expect(await page.locator('.main').evaluate(el=>el.scrollTop)).toBe(scroll);
@@ -126,7 +127,7 @@ test('long titles, large text and keyboard-like narrow/landscape viewports remai
     await page.setViewportSize(viewport);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.getByRole('button',{name:/Current workspace:/}).click();await expect(page.getByRole('button',{name:'Close dialog'})).toBeInViewport();await page.getByRole('button',{name:'Close dialog'}).click();
   }
-  await page.getByRole('button',{name:/Type a command/}).click();await page.getByLabel('Command text').fill('Remember a thought');await page.getByRole('button',{name:'Run command →'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button',{name:'Type instead'}).click();await page.getByLabel('Your words').fill('Remember a thought');await page.locator('#run-command').click();await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
 test('opening from a scrolled list starts reader at title and polling preserves reader position',async({page})=>{
@@ -142,6 +143,61 @@ test('editing a reference opens the same resource immediately in its original wo
 });
 
 test('system dictation focuses the input before handing control to Windows',async({page})=>{
-  await page.goto('/tests/host.html?dictation');await page.getByLabel('Workspace name',{exact:true}).fill('Work');await page.getByRole('button',{name:'Create workspace',exact:true}).click();await page.getByRole('button',{name:'Speak a command',exact:true}).click();
-  await expect(page.getByLabel('Command text',{exact:true})).toBeFocused();await page.getByLabel('Command text',{exact:true}).fill('Remember Windows dictation');await page.getByRole('button',{name:'Finish input'}).click();await page.getByRole('button',{name:'Run command →'}).click();expect((await page.evaluate(()=>window.fixture.resources()))[0]?.heads[0]?.body).toBe('Windows dictation');
+  await page.goto('/tests/host.html?dictation');await page.getByLabel('Workspace name',{exact:true}).fill('Work');await page.getByRole('button',{name:'Create workspace',exact:true}).click();await page.getByRole('button',{name:'Speak',exact:true}).click();
+  await expect(page.getByLabel('Your words',{exact:true})).toBeFocused();await page.getByLabel('Your words',{exact:true}).fill('Remember Windows dictation');await page.getByRole('button',{name:'Finish input'}).click();await page.locator('#run-command').click();expect(await page.evaluate(()=>{const h=window.fixture.resources()[0]?.heads[0];return h&&'body' in h?h.body:null})).toBe('Windows dictation');
+});
+
+test('themes persist locally and explicit selection survives system color changes',async({page})=>{
+  await page.emulateMedia({colorScheme:'light'});await createWorkspace(page);
+  await page.getByRole('button',{name:/Current workspace:/}).click();await page.getByRole('button',{name:'Appearance',exact:true}).click();await page.getByRole('button',{name:'Dark',exact:true}).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme','dark');await page.emulateMedia({colorScheme:'dark'});await page.emulateMedia({colorScheme:'light'});await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+  await page.getByRole('button',{name:'Close dialog'}).click();await page.evaluate(()=>window.fixture.restart());await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+  await page.getByRole('button',{name:/Current workspace:/}).click();await page.getByRole('button',{name:'Appearance',exact:true}).click();await page.getByRole('button',{name:'Light',exact:true}).click();await page.emulateMedia({colorScheme:'dark'});await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+  await page.getByRole('button',{name:'System',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+});
+
+test('dictation inserts into captured editor field without creating another note',async({page})=>{
+  await createWorkspace(page);await startNote(page);await page.getByLabel('Title',{exact:true}).fill('Thought');await page.getByLabel('Content',{exact:true}).fill('First. ');await page.getByLabel('Content',{exact:true}).press('End');
+  const before=await page.evaluate(()=>window.fixture.commands().length);await page.getByRole('button',{name:'Speak',exact:true}).click();await page.evaluate(()=>window.fixture.speech('Open Word, then review the brief.'));await page.getByRole('button',{name:'Stop recording',exact:true}).click();await page.getByRole('button',{name:'Insert into draft',exact:true}).click();
+  await expect(page.getByLabel('Content',{exact:true})).toHaveValue('First. Open Word, then review the brief.');expect(await page.evaluate(()=>window.fixture.commands().length)).toBe(before);await page.getByRole('button',{name:'Save note',exact:true}).click();expect(await page.evaluate(()=>window.fixture.resources().length)).toBe(1);
+});
+
+test('provider setup and exact retry keep keys out of the interface, free speech becomes a note',async({page})=>{
+  await page.setViewportSize({width:390,height:667});await page.goto('/tests/host.html?provider');await page.getByLabel('Workspace name',{exact:true}).fill('Work');await page.getByRole('button',{name:'Create workspace',exact:true}).click();await page.getByRole('button',{name:'Speak',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'OpenAI connection',exact:true})).toBeVisible();const key='synthetic-only-connection-key';await page.getByLabel('OpenAI API key',{exact:true}).fill(key);await page.evaluate(()=>window.fixture.loseConnectionReceipt());await page.getByRole('button',{name:'Save connection',exact:true}).click();expect(await page.evaluate(()=>window.fixture.hasUnsubmittedInput())).toBe(true);await page.getByRole('button',{name:'Retry connection change',exact:true}).click();expect(await page.evaluate(()=>window.fixture.hasUnsubmittedInput())).toBe(false);
+  await expect(page.getByLabel('Replace API key',{exact:true})).toHaveValue('');const writes=await page.evaluate(()=>window.fixture.connectionWrites());expect(writes).toHaveLength(2);expect(writes[0]).toEqual(writes[1]);expect(await page.locator('body').innerHTML()).not.toContain(key);expect(JSON.stringify(await page.evaluate(()=>window.fixture.resources()))).not.toContain(key);
+  await page.getByRole('button',{name:'Continue to voice'}).click();await page.getByRole('button',{name:'Start speaking'}).click();await expect(page.locator('#command-text')).toHaveCount(0);await page.getByRole('button',{name:'Stop recording',exact:true}).click();await expect(page.locator('.voice-stage h3')).toHaveText('Transcribing');await page.evaluate(()=>window.fixture.finishSpeech('A thought without a command prefix.'));await expect(page.getByRole('button',{name:'Save as note',exact:true})).toBeFocused();expect((await page.locator('#command-text').boundingBox())!.y).toBeLessThan(320);const saveBounds=(await page.locator('#run-command').boundingBox())!;expect(saveBounds.y+saveBounds.height).toBeLessThan(650);await page.getByRole('button',{name:'Save as note',exact:true}).click();
+  await expect(page.locator('.note-body')).toHaveText('A thought without a command prefix.');await page.getByRole('button',{name:'Share this workspace'}).click();await expect(page.getByRole('dialog')).toContainText('saved OpenAI connections');
+});
+
+test('code document edits use a retained editor and Office opens through an honest external action',async({page})=>{
+  await createWorkspace(page);await page.getByRole('button',{name:'Add to workspace',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:/^Code document /}).click();await page.getByLabel('Title',{exact:true}).fill('example.ts');await page.getByLabel('Language',{exact:true}).selectOption('typescript');await page.getByRole('textbox',{name:'Code content'}).fill('const example = 1;');await page.evaluate(()=>window.fixture.refresh());await expect(page.getByRole('textbox',{name:'Code content'})).toHaveText('const example = 1;');
+  await page.getByRole('button',{name:'Save document',exact:true}).click();await expect(page.getByRole('heading',{name:'example.ts',exact:true})).toBeVisible();await page.getByRole('button',{name:'Edit',exact:true}).click();await page.getByRole('textbox',{name:'Code content'}).fill('const example = 2;');await page.getByRole('button',{name:'Save document',exact:true}).click();
+  const resources=await page.evaluate(()=>window.fixture.resources());expect(resources).toHaveLength(1);const head=resources[0]?.heads[0];expect(head&&'surface' in head&&head.surface.type==='code_document'?head.surface.text:null).toBe('const example = 2;');
+  await page.getByRole('button',{name:'Add to workspace',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:/^Word /}).click();await expect(page.getByRole('link',{name:'Open Word ↗'})).toHaveAttribute('href','https://word.cloud.microsoft/');await expect(page.locator('iframe')).toHaveCount(0);await expect(page.locator('.application-paper')).toContainText('browser tab');
+});
+
+
+test('plus picker preserves an unfinished draft and voice app capture recovers a lost receipt',async({page})=>{
+  await createWorkspace(page);await startNote(page);await page.getByLabel('Title',{exact:true}).fill('Keep me');await page.getByLabel('Content',{exact:true}).fill('An unfinished idea');await page.getByRole('button',{name:'Keep draft & go back'}).click();
+  await page.getByRole('button',{name:'Add to workspace',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:/^Code document /}).click();await expect(page.getByLabel('Content',{exact:true})).toHaveValue('An unfinished idea');await page.getByRole('button',{name:'Discard local edit',exact:true}).click();
+  await page.getByRole('button',{name:'Speak',exact:true}).click();await page.evaluate(()=>window.fixture.speech('Open Word'));await page.getByRole('button',{name:'Stop recording',exact:true}).click();await page.evaluate(()=>window.fixture.loseReceipt());await page.locator('#run-command').click();await page.getByRole('dialog').getByRole('button',{name:'Retry this change'}).click();
+  await expect(page.getByRole('link',{name:'Open Word ↗'})).toBeVisible();expect(await page.evaluate(()=>window.fixture.resources().length)).toBe(1);await page.getByRole('button',{name:'← All work',exact:true}).click();await page.getByRole('button',{name:'Speak',exact:true}).click();await expect(page.locator('.capture-address')).toHaveText('Launch work');
+});
+
+test('dictation cannot insert into a replacement draft and can recover as a separate note',async({page})=>{
+  await createWorkspace(page);await startNote(page);await page.getByLabel('Title',{exact:true}).fill('First draft');await page.getByLabel('Content',{exact:true}).fill('Original');await page.getByRole('button',{name:'Speak',exact:true}).click();await page.evaluate(()=>window.fixture.speech('Open Word'));await page.getByRole('button',{name:'Stop recording',exact:true}).click();await page.getByRole('button',{name:'Close dialog'}).click();
+  await page.getByRole('button',{name:'Discard local edit'}).click();await startNote(page);await page.getByLabel('Title',{exact:true}).fill('Replacement');await page.getByLabel('Content',{exact:true}).fill('Original');await page.getByRole('button',{name:'Review capture'}).click();await page.getByRole('button',{name:'Insert into draft'}).click();
+  await expect(page.getByRole('dialog')).toContainText('original editor is no longer open');await page.getByRole('button',{name:'Keep as a separate note'}).click();await page.getByRole('button',{name:'Save as note'}).click();await expect(page.getByLabel('Content',{exact:true})).toHaveValue('Original');const saved=await page.evaluate(()=>window.fixture.resources());expect(saved).toHaveLength(1);expect(saved[0]?.heads[0]).toHaveProperty('body','Open Word');
+});
+
+
+test('code dictation replaces the captured selection and retains its editor',async({page})=>{
+  await createWorkspace(page);await page.getByRole('button',{name:'Add to workspace'}).click();await page.getByRole('dialog').getByRole('button',{name:/^Code document /}).click();await page.getByRole('textbox',{name:'Code content'}).fill('const draft = 1;');await page.getByRole('textbox',{name:'Code content'}).press('Control+Home');for(let index=0;index<6;index++)await page.keyboard.press('Shift+ArrowRight');
+  await page.getByRole('button',{name:'Speak',exact:true}).click();await page.evaluate(()=>window.fixture.speech('let '));await page.getByRole('button',{name:'Stop recording'}).click();await page.getByRole('button',{name:'Insert into draft'}).click();await expect(page.getByRole('textbox',{name:'Code content'})).toHaveText('let draft = 1;');expect(await page.evaluate(()=>window.fixture.resources().length)).toBe(0);
+});
+
+
+test('failed rerecording keeps the previous transcript and exposes the error',async({page})=>{
+  await createWorkspace(page);await page.getByRole('button',{name:'Speak',exact:true}).click();await page.evaluate(()=>window.fixture.speech('Keep the previous thought'));await page.getByRole('button',{name:'Stop recording'}).click();await page.evaluate(()=>window.fixture.failSpeech());await page.getByRole('button',{name:'Record again'}).click();await expect(page.locator('.voice-status')).toContainText('Voice could not start');await expect(page.getByLabel('Spoken transcript · editable')).toHaveValue('Keep the previous thought');
 });

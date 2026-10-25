@@ -1,6 +1,8 @@
 import '../../../native/ui/src/style.css';
 import './style.css';
+import { observeAppearance } from '../../../native/ui/src/theme.ts';
 import { mountApp } from '../../../native/ui/src/app.ts';
+import { ProviderVoice } from './provider-voice.ts';
 import { BrowserVoice } from './voice.ts';
 import { consumeInvitation, invitationLink } from './invitation.ts';
 import { prepareBrowser } from './pwa.ts';
@@ -8,6 +10,7 @@ import { prepareBrowser } from './pwa.ts';
 const root = document.getElementById('app')!;
 const controls = document.getElementById('browser-controls')!;
 const base = new URL(import.meta.env.BASE_URL, location.origin).href;
+const startupAppearance = observeAppearance(() => {});
 let app: ReturnType<typeof mountApp> | undefined;
 let closeHost: (() => Promise<void>) | undefined;
 let ready = false;
@@ -35,7 +38,7 @@ window.addEventListener('popstate', () => { if(updateClosing){history.pushState(
 optionsDialog.addEventListener('close', () => {
   if (document.querySelector('.browser-notice[open]')) return;
   closeBrowserDialog();
-  root.querySelector<HTMLButtonElement>('[data-action=app-options]')?.focus();
+  root.querySelector<HTMLButtonElement>('#workspace-picker')?.focus();
 });
 let updateWaiting = false;
 function offerUpdate(registration: ServiceWorkerRegistration): void {
@@ -47,7 +50,7 @@ function offerUpdate(registration: ServiceWorkerRegistration): void {
     const message = document.createElement('p'); message.textContent = 'Save your work before reloading to the new version.';
     let closing = false;
     panel.addEventListener('cancel', event => { if (closing) event.preventDefault(); });
-    panel.addEventListener('close', () => { panel.remove(); closeBrowserDialog(); root.querySelector<HTMLButtonElement>('[data-action=app-options]')?.focus(); });
+    panel.addEventListener('close', () => { panel.remove(); closeBrowserDialog(); root.querySelector<HTMLButtonElement>('#workspace-picker')?.focus(); });
     panel.append(heading, message, action('Reload with update', async () => {
       if (app?.session.state.mutation.type === 'sending' || app?.session.state.mutation.type === 'uncertain') { message.textContent = 'Finish or recover the pending save before updating.'; return; }
       if (app?.hasUnsubmittedInput()) { message.textContent = 'You have an unfinished edit or captured input. Choose Later to save or discard it first.'; return; }
@@ -83,7 +86,7 @@ async function start(): Promise<void> {
   const host = await BrowserHost.open({ deviceName: 'Web browser', baseUrl: base, startPaused: document.hidden });
   closeHost = () => host.close();
   app = mountApp(root, {
-    host, voice: new BrowserVoice(), openAppOptions: () => openBrowserDialog(optionsDialog), invitationUrl: ticket => invitationLink(base, ticket),
+    host, connections:host, voice: new ProviderVoice({locale:'',captureContext:()=>{if(!app)throw new Error('Workspace is opening');return app.voiceContext()},transcribe:(audio,{signal,locale,context})=>host.transcribe({workspace_id:context.workspaceId,connection_version:context.connectionVersion,audio,locale},signal)}),fallbackVoice:new BrowserVoice(), openAppOptions: () => openBrowserDialog(optionsDialog), invitationUrl: ticket => invitationLink(base, ticket),
     ...(typeof navigator.share === 'function' ? { shareInvitation: async (url: string): Promise<'shared' | 'cancelled'> => {
       try { await navigator.share({ title: 'Shared workspaces', url }); return 'shared'; }
       catch (error) { if (error instanceof DOMException && error.name === 'AbortError') return 'cancelled'; throw error; }
@@ -91,6 +94,7 @@ async function start(): Promise<void> {
     ...(initialInvite ? { initialInvite } : {}),
     scanner: { async available() { return false; }, async scan() { throw new Error('Open the invitation with your camera app, or paste a ticket.'); }, async cancel() {} },
   });
+  startupAppearance.dispose();
   ready = true; if(updateWaiting) app.setUpdateAvailable();
   const foreground = () => { void host.setForeground(!document.hidden).then(() => { if (!document.hidden) return app?.session.refresh(); }).catch(() => app?.session.refresh()); };
   document.addEventListener('visibilitychange', foreground);

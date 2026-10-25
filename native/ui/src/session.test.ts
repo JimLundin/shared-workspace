@@ -28,7 +28,7 @@ test('retry an unconfirmed save preserves exact operation identity and content',
 test('stale editor preserves its original heads until explicit reconciliation',async()=>{
   const host=new HostFixture(),session=new WorkspaceSession(host,ids());await session.refresh();session.edit('note1');session.updateEditor('body','My unsaved change');host.value=snapshot('r2');await session.refresh();
   host.commandHandler=async c=>c.type==='edit_resource'&&c.expected_heads[0]==='r1'?{type:'conflict',resource_id:'note1',expected_heads:['r1'],actual_heads:['r2']}:{type:'applied',operation_id:c.operation_id,workspace_id:c.workspace_id,replayed:false};
-  await session.saveEditor();assert.equal(session.state.mutation.type,'conflict');assert.equal(session.state.editor?.body,'My unsaved change');const first=host.commands[0];assert.equal(first?.type,'edit_resource');if(first?.type==='edit_resource')assert.deepEqual(first.expected_heads,['r1']);
+  await session.saveEditor();assert.equal(session.state.mutation.type,'conflict');assert.equal(session.state.editor?.type==='existing'?session.state.editor.body:null,'My unsaved change');const first=host.commands[0];assert.equal(first?.type,'edit_resource');if(first?.type==='edit_resource')assert.deepEqual(first.expected_heads,['r1']);
   await session.saveEditor(['r2']);const second=host.commands[1];assert.equal(second?.type,'edit_resource');if(second?.type==='edit_resource')assert.deepEqual(second.expected_heads,['r2']);assert.equal(session.state.mutation.type,'idle');
 });
 test('receipt for another operation cannot report this edit saved',async()=>{
@@ -92,4 +92,18 @@ test('a refresh started during join cannot replace the committed join snapshot',
   const joining=session.join('opaque-test-invitation');host.snapshotHandler=()=>read.promise;const refreshing=session.refresh();
   join.resolve(snapshot('joined'));await joining;read.resolve(snapshot('old'));await refreshing;
   assert.equal(session.snapshot()?.resources[0]?.heads[0]?.id,'joined');
+});
+
+test('new application or note editors cannot replace retained drafts',async()=>{
+  const host=new HostFixture(),session=new WorkspaceSession(host,ids());await session.refresh();session.newNote('w1');session.updateEditor('body','Keep this draft');const original=session.state.editor;
+  session.newSurface('w1',{type:'code_document',language:'python',text:'print(1)'});session.edit('note1');session.newNote('w1');assert.strictEqual(session.state.editor,original);
+  session.closeEditor();session.newSurface('w1',{type:'code_document',language:'python',text:'print(1)'});assert.notEqual(session.state.editor?.draftId,original?.draftId);
+});
+test('surface editor retains observed heads and local code through a conflict and exact retry',async()=>{
+  const host=new HostFixture();host.value={...snapshot(),resources:[{...snapshot().resources[0]!,heads:[{id:'r1',author:'local',parents:[],title:'Code',surface:{type:'code_document',language:'python',text:'print(1)'}}]}]};
+  const session=new WorkspaceSession(host,ids());await session.refresh();session.edit('note1');session.updateSurface({type:'code_document',language:'python',text:'print(2)'});
+  host.value={...host.value,resources:[{...host.value.resources[0]!,heads:[{id:'r2',author:'peer',parents:['r1'],title:'Code',surface:{type:'code_document',language:'python',text:'print(3)'}}]}]};await session.refresh();
+  host.commandHandler=async c=>c.type==='edit_surface'&&c.expected_heads[0]==='r1'?{type:'conflict',resource_id:'note1',expected_heads:['r1'],actual_heads:['r2']}:{type:'applied',operation_id:c.operation_id,workspace_id:c.workspace_id,replayed:false};
+  await session.saveEditor();assert.equal(session.state.mutation.type,'conflict');const draft=session.state.editor;assert.equal(draft?.type,'surface_existing');if(draft?.type==='surface_existing')assert.deepEqual(draft.surface,{type:'code_document',language:'python',text:'print(2)'});
+  await session.saveEditor(['r2']);assert.equal(session.state.editor,null);const change=host.commands[1];assert.equal(change?.type,'edit_surface');if(change?.type==='edit_surface')assert.deepEqual(change.expected_heads,['r2']);
 });

@@ -4,6 +4,7 @@
     "New build waits and offers update without reloading or replacing unsaved input.",
     "Deferring the update retains the open editor and text.",
     "Options survive polling and restore focus; update preserves unfinished workspace creation.",
+    "Update preserves private key input and blocks an unconfirmed real connection write until its exact retry completes.",
     "Explicit update reload reopens the committed note and isolated storage.",
     "Previous build asset remains available to an older client after removal from server.",
     "A missing close acknowledgement offers explicit reload recovery and reopens committed work."

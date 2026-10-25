@@ -1,6 +1,13 @@
 import { connect } from '@tursodatabase/database-wasm';
 import { Domain } from '../../host-wasm/pkg/browser_workspace_host.js';
 import { decodeSnapshot, object, string, number } from '../../../native/ui/src/protocol.ts';
+import { ConnectionVault, type SealedConnection } from './connection-vault.ts';
+import { verifyIdentityStorage } from './identity-storage.ts';
+import {
+  MAX_CONNECTION_RECORDS, activeConnection, connectionError, connectionFailure, connectionPayload, connectionRecords,
+  connectionState, mergeConnections, prepareConnection, publicConnection, removeConnection, setConnection, workspaceId,
+  type ConnectionReceipt, type ConnectionState, type PublicConnection, type RemoveConnection, type SetConnection, type SignedConnection,
+} from './connections.ts';
 import {
   batch, bytes, deviceName, fields, hex, json, parse, randomHex, requireThat, scope, signedOperations,
   type Batch, type Command, type Contact, type DataSnapshot, type ImportReceipt, type PeerRecord,
@@ -18,15 +25,19 @@ export class BrowserStore {
   readonly id: string;
   readonly #db: Database;
   readonly #domain: Domain;
+  readonly #vault: ConnectionVault;
+  #connections: readonly PublicConnection[] = [];
+  readonly #sealedConnections = new Map<string, SealedConnection>();
   readonly #peers = new Map<string, PeerRecord>();
   readonly #invitations = new Map<string, Invitation>();
   #queue: Promise<unknown> = Promise.resolve();
   #closed = false;
   #poisoned = false;
 
-  private constructor(db: Database, domain: Domain, seed: string, name: string) {
+  private constructor(db: Database, domain: Domain, seed: string, name: string, vault: ConnectionVault) {
     this.#db = db;
     this.#domain = domain;
+    this.#vault = vault;
     this.seedHex = seed;
     this.name = name;
     this.id = string(object(parse(domain.snapshot())).device_id);
@@ -40,20 +51,80 @@ export class BrowserStore {
     try {
       await db.exec(`PRAGMA synchronous = FULL;
         CREATE TABLE IF NOT EXISTS identity (slot INTEGER PRIMARY KEY CHECK (slot = 1), seed BLOB NOT NULL, name TEXT NOT NULL) STRICT;
+        CREATE TABLE IF NOT EXISTS identity_format (slot INTEGER PRIMARY KEY CHECK (slot = 1), version INTEGER NOT NULL CHECK (version = 1)) STRICT;
         CREATE TABLE IF NOT EXISTS operations (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, payload TEXT NOT NULL) STRICT;
         CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, payload TEXT NOT NULL) STRICT;
         CREATE TABLE IF NOT EXISTS peers (id TEXT PRIMARY KEY, payload TEXT NOT NULL) STRICT;
-        CREATE TABLE IF NOT EXISTS invitations (token_hash TEXT PRIMARY KEY, workspace_ids TEXT NOT NULL, expires_at_ms INTEGER NOT NULL, accepted_peer TEXT) STRICT;`);
+        CREATE TABLE IF NOT EXISTS invitations (token_hash TEXT PRIMARY KEY, workspace_ids TEXT NOT NULL, expires_at_ms INTEGER NOT NULL, accepted_peer TEXT) STRICT;
+        CREATE TABLE IF NOT EXISTS connections (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, nonce TEXT NOT NULL, ciphertext TEXT NOT NULL) STRICT;`);
       let identity = await (await db.prepare('SELECT seed, name FROM identity WHERE slot = 1')).get();
+      const format = await (await db.prepare('SELECT version FROM identity_format WHERE slot = 1')).get();
+      requireThat(format === undefined || (identity !== undefined && object(format).version === 1), 'Stored device identity format is invalid; refusing to rotate identity.');
+      const sealed = await (await db.prepare('SELECT id,workspace_id,nonce,ciphertext FROM connections ORDER BY id')).all();
+      requireThat(sealed.length <= MAX_CONNECTION_RECORDS, 'Retained connection history exceeds its supported limit.');
+      if (identity !== undefined) {
+        const stored = object(identity).seed;
+        requireThat(stored instanceof Uint8Array && (stored.length === 32 || stored.length === 64), 'Stored device key is invalid; refusing to rotate identity.');
+        requireThat(format === undefined || stored.length === 64, 'The encrypted device identity is damaged; refusing to reinterpret it as a legacy seed.');
+      }
+      const encryptedIdentity = identity !== undefined && (object(identity).seed as Uint8Array).length === 64;
+      const vault = await ConnectionVault.open(databaseName, sealed.length > 0 || encryptedIdentity);
       if (identity === undefined) {
+        if (!vault.created) throw connectionError('A retained device key exists but its database identity is missing. Restore the original workspace data; no replacement identity was created.');
         // Commit the endpoint/signing seed before any network endpoint exists.
         const seed = crypto.getRandomValues(new Uint8Array(32));
-        await (await db.prepare('INSERT INTO identity(slot,seed,name) VALUES(1,?,?)')).run(seed, name);
-        identity = { seed, name };
+        try {
+          const encrypted = await vault.sealIdentity(databaseName, seed);
+          await db.exec('BEGIN');
+          await (await db.prepare('INSERT INTO identity(slot,seed,name) VALUES(1,?,?)')).run(encrypted, name);
+          await db.exec('INSERT INTO identity_format(slot,version) VALUES(1,1)');
+          await db.exec('COMMIT');
+          identity = { seed: encrypted, name };
+        } catch {
+          try { await db.exec('ROLLBACK'); } catch { /* A reopen must inspect the original commit outcome. */ }
+          throw connectionError('Device identity initialization is unconfirmed. Close and reopen this tab; no replacement identity will be created.');
+        } finally { seed.fill(0); }
       }
       const identityRow = object(identity);
-      requireThat(identityRow.seed instanceof Uint8Array && identityRow.seed.length === 32, 'Stored device key is invalid; refusing to rotate identity.');
-      const seedHex = Array.from(identityRow.seed, byte => byte.toString(16).padStart(2, '0')).join('');
+      requireThat(identityRow.seed instanceof Uint8Array, 'Stored device key is invalid; refusing to rotate identity.');
+      let seed: Uint8Array<ArrayBuffer>;
+      if (identityRow.seed.length === 32) {
+        seed = new Uint8Array(identityRow.seed);
+        const encrypted = await vault.sealIdentity(databaseName, seed);
+        // The separately retained device key is durable before migration starts.
+        // On unknown commit outcome, reopening reads the original or ciphertext;
+        // either represents the exact same device identity, never a new seed.
+        try {
+          await db.exec('BEGIN');
+          await (await db.prepare('UPDATE identity SET seed = ? WHERE slot = 1')).run(encrypted);
+          await db.exec('INSERT INTO identity_format(slot,version) VALUES(1,1)');
+          await db.exec('COMMIT');
+        } catch {
+          seed.fill(0);
+          try { await db.exec('ROLLBACK'); } catch { /* Reopening determines whether migration committed. */ }
+          throw connectionError('Device identity migration is unconfirmed. Close and reopen this tab to recover the same identity.');
+        }
+      } else {
+        seed = await vault.unsealIdentity(databaseName, new Uint8Array(identityRow.seed));
+        // An interim encrypted profile is accepted only after authenticated
+        // decryption, then explicitly marked without changing its identity.
+        if (format === undefined) {
+          try { await db.exec('INSERT INTO identity_format(slot,version) VALUES(1,1) ON CONFLICT(slot) DO NOTHING'); }
+          catch { seed.fill(0); throw connectionError('Device identity format could not be retained. Reopen this tab to recover.'); }
+        }
+      }
+      let seedHex: string;
+      try {
+        // Superseded WAL frames can still contain the old plaintext seed after
+        // UPDATE. Checkpoint, then verify the actual current files before any
+        // Domain or endpoint can expose shared connections. Reopening repeats
+        // this barrier after a crash at any migration/checkpoint boundary.
+        await verifyIdentityStorage(databaseName, seed, () => db.exec('PRAGMA wal_checkpoint(TRUNCATE)', { queryTimeout: 15_000 }));
+        seedHex = Array.from(seed, byte => byte.toString(16).padStart(2, '0')).join('');
+      } finally {
+        seed.fill(0);
+        if (identityRow.seed.length === 32) identityRow.seed.fill(0);
+      }
       const retainedName = deviceName(identityRow.name);
       const operations: unknown[] = [];
       for (const raw of await (await db.prepare('SELECT id,workspace_id,payload FROM operations ORDER BY id')).all()) {
@@ -70,7 +141,17 @@ export class BrowserStore {
         requests.push(command);
       }
       domain = new Domain(seedHex, retainedName, json(operations), json(requests));
-      const store = new BrowserStore(db, domain, seedHex, retainedName);
+      const store = new BrowserStore(db, domain, seedHex, retainedName, vault);
+      try {
+        const retained = await Promise.all(sealed.map(row => vault.unseal(row)));
+        for (const item of retained) store.#verifyConnection(item);
+        store.#connections = mergeConnections([], retained).map(publicConnection);
+        for (const raw of sealed) {
+          const row = object(raw);
+          const item = { id: hex(row.id), workspace_id: string(row.workspace_id), nonce: string(row.nonce), ciphertext: string(row.ciphertext) };
+          store.#sealedConnections.set(item.id, item);
+        }
+      } catch { throw connectionError('Retained workspace connections could not be restored.'); }
       for (const raw of await (await db.prepare('SELECT id,payload FROM peers ORDER BY id')).all()) {
         const row = object(raw);
         const peer = store.#decodePeer(domain.validate_peer(string(row.payload)));
@@ -98,7 +179,9 @@ export class BrowserStore {
       requireThat(!this.#poisoned, 'Storage outcome is uncertain. Close and reopen this tab to recover.');
       return action();
     });
-    this.#queue = result.catch(() => undefined);
+    // The sequencing promise must not retain a successful result: worker-only
+    // connection reads can return transient decrypted material to their caller.
+    this.#queue = result.then(() => undefined, () => undefined);
     return result;
   }
 
@@ -143,6 +226,115 @@ export class BrowserStore {
       const value = decodeSnapshot({ ...object(parse(this.#domain.snapshot())), network: { type: 'paused' }, peers: [] });
       const { network: _, peers: __, ...data } = value;
       return data;
+    });
+  }
+
+  #connectionWork<T>(action: () => T | Promise<T>): Promise<T> {
+    return this.#run(action).catch(error => { throw connectionError(connectionFailure(error)); });
+  }
+
+  #connectionMembership(peer: string, selected: readonly string[]): void {
+    for (const device of [this.id, hex(peer)]) {
+      const allowed = parse(this.#domain.allowed_workspaces(device));
+      requireThat(Array.isArray(allowed) && selected.every(workspace => allowed.includes(workspace)), 'Connection workspace membership is required.');
+    }
+  }
+
+  #verifyConnection(item: SignedConnection): void {
+    this.#domain.verify_connection(item.record.workspace_id, item.record.author, connectionPayload(item.record), item.signature);
+  }
+
+  async #persistConnections(next: readonly SignedConnection[]): Promise<void> {
+    const retained = new Set(this.#connections.map(item => item.record.id));
+    const added = next.filter(item => !retained.has(item.record.id));
+    if (!added.length) return;
+    requireThat(this.#connections.length + added.length <= MAX_CONNECTION_RECORDS, 'Connection history limit reached.');
+    const encrypted = await Promise.all(added.map(item => this.#vault.seal(item)));
+    await this.#apply({ batch_id: null, operations: [] }, async () => {
+      for (const row of encrypted) {
+        await (await this.#db.prepare('INSERT INTO connections(id,workspace_id,nonce,ciphertext) VALUES(?,?,?,?)')).run(row.id, row.workspace_id, row.nonce, row.ciphertext);
+      }
+    });
+    this.#connections = [...this.#connections, ...added.map(publicConnection)].sort((a, b) => a.record.id.localeCompare(b.record.id));
+    for (const row of encrypted) this.#sealedConnections.set(row.id, row);
+  }
+
+  #decryptConnections(selected: readonly string[]): Promise<readonly SignedConnection[]> {
+    return Promise.all([...this.#sealedConnections.values()].filter(row => selected.includes(row.workspace_id)).map(row => this.#vault.unseal(row)));
+  }
+
+  connection(workspace: string): Promise<ConnectionState> {
+    return this.#connectionWork(() => {
+      workspaceId(workspace);
+      this.#connectionMembership(this.id, [workspace]);
+      return connectionState(this.#connections, workspace);
+    });
+  }
+
+  setConnection(value: SetConnection): Promise<ConnectionReceipt> {
+    return this.#connectionWork(async () => {
+      const input = setConnection(value);
+      return this.#changeConnection(input, { type: 'set', api_key: input.api_key, model: input.model });
+    });
+  }
+
+  removeConnection(value: RemoveConnection): Promise<ConnectionReceipt> {
+    return this.#connectionWork(async () => this.#changeConnection(removeConnection(value), { type: 'remove' }));
+  }
+
+  async #changeConnection(input: RemoveConnection, action: SignedConnection['record']['action']): Promise<ConnectionReceipt> {
+    this.#connectionMembership(this.id, [input.workspace_id]);
+    const retained = await this.#decryptConnections([input.workspace_id]);
+    // A request identity cannot be borrowed from another workspace.
+    requireThat(!this.#sealedConnections.has(input.operation_id) || retained.some(item => item.record.id === input.operation_id), 'Connection request identity belongs to another workspace.');
+    const prepared = prepareConnection(retained, this.id, input, action);
+    if (!prepared.replayed) {
+      const signature = this.#domain.sign_connection(input.workspace_id, connectionPayload(prepared.record));
+      const signed = { record: prepared.record, signature };
+      await this.#persistConnections(mergeConnections(retained, [signed]));
+    }
+    return { operation_id: input.operation_id, replayed: prepared.replayed, state: connectionState(this.#connections, input.workspace_id) };
+  }
+
+  /** Worker-only resolution; never dispatch this method to the UI. */
+  connectionCredential(workspace: string, version: string): Promise<ReturnType<typeof activeConnection>> {
+    return this.#connectionWork(async () => {
+      workspaceId(workspace); hex(version);
+      this.#connectionMembership(this.id, [workspace]);
+      const state = connectionState(this.#connections, workspace);
+      if (state.status !== 'ready' || state.version !== version) throw connectionError('The workspace connection changed or is unavailable. Record again after reviewing its settings.');
+      const sealed = this.#sealedConnections.get(version);
+      requireThat(sealed, 'Connection is unavailable.');
+      return activeConnection([await this.#vault.unseal(sealed)], workspace, version);
+    });
+  }
+
+  connectionFingerprint(peer: string, selected: readonly string[]): Promise<string> {
+    return this.#connectionWork(async () => {
+      scope(selected); this.#connectionMembership(peer, selected);
+      const summary = this.#connections.filter(item => selected.includes(item.record.workspace_id)).map(item => [item.record.id, item.signature]);
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(json(summary)));
+      return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    });
+  }
+
+  exportConnections(peer: string, selected: readonly string[]): Promise<readonly SignedConnection[]> {
+    return this.#connectionWork(() => {
+      scope(selected); this.#connectionMembership(peer, selected);
+      return this.#decryptConnections(selected);
+    });
+  }
+
+  importConnections(peer: string, selected: readonly string[], incoming: unknown): Promise<boolean> {
+    return this.#connectionWork(async () => {
+      scope(selected); this.#connectionMembership(peer, selected);
+      const parsed = connectionRecords(incoming, selected);
+      for (const item of parsed) this.#verifyConnection(item);
+      const retained = await this.#decryptConnections(selected);
+      requireThat(parsed.every(item => !this.#sealedConnections.has(item.record.id) || retained.some(previous => previous.record.id === item.record.id)), 'Connection identity belongs to another workspace.');
+      await this.#persistConnections(mergeConnections(retained, parsed));
+      const incomingIds = new Set(parsed.map(item => item.record.id));
+      return this.#connections.filter(item => selected.includes(item.record.workspace_id)).every(item => incomingIds.has(item.record.id));
     });
   }
 
