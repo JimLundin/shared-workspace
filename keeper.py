@@ -1,14 +1,14 @@
 """The keeper: the one part of the toolkit that never changes itself.
 
-It runs the layout and the assistant, and installs changes to them: when the agent
-asks, it checks the change (selfcheck.py), keeps a copy of the current version,
-installs, and restarts both. A change that fails its checks isn't installed; one
-that doesn't come up, crashes during its ten-minute trial, or keeps crashing later
-is undone, back to the copy. During the trial a small window offers Keep and Undo,
+It runs the layout, assistant, and automation worker, and installs changes to
+them: when the agent asks, it checks the change (selfcheck.py), keeps a copy of
+the current version, installs, and restarts them. A failed check prevents an
+installation. A change that doesn't start, crashes during its ten-minute trial,
+or keeps crashing later is undone, back to the copy. During the trial a small window offers Keep and Undo,
 usable with the mouse alone in case the change broke the keyboard.
 
 So that a change can never break what undoes it, the agent can't edit this file,
-selfcheck.py or toolkit.pyw (`PROTECTED`), and this file uses nothing but Python's
+selfcheck.py or toolkit.pyw (`PROTECTED`), and the keeper uses a protected Qt dialog module. Its bootstrap uses only the
 standard library. The other programs talk to it through files: requests in one
 folder, and a "ready" file each program writes once it's up.
 
@@ -44,15 +44,18 @@ VERSIONS: Final = DIRECTORY / "versions"
 """A copy of each version replaced by an install, newest last."""
 KEPT_VERSIONS: Final = 20
 
-PROTECTED: Final = frozenset({"keeper.py", "selfcheck.py", "toolkit.pyw", "runtime.py"})
+PROTECTED: Final = frozenset({"keeper.py", "selfcheck.py", "toolkit.pyw", "runtime.py", "keeper_ui.py"})
 """Files a change can't touch."""
-PROGRAMS: Final = {"layout": "miryoku", "assistant": "assistant"}
-"""What the keeper runs: name -> module."""
+PROGRAMS: Final = {"layout": "miryoku", "assistant": "assistant", "automation": "automation"}
+"""What the keeper runs, in startup order: name -> module.
+Shutdown reverses this order so execution releases the desktop before its UI.
+"""
 
 # The window titles and messages that ask each program to quit cleanly (the layout
 # lets go of held keys first). Defined here, the stable side; protocol.py uses them.
 LAYOUT_WINDOW: Final = "toolkit layout"
 ASSISTANT_WINDOW: Final = "toolkit assistant"
+AUTOMATION_WINDOW: Final = "toolkit automation"
 WM_CLOSE: Final = 0x0010
 WM_QUIT_LAYOUT: Final = 0x8003
 
@@ -240,6 +243,11 @@ class Stage(Enum):
     TRIAL = auto()
 
 
+def unexpected_exit(name: str, code: int | None) -> bool:
+    """Only the layout and assistant have a user-requested normal exit."""
+    return code is not None and (code != 0 or name == "automation")
+
+
 class RefusedCheck:
     __slots__ = ()
 
@@ -323,8 +331,8 @@ class Keeper:
         self.stage, self.deadline = Stage.STARTING, now + START_S
 
     def stop_all(self) -> None:
-        for child in self.children.values():
-            if child.poll() is None:
+        for name in reversed(PROGRAMS):
+            if (child := self.children.get(name)) is not None and child.poll() is None:
                 child.stop()
         self.children = {}
 
@@ -363,7 +371,7 @@ class Keeper:
             case Stage.STARTING:
                 self.starting(now)
             case Stage.TRIAL:
-                if any(child.poll() not in (None, 0) for child in self.children.values()):
+                if any(unexpected_exit(name, child.poll()) for name, child in self.children.items()):
                     self.rollback("it crashed during its trial", now)
                     return
                 self.running(now)  # quitting on purpose is handled as usual
@@ -427,7 +435,7 @@ class Keeper:
             if code is None:
                 continue
             del self.children[name]
-            if code == 0:
+            if not unexpected_exit(name, code):
                 if name == "assistant":  # Quit in the tray menu: everything stops
                     self.stop_all()
                     self.done = True
@@ -537,11 +545,12 @@ class _Check:
         return code == 0, self.output.read_text(encoding="utf-8", errors="replace")
 
 
-def main() -> None:  # noqa: PLR0915 (the protected keeper owns its Windows UI)
+def main() -> None:
     if sys.platform != "win32":
         sys.exit("the keeper runs on Windows")
     import msvcrt  # noqa: PLC0415 (Windows only)
-    import tkinter as tk  # noqa: PLC0415
+
+    from keeper_ui import KeeperUi  # noqa: PLC0415  # Activated pinned Qt; isolated from assistant source.
 
     STATE.mkdir(parents=True, exist_ok=True)
     lock_file = (STATE / "keeper.lock").open("a+b")
@@ -550,45 +559,11 @@ def main() -> None:  # noqa: PLR0915 (the protected keeper owns its Windows UI)
     except OSError:
         sys.exit(0)  # already running
     user32 = cast("_User32", ctypes.WinDLL("user32"))
-    root = tk.Tk()
-    root.withdraw()
-    trial: list[tk.Toplevel] = []
+    ui = KeeperUi()
     choices: list[str] = []
 
-    def corner(window: tk.Toplevel, width: int, height: int) -> None:
-        window.geometry(f"{width}x{height}+{root.winfo_screenwidth() - width - 24}+{root.winfo_screenheight() - height - 72}")
-        window.attributes("-topmost", True)  # pyright: ignore[reportUnknownMemberType] (Tk's stubs)
-
     def approve(candidate: Path) -> bool:
-        """Keeper-owned approval: unapproved source cannot replace this prompt."""
-        window = tk.Toplevel(root, padx=12, pady=12)
-        window.title("Toolkit update review")
-        window.geometry("900x640")
-        tk.Label(window, text="Run checks and install this change?", font=("Segoe UI", 12)).pack(anchor="w")
-        tk.Label(window, text="These checks execute the proposed code with your Windows account. Approve only code you trust.").pack(anchor="w")
-        text = tk.Text(window, wrap="none", font=("Consolas", 10))
-        text.insert("1.0", source_diff(LIVE, candidate))
-        text.configure(state="disabled")
-        text.pack(fill="both", expand=True)
-        answer = [False]
-
-        def finish(accepted: bool) -> None:
-            answer[0] = accepted
-            window.destroy()
-
-        buttons = tk.Frame(window)
-        buttons.pack(anchor="e")
-        tk.Button(buttons, text="Cancel", command=lambda: finish(False)).pack(side="left")
-        tk.Button(buttons, text="Run checks and install", command=lambda: finish(True)).pack(side="left")
-        window.protocol("WM_DELETE_WINDOW", lambda: finish(False))
-
-        def escape(_: object) -> None:
-            finish(False)
-
-        window.bind("<Escape>", escape)
-        window.attributes("-topmost", True)  # pyright: ignore[reportUnknownMemberType]
-        root.wait_window(window)
-        return answer[0]
+        return ui.approve(source_diff(LIVE, candidate))
 
     class WinWorld:
         __slots__ = ("candidate",)
@@ -605,6 +580,8 @@ def main() -> None:  # noqa: PLR0915 (the protected keeper owns its Windows UI)
             _log(f"started {name}")
             if name == "layout":
                 return _Process(process, LAYOUT_WINDOW, WM_QUIT_LAYOUT, user32)
+            if name == "automation":
+                return _Process(process, AUTOMATION_WINDOW, WM_CLOSE, user32)
             return _Process(process, ASSISTANT_WINDOW, WM_CLOSE, user32)
 
         def is_ready(self, name: str) -> bool:
@@ -630,37 +607,17 @@ def main() -> None:  # noqa: PLR0915 (the protected keeper owns its Windows UI)
 
         def notify(self, text: str) -> None:
             _log(text)
-            toast = tk.Toplevel(root, padx=14, pady=10)
-            toast.title("Toolkit")
-            tk.Label(toast, text=text[:700], justify="left", wraplength=420).pack(anchor="w")
-            tk.Button(toast, text="OK", width=8, command=toast.destroy).pack(anchor="e", pady=(8, 0))
-            corner(toast, 460, 110 + 14 * min(text.count("\n"), 12))
-            toast.after(20_000, toast.destroy)
+            ui.notify(text)
 
         def show_trial(self, summary: str | None) -> None:
-            for window in trial:
-                window.destroy()
-            trial.clear()
             _log(f"on trial: {summary}" if summary else "trial over")
-            if summary is None:
-                return
-            window = tk.Toplevel(root, padx=14, pady=10)
-            window.title("Toolkit update")
-            window.protocol("WM_DELETE_WINDOW", lambda: choices.append("keep"))
-            tk.Label(window, text=f"Updated: {summary}", justify="left", wraplength=380, font=("Segoe UI Semibold", 10)).pack(anchor="w")
-            tk.Label(window, text="On trial for ten minutes; it's undone if it crashes.", justify="left").pack(anchor="w")
-            buttons = tk.Frame(window)
-            buttons.pack(anchor="e", pady=(8, 0))
-            tk.Button(buttons, text="Undo", width=8, command=lambda: choices.append("undo")).pack(side="left", padx=(0, 6))
-            tk.Button(buttons, text="Keep", width=8, command=lambda: choices.append("keep")).pack(side="left")
-            corner(window, 420, 120)
-            trial.append(window)
+            ui.show_trial(summary, choices.append)
 
     keeper = Keeper(WinWorld(), Recovery(STATE / "recovery.json"))
     keeper.recover()
     keeper.start(time.monotonic())
 
-    def loop() -> None:
+    def loop() -> bool:
         now = time.monotonic()
         for action, summary in [*((c, "") for c in choices), *take_requests()]:
             _log(f"request {action} {summary}")
@@ -673,13 +630,9 @@ def main() -> None:  # noqa: PLR0915 (the protected keeper owns its Windows UI)
             keeper.tick(now)
         except OSError as error:
             _log(f"keeper error: {error}")
-        if keeper.done:
-            root.destroy()
-        else:
-            root.after(500, loop)
+        return keeper.done
 
-    root.after(500, loop)
-    root.mainloop()
+    ui.run(loop)
 
 
 if __name__ == "__main__":

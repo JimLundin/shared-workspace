@@ -16,7 +16,7 @@ from .llm import Json
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 MAX_OUTPUT = 20_000
-SCOPES = ("User.Read", "User.ReadBasic.All", "Chat.ReadBasic", "Chat.Create", "ChatMessage.Send")
+SCOPES = ("User.Read", "User.ReadBasic.All", "Chat.Read", "Chat.Create", "ChatMessage.Send")
 SCOPE_REQUEST = "offline_access " + " ".join(f"https://graph.microsoft.com/{scope}" for scope in SCOPES)
 
 
@@ -385,6 +385,45 @@ class Teams:
         _atomic(self.folder / "config.json", json.dumps(config, indent=2).encode())
         return {"configured": True, "message": "Teams app IDs saved. Use teams_sign_in for delegated sign-in.", "scopes": list(SCOPES)}
 
+    def _messages(self, args: dict[str, Json], cancel: threading.Event) -> dict[str, Json]:
+        chat_id, message_id = _text(args, "chat_id"), _text(args, "message_id")
+        limit = _integer(args, "limit", 10, 1, 20)
+        if not chat_id or len(chat_id) > 500 or len(message_id) > 500:
+            raise GraphError("Provide a chat ID and optional message ID of at most 500 characters.")
+        route = f"/chats/{quote(chat_id, safe='')}/messages"
+        if message_id:
+            data = self._api("GET", route + "/" + quote(message_id, safe=""), cancel)
+            if _text(data, "id") != message_id:
+                raise GraphError("Microsoft returned a different message; the requested send is not verified.")
+            values: list[Json] = [data]
+        else:
+            data = self._api("GET", route + "?" + urlencode({"$top": str(limit), "$orderby": "createdDateTime desc"}), cancel)
+            received = data.get("value")
+            if not isinstance(received, list):
+                raise GraphError("Microsoft returned an invalid message list.")
+            values = received
+        messages: list[Json] = []
+        for item in values[:limit]:
+            value = _object(item)
+            body = _object(value.get("body"))
+            identity, content, kind = _text(value, "id"), _text(body, "content"), _text(body, "contentType")
+            if not identity or len(identity) > 500 or kind not in ("text", "html"):
+                raise GraphError("Microsoft returned an invalid message.")
+            messages.append({
+                "message_id": identity, "content": content[:12_000], "content_type": kind,
+                "content_truncated": len(content) > 12_000, "created_at": _text(value, "createdDateTime"),
+            })
+        result: dict[str, Json] = {
+            "chat_id": chat_id, "messages": messages,
+            "more_available": bool(data.get("@odata.nextLink")) or len(values) > limit,
+        }
+        while len(json.dumps(result, ensure_ascii=False)) > MAX_OUTPUT:
+            if len(messages) == 1:
+                raise GraphError("This message exceeds the bounded readback size; inspect it in Teams.")
+            messages.pop()
+            result["more_available"] = True
+        return result
+
     def _request(self, operation: str, args: dict[str, Json], cancel: threading.Event) -> dict[str, Json]:
         if operation == "configure":
             return self._configure(args)
@@ -405,6 +444,8 @@ class Teams:
             return self._begin(cancel)
         if operation == "finish_sign_in":
             return self._finish(_integer(args, "timeout_seconds", 30, 1, 600), cancel)
+        if operation == "read_messages":
+            return self._messages(args, cancel)
         if operation in ("find_users", "list_chats"):
             chats = operation == "list_chats"
             if cursor := _text(args, "cursor"):

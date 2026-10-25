@@ -1,6 +1,6 @@
 """A bounded notification projection; expiry never edits the conversation.
 
-Session observations and monotonic timestamps enter here. Tk owns the windows,
+Session observations and monotonic timestamps enter here. The UI owns windows,
 timer callbacks and motion; the model remembers which content has been seen so
 an expired reply cannot reappear on the next status update.
 """
@@ -30,7 +30,7 @@ from .agent_session import (
 from .recording_state import RecordingState, duration, phase_label
 
 MAX_VISIBLE: Final = 5
-WIDTH: Final = 280  # maximum logical width, independent of the full history window
+WIDTH: Final = 360  # maximum logical width, independent of the full history window
 MIN_SECONDS: Final = 12.0
 MAX_SECONDS: Final = 30.0
 MOTION_SECONDS: Final = .28  # Vault of Glass: motion.base

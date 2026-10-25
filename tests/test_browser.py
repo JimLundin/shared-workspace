@@ -1,5 +1,6 @@
 """CDP transport failures and browser limits do not leave ambiguous side effects."""
 
+import base64
 import json
 import threading
 from pathlib import Path
@@ -11,6 +12,10 @@ from assistant.browser import MAX_OUTPUT, MAX_RESPONSE, Attached, Browser, Brows
 from assistant.browser_session import BrowserSession, Source
 from assistant.browser_tabs import TabStrip
 from assistant.llm import Json
+
+VIEWPORT_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+)
 
 
 def decoded(value: str) -> dict[str, Json]:
@@ -69,6 +74,13 @@ def connected_browser(
     browser = Browser(path, source=source, opener=ScriptedSessions(BrowserSession(Cdp(channel), owner)), strip=strip)
     browser.connect(threading.Event(), visible=isinstance(owner, Managed) and owner.visible)
     return browser
+
+
+def screenshot_channel() -> Channel:
+    return Channel.results(
+        {"targetInfos": [{"type": "page", "targetId": "fixture"}]}, {"sessionId": "page-session"}, {},
+        {"data": base64.b64encode(VIEWPORT_PNG).decode("ascii")}, {},
+    )
 
 
 def test_cdp_ignores_events_and_late_replies_and_preserves_session() -> None:
@@ -143,7 +155,7 @@ def test_browser_snapshot_limits_keep_valid_json_and_progress_offsets(tmp_path: 
         "offset": 4, "total": 104, "more_controls": False,
     }
     channel = Channel.results(
-        {"targetInfos": [{"type": "page", "targetId": "fixture"}]}, {"sessionId": "page-session"}, {},
+        {"targetInfos": [{"type": "page", "targetId": "fixture"}]}, {"sessionId": "page-session"},
         {"frameTree": {"frame": {"id": "main", "url": "https://example.com"}}}, {"executionContextId": 1}, {"result": {"value": source}},
     )
     browser = connected_browser(tmp_path, channel)
@@ -155,14 +167,179 @@ def test_browser_snapshot_limits_keep_valid_json_and_progress_offsets(tmp_path: 
     assert page["next_control_offset"] == 4 + len(cast(list[Json], page["controls"]))
 
 
-def test_browser_bad_screenshot_is_reported_as_a_tool_error(tmp_path: Path) -> None:
+def test_browser_screenshot_resets_focus_before_returning_the_image(tmp_path: Path) -> None:
+    channel = screenshot_channel()
+    browser = connected_browser(tmp_path, channel)
+    try:
+        result = browser.request("screenshot", {"target_id": "fixture"}, threading.Event())
+        assert result.image == VIEWPORT_PNG
+        assert "viewport" in result.text
+        assert not channel.replies, "The focus reset must be acknowledged before the image is returned."
+        assert not channel.closed and browser.connection is not None
+        assert [(call["method"], call["params"], call.get("sessionId")) for call in channel.sent[2:]] == [
+            ("Emulation.setFocusEmulationEnabled", {"enabled": True}, "page-session"),
+            ("Page.captureScreenshot", {"format": "png", "captureBeyondViewport": False}, "page-session"),
+            ("Emulation.setFocusEmulationEnabled", {"enabled": False}, "page-session"),
+        ]
+    finally:
+        browser.close()
+
+
+def test_browser_bad_screenshot_resets_focus_before_reporting_a_tool_error(tmp_path: Path) -> None:
     for data in ("invalid base64!", "aGVsbG8="):
         channel = Channel.results(
-            {"targetInfos": [{"type": "page", "targetId": "fixture"}]}, {"sessionId": "page-session"}, {}, {"data": data},
+            {"targetInfos": [{"type": "page", "targetId": "fixture"}]}, {"sessionId": "page-session"}, {}, {"data": data}, {},
         )
         browser = connected_browser(tmp_path, channel)
-        with TestCase().assertRaisesRegex(BrowserError, "invalid"):
+        try:
+            with TestCase().assertRaisesRegex(BrowserError, "invalid"):
+                browser.request("screenshot", {"target_id": "fixture"}, threading.Event())
+            assert not channel.replies and channel.sent[-1]["params"] == {"enabled": False}
+            assert browser.connection is not None and not channel.closed
+        finally:
+            browser.close()
+
+
+def test_browser_capture_failure_is_preserved_after_successful_focus_reset(tmp_path: Path) -> None:
+    channel = screenshot_channel()
+    channel.replies[3] = '{"id":4,"error":{"message":"Screenshot capture failed"}}'
+    browser = connected_browser(tmp_path, channel)
+    try:
+        with TestCase().assertRaisesRegex(BrowserError, "^Screenshot capture failed$"):
             browser.request("screenshot", {"target_id": "fixture"}, threading.Event())
+        assert not channel.replies and channel.sent[-1]["params"] == {"enabled": False}
+        assert browser.connection is not None and not channel.closed
+        assert [call["method"] for call in channel.sent].count("Page.captureScreenshot") == 1
+    finally:
+        browser.close()
+
+
+def test_browser_failed_focus_enable_still_resets_without_capturing(tmp_path: Path) -> None:
+    channel = screenshot_channel()
+    channel.replies[2:] = ['{"id":3,"error":{"message":"Focus enable failed"}}', '{"id":4,"result":{}}']
+    browser = connected_browser(tmp_path, channel)
+    try:
+        with TestCase().assertRaisesRegex(BrowserError, "^Focus enable failed$"):
+            browser.request("screenshot", {"target_id": "fixture"}, threading.Event())
+        assert not channel.replies and channel.sent[-1]["params"] == {"enabled": False}
+        assert "Page.captureScreenshot" not in [call["method"] for call in channel.sent]
+        assert browser.connection is not None and not channel.closed
+    finally:
+        browser.close()
+
+
+def test_browser_failed_focus_reset_discards_the_image_and_detaches_a_personal_browser(tmp_path: Path) -> None:
+    channel = screenshot_channel()
+    channel.replies[4] = '{"id":5,"error":{"message":"Focus reset failed"}}'
+    browser = connected_browser(tmp_path, channel)
+    with TestCase().assertRaisesRegex(BrowserError, "^Focus reset failed$"):
+        browser.request("screenshot", {"target_id": "fixture"}, threading.Event())
+    assert not channel.replies and channel.closed
+    assert browser.connection is None and not browser.sessions
+    assert decoded(browser.request("tabs", {}, threading.Event()).text)["mode"] == "stopped"
+    assert "Browser.close" not in [call["method"] for call in channel.sent]
+
+
+def test_browser_preserves_focus_reset_failure_when_owned_process_cleanup_also_fails(tmp_path: Path) -> None:
+    class FinishedProcess:
+        __slots__ = ()
+        pid = 42
+
+        def poll(self) -> int | None:
+            return 0
+
+        def wait(self, timeout: float) -> int:
+            assert timeout > 0
+            return 0
+
+        def kill(self) -> None:
+            raise AssertionError("An exited browser must not be killed.")
+
+    class FailedJobCleanup:
+        __slots__ = ()
+
+        def close(self) -> None:
+            raise OSError("The owned browser processes did not finish exiting in time.")
+
+    channel = screenshot_channel()
+    channel.replies[4] = '{"id":5,"error":{"message":"Focus reset failed"}}'
+    channel.replies.append('{"id":6,"result":{}}')
+    browser = connected_browser(tmp_path, channel, owner=Managed(FinishedProcess(), FailedJobCleanup(), False))
+    with TestCase().assertRaisesRegex(BrowserError, "^Focus reset failed$") as failure:
+        browser.request("screenshot", {"target_id": "fixture"}, threading.Event())
+    assert any("owned browser processes did not finish exiting" in note for note in failure.exception.__notes__)
+    assert not channel.replies and channel.closed
+    assert browser.connection is None and not browser.sessions
+    assert [call["method"] for call in channel.sent].count("Browser.close") == 1
+
+
+def test_browser_preserves_the_primary_failure_when_focus_reset_also_fails(tmp_path: Path) -> None:
+    for primary in ("enable", "capture"):
+        channel = screenshot_channel()
+        if primary == "enable":
+            channel.replies[2:] = [
+                '{"id":3,"error":{"message":"Primary failure"}}', '{"id":4,"error":{"message":"Focus reset failed"}}',
+            ]
+        else:
+            channel.replies[3:] = [
+                '{"id":4,"error":{"message":"Primary failure"}}', '{"id":5,"error":{"message":"Focus reset failed"}}',
+            ]
+        browser = connected_browser(tmp_path, channel)
+        with TestCase().assertRaisesRegex(BrowserError, "^Primary failure$") as failure:
+            browser.request("screenshot", {"target_id": "fixture"}, threading.Event())
+        assert any("Focus reset failed" in note for note in failure.exception.__notes__)
+        assert not channel.replies and channel.closed and browser.connection is None
+        assert "Browser.close" not in [call["method"] for call in channel.sent]
+
+
+def test_browser_canceled_capture_closes_only_its_owned_browser(tmp_path: Path) -> None:
+    class Process:
+        __slots__ = ("waited",)
+        pid = 42
+
+        def __init__(self) -> None:
+            self.waited = False
+
+        def poll(self) -> int | None:
+            return None
+
+        def wait(self, timeout: float) -> int:
+            assert timeout > 0
+            self.waited = True
+            return 0
+
+        def kill(self) -> None:
+            raise AssertionError("The owned browser closed gracefully; it must not be killed again.")
+
+    class CancelCaptureChannel(Channel):
+        __slots__ = ("stop",)
+
+        def __init__(self, stop: threading.Event) -> None:
+            super().__init__(
+                *Channel.results({"targetInfos": [{"type": "page", "targetId": "fixture"}]}, {"sessionId": "page-session"}, {}).replies,
+                '{"id":5,"result":{}}',
+            )
+            self.stop = stop
+
+        def recv(self, timeout: float) -> str | bytes:
+            if self.sent[-1]["method"] == "Page.captureScreenshot":
+                self.stop.set()
+                return '{"method":"Page.loadEventFired"}'
+            return super().recv(timeout)
+
+    process = Process()
+    for owner in (Attached(Product.EDGE), Managed(process, None, False)):
+        stop = threading.Event()
+        channel = CancelCaptureChannel(stop)
+        browser = connected_browser(tmp_path, channel, owner=owner)
+        with TestCase().assertRaisesRegex(InterruptedError, "may already have completed"):
+            browser.request("screenshot", {"target_id": "fixture"}, stop)
+        assert stop.is_set() and channel.closed and browser.connection is None
+        assert not browser.sessions
+        methods = [call["method"] for call in channel.sent]
+        assert methods.count("Page.captureScreenshot") == 1
+        assert methods.count("Browser.close") == int(isinstance(owner, Managed))
+        assert process.waited == isinstance(owner, Managed)
         browser.close()
 
 

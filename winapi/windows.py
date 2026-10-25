@@ -82,7 +82,7 @@ _MA_NOACTIVATE: Final = 3
 
 
 def overlay_message(hwnd: int, message: int, wparam: int, lparam: int, subclass: int, _data: int) -> int:
-    """Keep an interactive overlay from activating, even if its toolkit (Tk) asks to."""
+    """Keep an interactive overlay from activating, even if its GUI toolkit asks to."""
     if message == _WM_MOUSEACTIVATE:
         return _MA_NOACTIVATE
     if message == _WM_NCDESTROY:

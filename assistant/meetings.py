@@ -1,4 +1,4 @@
-"""Explicit long-running recording, independent of dictation, model work and Tk.
+"""Explicit long-running recording, independent of dictation, model work and the UI.
 
 Capture journals one second at a time. A separate worker transcribes 20-30 second
 chunks, retries outages, and resumes pending text work after a restart. Restarting
@@ -56,13 +56,14 @@ class _Writer:
 class Meetings:
     __slots__ = (
         "_capture", "_closing", "_lock", "_paused", "_queue", "_quit", "_recovery", "_retry_pending", "_scheduled", "_state", "_stop", "_wake",
-        "_worker", "archive", "factory", "on_update", "retry_policy", "settings", "transcribe_audio",
+        "_worker", "archive", "factory", "on_complete", "on_recovery", "on_update", "retry_policy", "settings", "transcribe_audio",
     )
 
     def __init__(
         self, settings: Settings, factory: Callable[[AudioSource], Capture], *, archive: MeetingArchive | None = None,
         on_update: Callable[[RecordingState], None] | None = None, transcribe_audio: Transcriber | None = None,
-        retry_policy: RetryPolicy | None = None,
+        retry_policy: RetryPolicy | None = None, on_complete: Callable[[MeetingStore], None] | None = None,
+        on_recovery: Callable[[tuple[Path, ...]], None] | None = None,
     ) -> None:
         self.settings, self.factory = settings, factory
         self.archive = archive if archive is not None else MeetingArchive(DIRECTORY / "meetings")
@@ -72,6 +73,7 @@ class Meetings:
         self.transcribe_audio: Transcriber = transcribe_audio if transcribe_audio is not None else configured_transcriber
         self.retry_policy = retry_policy if retry_policy is not None else RetryPolicy()
         self.on_update = on_update
+        self.on_complete, self.on_recovery = on_complete, on_recovery
         self._lock = threading.RLock()
         self._state = RecordingState()
         self._stop, self._quit, self._wake = threading.Event(), threading.Event(), threading.Event()
@@ -245,6 +247,8 @@ class Meetings:
                 self._emit()
 
     def _work(self) -> None:
+        if self.on_recovery is not None:
+            self.on_recovery(self._recovery)
         self._recover()
         while not self._quit.is_set():
             store = self._queue.get()
@@ -282,6 +286,8 @@ class Meetings:
             if batch is None:
                 if state.finished:
                     store.export()
+                    if self.on_complete is not None:
+                        self.on_complete(store)
                     self._publish(store, detail=state.problem)
                     return
                 self._wake.wait(0.5)

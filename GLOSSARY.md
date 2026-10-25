@@ -1,0 +1,77 @@
+# Toolkit work
+
+Toolkit carries out requested outcomes and standing instructions across
+conversations and interruptions.
+
+## Language
+
+**Task**:
+A requested outcome with its constraints, progress, and result. A task has a
+lifetime independent of the conversation in which it was requested.
+_Avoid_: Chat turn, command
+
+**Run**:
+One period of execution of a task. A task can have several runs as it waits,
+resumes, or recovers from an interruption.
+_Avoid_: Task, session
+
+**Conversation**:
+The context shared by a sequence of requests and replies. Starting a new
+conversation does not erase its tasks.
+_Avoid_: Task history
+
+**Action attempt**:
+A recorded intention to change something outside the task itself. An attempt
+does not establish that the intended effect occurred.
+_Avoid_: Completed action
+
+**Observed outcome**:
+Evidence about what an action actually did. An interrupted attempt can retain
+an uncertain outcome until the affected state is inspected.
+_Avoid_: Assumed success
+
+**Checkpoint**:
+A bounded account of a task's progress that helps a later run continue from
+known facts.
+_Avoid_: Conversation dump
+
+**Workspace**:
+A named working context containing resources and their arrangement. Showing a
+different workspace does not change the identity of its resources or tasks.
+_Avoid_: Conversation, source checkout
+
+**Resource**:
+A document, application, note, source, or result that can be worked with and
+shown in more than one workspace.
+_Avoid_: Placement, task
+
+**Placement**:
+The presentation of a resource within one workspace. Removing that presentation
+does not delete the resource or cancel its work.
+_Avoid_: Resource, application instance
+
+**Standing instruction**:
+A saved instruction that authorizes work when a specified trigger occurs.
+Enabling it determines when it begins responding to those occurrences.
+_Avoid_: Background prompt, permanent task
+
+**Trigger occurrence**:
+One identifiable event or scheduled time to which a standing instruction
+responds. Repeated delivery of an occurrence refers to the same work.
+_Avoid_: New task
+
+**Accepted handoff**:
+A standing instruction's commitment to carry out a trigger occurrence. Later
+editing or disabling the instruction does not revoke work already accepted;
+that task can be cancelled separately.
+_Avoid_: Unobserved event, pending trigger
+
+**Cancellation**:
+The user's decision to end a task. An effect already underway can still acquire
+an observed outcome without reviving the cancelled task.
+_Avoid_: Shutdown, interruption
+
+**Interruption**:
+An execution break that leaves a task unfinished and recoverable. It does not
+authorize blindly repeating an action with an uncertain outcome.
+_Avoid_: Cancellation, failure

@@ -38,6 +38,8 @@ from openai import APIError, AsyncOpenAI, DefaultAsyncHttpxClient
 from openai.types.responses import ResponseOutputItem, ResponseStreamEvent
 from openai.types.shared import Reasoning
 
+from automation.execution import Incomplete, InstallationRequested, InvalidConfiguration, Reported, ReportStatus
+
 from .agent import KEPT_SCREENSHOTS
 from .agent_session import Answer, LiveMessage, ReasoningSummary, StreamState
 from .llm import Json, ToolCall, ToolSpec
@@ -55,12 +57,15 @@ class StoppedError(Exception):
 class MemorySession:
     """The SDK's session interface backed by the app's conversation, retained until reset or exit."""
 
-    __slots__ = ("items",)
-    session_id: str = "toolkit"
+    __slots__ = ("checkpoint", "items", "session_id")
+    session_id: str
     session_settings: SessionSettings | None = None
 
-    def __init__(self, items: list[Json]) -> None:
+    def __init__(
+        self, items: list[Json], *, checkpoint: Callable[[list[Json]], None] | None = None, session_id: str = "toolkit",
+    ) -> None:
         self.items = items
+        self.checkpoint, self.session_id = checkpoint, session_id
 
     async def get_items(self, limit: int | None = None) -> list[TResponseInputItem]:
         items = self.items if limit is None else self.items[-limit:] if limit > 0 else []
@@ -70,6 +75,8 @@ class MemorySession:
         self.items.extend(cast(list[Json], copy.deepcopy(items)))
         # Discard old image bytes in retained context too, not just in the HTTP request.
         self.items[:] = cast(list[Json], recent_images(cast(list[Any], self.items)))
+        if self.checkpoint is not None:
+            self.checkpoint(self.items)
 
     async def pop_item(self) -> TResponseInputItem | None:
         return cast(TResponseInputItem, self.items.pop()) if self.items else None
@@ -199,6 +206,8 @@ async def watch_stop(local: Agent, result: RunResultStreaming, hooks: Hooks) -> 
 def tool(spec: ToolSpec) -> FunctionTool:
     async def invoke(context: Any, arguments: str) -> object:
         local: Agent = context.context
+        if local.work is not None and local.work.disposition is not None:
+            return "This task is waiting; its execution will suspend."
         if local.stop.is_set() or local.installing is not None:
             return "Stopped by the user." if local.stop.is_set() else "Installation already requested."
         local.mark("first_tool_seconds")
@@ -221,6 +230,8 @@ def after_tools(context: RunContextWrapper[Agent], results: list[FunctionToolRes
     if local.stop.is_set():
         # Finish normally so the SDK retains completed tool results for a follow-up.
         return ToolsToFinalOutputResult(is_final_output=True, final_output="Stopped.")
+    if local.work is not None and local.work.disposition is not None:
+        return ToolsToFinalOutputResult(is_final_output=True, final_output="Waiting for this task to continue.")
     if local.installing is not None:
         return ToolsToFinalOutputResult(is_final_output=True, final_output=f"Installing: {local.installing}. The toolkit restarts in a moment.")
     return ToolsToFinalOutputResult(is_final_output=False)
@@ -267,7 +278,9 @@ async def run(local: Agent, task: str, prompt: str, specs: tuple[ToolSpec, ...])
     try:
         reasoning = Reasoning.model_validate({"effort": local.settings.agent_reasoning_effort, "summary": "auto"})
     except ValueError:
-        local.log.problem(f"Invalid TOOLKIT_AGENT_REASONING_EFFORT: {local.settings.agent_reasoning_effort!r}.")
+        reason = f"Invalid TOOLKIT_AGENT_REASONING_EFFORT: {local.settings.agent_reasoning_effort!r}."
+        local.report = InvalidConfiguration(reason)
+        local.log.problem(reason)
         return False
     http = DefaultAsyncHttpxClient(trust_env=True)
     async with AsyncOpenAI(
@@ -282,7 +295,11 @@ async def run(local: Agent, task: str, prompt: str, specs: tuple[ToolSpec, ...])
         hooks, timeline = Hooks(), Timeline(local.update)
         try:
             result = Runner.run_streamed(
-                agent, request_input(local, task), context=local, max_turns=local.max_steps, hooks=hooks, session=MemorySession(local.history),
+                agent, request_input(local, task), context=local, max_turns=local.max_steps, hooks=hooks,
+                session=MemorySession(
+                    local.history, checkpoint=local.work.checkpoint if local.work is not None else None,
+                    session_id=local.work.claim.run.run_id if local.work is not None else "toolkit",
+                ),
                 run_config=RunConfig(
                     tracing_disabled=True, trace_include_sensitive_data=False,
                     # Serialize locally: some compatible endpoints reject parallel_tool_calls.
@@ -301,18 +318,30 @@ async def run(local: Agent, task: str, prompt: str, specs: tuple[ToolSpec, ...])
                 watcher.cancel()
                 await asyncio.gather(watcher, return_exceptions=True)
         except StoppedError:
+            local.report = ReportStatus.STOPPED
             local.log.done("Stopped.")
             return False
         except MaxTurnsExceeded:
-            local.log.done(f"Stopped after {local.max_steps} steps, not finished.")
+            reason = f"Stopped after {local.max_steps} steps, not finished."
+            local.report = Incomplete(reason)
+            local.log.done(reason)
             return False
         except APIError as error:
-            local.log.problem(f"Endpoint request failed: {error.message}")
+            reason = f"Endpoint request failed: {error.message}"
+            local.report = Incomplete(reason)
+            local.log.problem(reason)
             return False
         except AgentsException as error:
-            local.log.problem(f"Agent request failed: {error}")
+            reason = f"Agent request failed: {error}"
+            local.report = Incomplete(reason)
+            local.log.problem(reason)
             return False
         finally:
             timeline.finish()
-        local.log.done("Stopped." if local.stop.is_set() else str(result.final_output or "Done."))
+        final = str(result.final_output or "Done.")
+        local.report = (
+            ReportStatus.STOPPED if local.stop.is_set() else
+            InstallationRequested(local.installing) if local.installing is not None else Reported(final)
+        )
+        local.log.done("Stopped." if local.stop.is_set() else final)
         return not local.stop.is_set()

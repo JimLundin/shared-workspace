@@ -1,0 +1,1384 @@
+{
+  "format_version": 1,
+  "recorded_at": "2026-10-23T09:27:16.879893+00:00",
+  "scope": "Combined durable-work and coordinated desktop/canvas integration checks. Deployment evidence is written separately after packaging; this document is not a deployment receipt.",
+  "tested_source": {
+    "manifest": {
+      "path": "/mnt/c/Users/Jim.Lundin/AppData/Local/Temp/toolkit-agentic-final-1792743371/tested-source-manifest.json",
+      "sha256": "7740eb3dbeda12b01c85c7e62f2bb0c8e538e83ff26415d178c729db103c2808",
+      "bytes": 22194
+    },
+    "snapshot": {
+      "created_at": 1792746861.5853598,
+      "root": "/home/jim/toolkit",
+      "candidate": "/mnt/c/Users/Jim.Lundin/AppData/Local/Temp/toolkit-agentic-final-1792743371/toolkit",
+      "files": {
+        ".github/workflows/checks.yml": "d21d9ef3a58da5b92e9af5c75a28680c93ec626432ca353026dc3121d9b51679",
+        ".github/workflows/desktop.yml": "72bbd84fba676cddce11660861de1093efea19dcefd888dd959c8fbc8b774ae8",
+        ".gitignore": "f0fd8f3b892f58e4d84ae5d43a1a0984d6d70840c93ef7a70c43441ab2545818",
+        ".python-version": "fd81c059718aeb990462ccbf0282b57d9488a7213420e8cc637d3182b6fa7697",
+        "AGENTS.md": "4d1d3997bb19aff36c8a63f6951d0be692a35af0dc23f025f6a5f4265c453f52",
+        "GLOSSARY.md": "b44f29a4dea8fe4072a770471d4471427d221f30b2dfb4dd3b47b4b7ca06aaa6",
+        "README.md": "8c3ce7a48918b7255af7e57e2e188e24085c6eff6c0f3b877eb60dd8c6d86dfc",
+        "StartToolkit.cmd": "c2b79732b38326bdfdb430d59319b5f5fbfe715663ae840330fa585c0e5cd5d9",
+        "assistant/__init__.py": "374865178a2cc48f636a6bd135325fb8ba587e925d1922ae102ac31d3ecbb146",
+        "assistant/__main__.py": "acf3c0528d247d61719e8f4c0d7c5b52e7ea6b038d89e187180760baaf977e68",
+        "assistant/action_text.py": "753c3ef9709243d6a49d51b93611d882e654ca01de588498037c00d61d8bf4b0",
+        "assistant/activity.py": "9c3ef330d044bf1291f1f4f9a3360ee07a8e052802923713f16728b21d6b882f",
+        "assistant/agent.py": "3696ea9ee205262a8f5a0ca687b98231fc352a23330f419ace097128ca02800c",
+        "assistant/agent_execution.py": "df0f6c9ae0996a0a801b2509332f328e5518c39caebb4f9e2e0636c2c029f142",
+        "assistant/agent_input.py": "f4beb66085c855bab6158670fb792c92e8cdfba1137b0168997d1e995817d2af",
+        "assistant/agent_panel.py": "89701eb210af028793e4ecc6204efeac1c90b0b4ad10bab0bd216abfeeec816a",
+        "assistant/agent_runner.py": "adadb99b4badeaa9e837d900691e2465502486121f398c5b4733cfced3bbf4fb",
+        "assistant/agent_session.py": "5f64d09d7cb8fda7e30850e12fab5f6b54ee4f60f7b547157faeb6bc6daa118d",
+        "assistant/agent_toasts.py": "e12dcad5ba9795e2dd3e71fbdd21edfb95facfaa29d090e70173da1100462775",
+        "assistant/agent_window.py": "6945b79d6d5c4914c6dfebcd254088fadc77ab029d5c541f3a724c567d96b67c",
+        "assistant/app.py": "7e39e8bb62f70c376edddcaf24d87e35a75130db4961a0e52efe278318818a7c",
+        "assistant/browser.py": "26ff3a83f7fd50e54d2ac232192529a4410f8e63bd1fa99ee20916e097f89274",
+        "assistant/browser_dom.py": "6e9f2da746f86d58fc91f24467a7da9d5e495774b5488f61092d5d0908e27190",
+        "assistant/browser_session.py": "99dc78475a1ef214c728ff21876bd23ce7404c4c3b3562ae5e653d9ef792285b",
+        "assistant/browser_tabs.py": "6f9ad32816c192876dda829bb2e02fe410899b206220d7cf72cbeee138e54e86",
+        "assistant/browser_values.py": "916c4ab1c6429c64c6e5070324e5bad78e73e2f9ab29422ae609c0b6c5f0aab0",
+        "assistant/canvas_agent.py": "5290f0eb440a9275c1ed9ca2aa23e499417138582564ad96449d09606772aac2",
+        "assistant/canvas_controller.py": "bff2a4c11b4c2d536d013aff1afa4020c2053c5d0c5321d7b58d02bbbd209fbb",
+        "assistant/canvas_guard.py": "179d10558af69aba4bafdc4f5ef1524f005276168275369fbe733207a3d3edaf",
+        "assistant/canvas_launcher.py": "7b8deb3d975c4a61c2207da7f06eaa8c6aa485fe62a58a139c5fd5be23443eeb",
+        "assistant/canvas_model.py": "810753a7b561efbd0713a1b6d3533795080b50b886b6618bcb87908f74ca3175",
+        "assistant/canvas_native.py": "799579812f68d6b871572b77b36bc71210868724bb3c4e3ee3404b68c678a28d",
+        "assistant/canvas_store.py": "c6621fae067eb891bb002f757a7d1e2a487e4ffd7cf658d90816461599b5c91f",
+        "assistant/canvas_ui.py": "dd98d867834464d9308debaf65ead0072a258a629e5c34eb115b46892759262f",
+        "assistant/canvas_widgets.py": "b7facdb1355eb165c717188522b0d5b7c6589e5637bd42525990569375e570e4",
+        "assistant/commands.py": "251146cf6d55af4e1af11dd0d24616e58ebcd0a090adbb711d19f708d6afeccb",
+        "assistant/desktop.py": "fe72f23539825c30836d6b678f5f886800be88f9fbb87ab5e1320366900f3818",
+        "assistant/features.py": "d73e32ded41b504324983a1ba69b32e16e6dcbce691936722d61d8bc4d86eee9",
+        "assistant/geometry.py": "f761171c676838f32c20419fa3aa9ced473ac867cba762bf6865d25c2c4d6d48",
+        "assistant/graph_http.py": "7ae6ffcbf89122517f39555fd99dd5a9fb51b693a4203c51fc4bbaf4d8038333",
+        "assistant/icons.py": "7bd49b3b5c8ef081cfe40497040d2f57e68b9bed1d801a6ac8c7c30c4cda0817",
+        "assistant/keymap.py": "26bc9f75fe00710875b18a3105a38b21b00041f526065f32ea6ce55c7e262a46",
+        "assistant/llm.py": "9f59651173744af4386cd13bbc024adf3e5109b96b2a919c096af707d59e62ad",
+        "assistant/machine.py": "18707896af23a9786f01ba5f198c8058d76201a6cb5725ca01708554d2feae5d",
+        "assistant/meeting_events.py": "7d8a1d1d8d26ad707f31ec2f1daa8a3b815c4fc778e41ea5472442130cfb90e3",
+        "assistant/meeting_store.py": "2478fbdc9974f21a701de2239891405073b31ee0a5cf36fff85af17dbf0e08f1",
+        "assistant/meetings.py": "33bb61845d940b1a8120baddae4bbf526a62a7d10b14774cdaad93c080681f38",
+        "assistant/notification_reading.py": "ce918dd64f320f414f4230c433274130aaf1163fa83bbf36f34ac50498e440ed",
+        "assistant/notification_text.py": "1aee78b6c3b987b665d69bfe51ea5797c08815f36ecafcd3e7619c6ba300fa7b",
+        "assistant/notifications.py": "37737235f9afe29ce6596e6e90d8fa1011d055e4aafc62439c22db2ac69b7680",
+        "assistant/overlay.py": "4d0234676a60fb2489f4578bad9741b8d4484263a512cd5218910dec7d1f8a88",
+        "assistant/panel.py": "d5378ad51ef945ff8909d7bc44d0651f3b08e7780b5f3e0f4bce882c8c9b3ca8",
+        "assistant/pcm.py": "fb4bee84d583647ccd6ab83c95ee82a6b37aa09de363d0919dbb437e2051897d",
+        "assistant/png.py": "11b2ab445b9e582d7628ff9bc236d0216361bc94cdfbf4a5126356bc1d637a0f",
+        "assistant/prompts.py": "f6192ae1c55573210a2e8c5085bbc5ba1d13161a8136ec1f2154934f81a06547",
+        "assistant/publishing.py": "841a04ce13af1feb682f1f9685c0c622ce3d75ed6f1eb9d05914fce986a9334a",
+        "assistant/qt.py": "ce36929b5ae92cb416897062c0b69d780e2a866c50921b3ce23fe545e5ec60a2",
+        "assistant/qt_text.py": "d2a291505d43e920895ac2ea4c814c86ab9af9d8d560491d9ed3bde2c7526b2b",
+        "assistant/qt_ui.py": "461b69fabbf1b785a6134e929c5512162c0a5bebe1479d2afa8704c776b14f97",
+        "assistant/recording_state.py": "7ce517e3d609b946cb4f28c62789ad1d133098fd6db473c8c192acaba29d9427",
+        "assistant/report.py": "5c219a41d474eec5323ad62e99154c678b5eae08d6c72f2d6001bfc1a4184f5d",
+        "assistant/rich_text.py": "ce99b2289cfd6e2758a658daca40a9e4fb8fbb31cacaa10de2d3ed3a95c712cd",
+        "assistant/sdk.py": "34cfcacdb0ab666b0990bf48eb71722444cc7972c58a8ce194d4bf2e698d180d",
+        "assistant/teams.py": "3243a69812e012d725ff766fce8e43ff1fc97b44f7092b14bad67a020c8333d0",
+        "assistant/text.py": "5a03e3248cb0b11c728faec51c1cf6040ca48edd2afc315148f0485c85abb86e",
+        "assistant/textio.py": "dcd0eb6b42e3cf39175d7d726eea099eef930b35d58b1ce92cf5179b7de80970",
+        "assistant/theme.py": "e890477c23ff148288743a9c8757485878421d310b0d8fd50600ef9f62b441c0",
+        "assistant/tk_text.py": "c5edb479d1de683bd5c499c70e61e1bdd35ffcb42c9f4e596e6244c7eb759193",
+        "assistant/toast_card.py": "02873d2f45f6b405d6cf94a591304db31051139e10151692f2f29f9b0a0a6aba",
+        "assistant/toast_style.py": "d3e05831ad0efa37dc9cc4b2bf826efdb677463b61d32deae066327e26949769",
+        "assistant/ui.py": "2b62ffbd7f8b9e4807fb202d7248b200970dac000f6b5c8fb52daf7b99eb2090",
+        "assistant/uia.ps1": "c987438d74c205849ef5e45fbfbfc35c96e4249cbcd4e224ecf6612691d61f0d",
+        "assistant/uia.py": "ce9a2a090c22e533e5a6d768fe318368829e9e87cf86858c4b9b8cc912f1f34d",
+        "assistant/work_agent.py": "aec5faad16488bf4ba031809cc85ad1c2f745050dfea466f3736b25889673fb4",
+        "assistant/work_panel.py": "1fa13312260592b0bf5f3e01b423a6bfd6227faa3b182dcb3e931ac183acf1e2",
+        "assistant/work_service.py": "f140793fb029769cbaac2491335f05985821948f7d1d3b16fae93f973a58f941",
+        "assistant/work_window.py": "5e2934eda53544175d5e6005187450e3374863177ebe90f18bf803c84c29447d",
+        "assistant/workspace.py": "87e9fcc9dec6abf3c2e426e2278107c1de10c0283a3e0a91b57f9e8ba94521de",
+        "automation/__init__.py": "53e2636e17351357f11e2808ac1e671d03b6075872b8b34c6d6d977a43f4e042",
+        "automation/__main__.py": "ef79c8c18150a7b38b8b0848deb7c36c5c7afbe7bdb80f453bdae845e48f59bf",
+        "automation/actions.py": "0d7b76bbf153ea0c9b55488982df4b9e0ccab1a0ab78f473d4bf090930ac7916",
+        "automation/app.py": "0c6c5787d58defe36f8e2a9a5e6c6d51ddd591e2443b355f0f71952eb9eb474e",
+        "automation/bridge.py": "15290544760b81c8480de59398df004c2fe1f6fa0ae6ee1c9d4972d73389ea37",
+        "automation/context.py": "9fe639070e4ede998cf82f7a688fdd8925f986a67fc250c555988efa437f1161",
+        "automation/controller.py": "c358247e42b3cb1e9e652a5ed8be1b6330abe9d97eacb1ef48e95c1883cbd638",
+        "automation/execution.py": "91c6bd360207128dbf23a9e7d9f8db70b2cb7ce17abbe89599d3b256beb198ad",
+        "automation/ipc.py": "a985a629c2f83066448a9216ec44baa8aaad713f00a6120ef55ce21bd5ba9aa7",
+        "automation/routines.py": "9a3c6cb9ef8d21efb20b508e478e2589140f75b717b280dc8fb9a604f9116e80",
+        "automation/store.py": "81154f61fc104162cb1950cfef2e0168c70a300c9596ef163b853af20f405cd1",
+        "automation/task.py": "83df9e9f1113aff6fc78d01e02de79c5134752d8ab623d7e82cb2f41a2e08e67",
+        "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+        "docs/adr/0001-durable-work.md": "c3367560635bb70cb61242d5fc08f23944a6894247090e1fca52d7c7b0b144fc",
+        "docs/agentic-implementation.md": "a2f2f41d55a61bd4298868a1d628bc27b9be41ae6835259bce122053b8000079",
+        "docs/agentic-mutations.json": "032160482e8feed021734b72e8aa76b05717c5d697f76f22e7c08c25e713872a",
+        "docs/agentic-pc.html": "a1b391f2bc4f3b41cf0d3834f27ee9d568e62b40d29c31a27d4c18a170cc2e14",
+        "docs/agentic-validation.md": "48743203c17af7263b758b6ff1bb75bafada9bc953e593002b9831a94c5dc381",
+        "docs/background-automation.md": "d4c5a61672f0170fca7c9d5bf4024024ec6bf427014b57e7e0b0ec8e0e90f699",
+        "docs/browser-session-reuse.md": "c3a5f7a5c641581b60f948830e18e07545e5aab85f4f9a4a93385afaf6278898",
+        "docs/conversation-mutations.json": "e37e614c7778366b2fecb16a76748c5d6fa4307ad8d1c5dda4fd3979939286d2",
+        "docs/dependency-refactor-checks.json": "b688d4659f73d6efe714def4e23ee31ab01ad1c71bebeea5cc45f3cf01203b7b",
+        "docs/desktop-canvas.md": "d9eb42b69fa4fd076e6a373a7356f1e3845aa3eee0891796d0804aeb7d6210cd",
+        "docs/functional-design.md": "3b75dff0bb8a62e1040813429723a9c0f4938f63dbc30455ed9c927e29d8e400",
+        "docs/readiness.md": "c7270d67a6deb3e13285134f71a1ab7205137c394282686c1749f2f57abc281e",
+        "docs/testing-audit.md": "ad7fe13200a9eab1f05957e5b462987e7db93444d4dfc9e3c79613bb4aeeeed6",
+        "docs/testing-dependencies.md": "9983a3702efa8a63f93190c95ed6ee8d403452f269ee29bccf8bf52509271864",
+        "docs/testing-mutations.json": "6d9d9d9dbd2fb663449aad9cce76d3100f503aa2014c22c0ce2bd86d689e13d8",
+        "docs/testing-timings.json": "bcc2acd3af3096775f4e0845320eded0b47b968eba1ce91768058c2e88529274",
+        "docs/voice-diagnostics.md": "493dda9bd699685adc5941ab394214370c840ea11adc77073cf44a1d378e2cf6",
+        "keeper.py": "bb462c12692ca7ef809eddd1932973afe111c8731df6a237253ab92303528482",
+        "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+        "miryoku/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+        "miryoku/engine.py": "f9925efa382606ac07154e694a205dba28b851d5e6296a63921a4941fa5fa9a3",
+        "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+        "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+        "protocol.py": "3958654d7a710674fffbf7dabf2960175c970b8e69cc8e85b5c2f6707d4cca43",
+        "pyproject.toml": "e9e90553dbdffddfe68c2c2bb94439244d6f00d0a22fac8d794a541e40809547",
+        "requirements/python-win64.json": "caf1c9f5b2889309c7a4caee9a451b3630c3f95db4ec07724a77351cd4fcc919",
+        "requirements/windows-py312.lock": "c568c28f02df3f2843573f46fc3a8cd35e48d6d8f94433de523a7bbde5809cb8",
+        "requirements/windows-py315.lock": "7d190f1bdbf2f1fc16ef1afc0a2606cc29c105accf33763f1247ba3d5593af0f",
+        "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+        "scripts/benchmark_keyboard.py": "f328b2915394ebf058f316e039b3a94857748d6fac307450440ba3b1f321c2b8",
+        "scripts/bundle.py": "50eeb3089e635ca40b319273b6b92eb0d640437c1b21b7039d1af45f65b52653",
+        "scripts/mutate.py": "a097f665cd9cff2651d00efff6ae6a0bd61074e23ead3513a2741f9b75671159",
+        "selfcheck.py": "a459f5ae7ac4a00e81552685910ddaae8edce2068393446230252eba9c1877c6",
+        "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "tests/browser_fixture.py": "f51e9cf8817562e458a698e3e0b62e10d069699b2a798a8d5fbc0a3edde0831d",
+        "tests/fake_endpoint.py": "a89fab13fc937ab6ae67cc66cc3c1ee18573cfc8d52bff3506369852fd74a7ba",
+        "tests/test_action_text.py": "21e4d5c1d6131417af67312979585a5598b4a516ac0a9fd5c7409d6dd8eceea7",
+        "tests/test_activity.py": "4287d1b15e27a8dc403db65ef24f0da22829b99134584cde2be7a2007c3591bd",
+        "tests/test_agent.py": "107a23b598b0b7d9ed936bba3ff0ac35295e18100e9b77c6651c5042d4aeceb6",
+        "tests/test_agent_runner.py": "d28aa9b6884c2f7dc097e088522b31dc4920c65ddf4e2cf9dba1e8583cd3b7bb",
+        "tests/test_agent_session.py": "f4b454972bfdc3ce1d3667f715ed22025bc102b28b72608c18c4183e6fc4b436",
+        "tests/test_agent_streaming.py": "3f1837a4f31f8c6cf26333cb88ecbc05893161e72a6e6ae3832f36801e8b5967",
+        "tests/test_agent_window.py": "aa454306ea2d8ab2cc9749b7177de45b6943e432554b18c39a6f8865d4a70eec",
+        "tests/test_automation_ipc.py": "26e2e0d2d98121674b137116fa7fdbcf49401fe0a543c007719d424e6eacabe5",
+        "tests/test_background_agent.py": "898cd1e78afbbbe1e7425c50d0bd4d65409362d3872ad1eef3de7ba9d75976e1",
+        "tests/test_browser.py": "872b3712bd02261678684b0619ce87a6f6b4f0c331bdc9790f00b74a08adbfd5",
+        "tests/test_browser_attachment.py": "f062ac34da1b3ea32860690b45a9d620a2b4891854ef86fa72e6cee6ecf791b0",
+        "tests/test_browser_tabs.py": "08b56b95d369a2733dbc855b5483fe761ac1b3cc49d101c24c8d6f5f1de105fb",
+        "tests/test_canvas.py": "cb26d4a2d46ca7a4bece42b1fbbeb1425516976be6207aa874a479c3e3292ee7",
+        "tests/test_commands.py": "1c76954006ed3765629c41a622c6ab735f04b6d14278692525fa883303e1359b",
+        "tests/test_computer_tools.py": "458150953909dbc8fd56e22415080fde947a36867fb406143385a19ff1ad7049",
+        "tests/test_engine.py": "78979b1d6e336713b987d9889cc781539013a034dd06396596db1a1cfcfd25fe",
+        "tests/test_external_input.py": "14a0e74d71dac01d662138c30c69da0043d59c634a4e78c23f9622abe20f42d5",
+        "tests/test_features.py": "f90ebb259806d08d5904337f5e14f5b02f9f05c7e3f2e10035b79d747ec07ff8",
+        "tests/test_geometry.py": "12fefec1b1bd66b5b4833295da60d3f64d2b987dd9d417a87c0921031d3e9938",
+        "tests/test_graph_http.py": "4d0b2580e729c0671c18415f6cb0d7100175144ae236c7f101084da653c2bd07",
+        "tests/test_keeper.py": "0ae60a750f659452f9cf274179f431ad2a0a05cf11a842ed3d85890ce756559d",
+        "tests/test_keymap.py": "05aef9b16cb8973d7cf32d0a7464a05e4dfa9904990b638ee612a00b7ab733e2",
+        "tests/test_llm.py": "ee2b099fde4137ec89ee1534a15b3fb474e9394ebe82621f07ab5b5dfd0ef8f0",
+        "tests/test_media.py": "88bdf363711e561b5b6418f3cd29a7044f00afcbf09efb764e7ff172d925941b",
+        "tests/test_meeting_events.py": "21b7b1e4cbbd4b2899869f39efa54f87d1eb557f923c810a589ffc6f99a8a702",
+        "tests/test_meetings.py": "8cc1ad674b6de1979322198a8149cf5709e4177fcb4718f0778f1068defe6b2e",
+        "tests/test_model.py": "a1e868a3113d698ffeb46b1bbdb070ba3d12077cdf2d45c3d024eb4e88619c00",
+        "tests/test_notification_reading.py": "d770b72b3951e43672e228543d48c9a98b196cae46ebff42f70b01746f77031c",
+        "tests/test_notifications.py": "e69cff8ac004f52329b8fde21bb6c43e031a2429c7bfee2b7dc79e99e8996347",
+        "tests/test_overlay.py": "61a54afa64f36148e89c332529aa642da5dcfbf34794fbf7c4c2bc7b06e6b9c3",
+        "tests/test_panel.py": "4cf0c0dc1af14f7f4f1bc20dac1c4e69b2e443222508f115bf514d090737e598",
+        "tests/test_pcm.py": "9c6541511177c72d888049e8b4a7badc3ccc5833cadefbc28ce89988a7600562",
+        "tests/test_project_context.py": "c8edad8b2ae2f0c42d5124fd315268aff1262dbc439010c16e9b105e632d6d48",
+        "tests/test_publishing.py": "d4a32f5cf9e1c6a6a2658b063609f4d27f153beb0772a0e8c5c75cc6a477d070",
+        "tests/test_recording_state.py": "c44614daeafad81f7f42720780d18368e0b31aefe4e63a7c70e306e5200575dd",
+        "tests/test_report.py": "fac8e19ca32d8112ba012aa83a087616f5c812fd34a5f62dd5185b91db0d0601",
+        "tests/test_rich_text.py": "547ffebd3dafa3f154ff5e4ce36f2671b58d59bf629eee6252f508e57e1bea2c",
+        "tests/test_routines.py": "98f620f6a32b3cadcbaf81d2fe61a24897c4d4a4b06aa14f0c83f22d4ed363bf",
+        "tests/test_runtime.py": "680533c20e13a1f76b8ac837b7f905c17c9814a4f5bb2184b41b5b0df42bc339",
+        "tests/test_selfcheck.py": "48642acc7fec6ad88c92725a21cfcbedb4ae3b3d4ff23c61a2e6c83b2f2cb0a6",
+        "tests/test_shared.py": "06ee0bfaefec5137d7a41ea5c4ada43143caab5d658766d1a46a5237f94e9fac",
+        "tests/test_slots.py": "0a08b38101ca992753a9af5bb94c80b2f30900effdf94905968c44b7f07262d6",
+        "tests/test_teams.py": "d51a287624546fc3ae4f07fad187f3fcbc928ee76cbbd5afb08e57c7cffc0b18",
+        "tests/test_text.py": "040adacd55d695c19868ddeb6360b9541c70aed792977e11bb743e5544719923",
+        "tests/test_textio.py": "e4a4aad1713b16d8ed73e2187d0fbac17673bec3f938c3ecd2982fc7727e272c",
+        "tests/test_windows_agent_approvals.py": "b617556a6af0bcc8f5f3b0407206845efdc90308bf537fc3ca8fa0a709bccb69",
+        "tests/test_windows_agent_panel.py": "76aadf4813431a48ac78adeb916a8b6e890ed46a8ad1d8eb01a6d97a506a187a",
+        "tests/test_windows_agent_toasts.py": "06135110be7f1e2e7471d973a5c04194e5dc92dcc649aa3065c2b06770d60453",
+        "tests/test_windows_assistant_e2e.py": "ff738c774cfe351bcf1cfc5974c623004afd3dd236924287a25ed332fdd83bb4",
+        "tests/test_windows_audio.py": "85ea933a172a9b3c77680b793ffc24cd589ab179d262ee6552d14d9fecb49619",
+        "tests/test_windows_bindings.py": "a2238f39c7703da2fa1663fe3292472ed1174d9cdfe000cf38681b7b800f6c9f",
+        "tests/test_windows_browser.py": "84ea364aee3c0e8b1e4986a9106176adb6bbf5c03e015aa9d98acce3644b6436",
+        "tests/test_windows_browser_tabs.py": "092f40a59691daf62c739648d542e7a85c92c508870b69d7e40a4160a9021d08",
+        "tests/test_windows_canvas.py": "1cf4ac957fc73142f5527edf8669d2049c95a4cca13f236ade5521197402a005",
+        "tests/test_windows_computer.py": "80de4c148d58180fa266404df7f795bdf9dd3ac6c31eefa26c1787a5c9510d64",
+        "tests/test_windows_e2e.py": "aa9f274550b694cf5899ed9d51d01698dffdbb98e8c1c3c02f6fdee6a772a2d7",
+        "tests/test_windows_integrations.py": "21b669d5965d383db13305c75acf4156428ae75c42bafe785de4a3be1b67b14e",
+        "tests/test_windows_machine.py": "4e80532455e64abcfe2bfda23e796a51c8db69edcd1ac6aabd655005eb1a062b",
+        "tests/test_windows_overlay.py": "997941c3e20162d5d6f4faa7b906d9627abbc643a219d68f398f7029e7fe5e42",
+        "tests/test_windows_recording.py": "c2115f4c74ce330132bb28baaaf862b01a1bc128b02da56048d2b933fa4789e2",
+        "tests/test_windows_runtime.py": "8468263d998113985b6d32fcac95681fa81294532483c4ad77365cdbd4968e5e",
+        "tests/test_windows_self_change_e2e.py": "ba7ec1f4483dc72effdc81977a97c8ec4e8a4c8d32247466ae7d8870ddac1a40",
+        "tests/test_windows_work_approvals.py": "8ca5802cf19a286aee598794176d8be6a2b335094e3b4cab9b36a348526226e3",
+        "tests/test_windows_work_panel.py": "0312e43aef10e2a3b2d0b19efbddbf3df3bc29cc96345e63b862c62b103ed260",
+        "tests/test_windows_work_process.py": "cc741108915e999400c4b55fe088532b3582ca55cac2d419bee874e2021731bc",
+        "tests/test_work_acceptance.py": "4327e36ecc1af58e2ac7239e22e43872aeaf2397e73e1327e6946b8b59a64efe",
+        "tests/test_work_actions.py": "650f082f3da825da68bcdf981b32be25c8b7367d20e455289b7a04219cb18fd5",
+        "tests/test_work_agent.py": "d92344a0fe721fdb26f7395e5e69cd3b4b4142ef3988c2ed42b5f403b0c262f7",
+        "tests/test_work_controller.py": "b4de0a5e2950afc1df42599892719e134c786d61bc2c993ab3e1375c2f3af9ed",
+        "tests/test_work_execution.py": "f0d9a32a380e90e732ec00823779fb8bf9bb93d5637c38381b96101fde67c4eb",
+        "tests/test_work_reply_receipts.py": "675d8768cbc84b6c77a37557e9adc74ee293210d2fe30c142c99655e5d422029",
+        "tests/test_work_store.py": "855e4694c61fd7d1800a592ca94e367ddc37affd50ebcb24afde296dd3b7dc94",
+        "tests/test_work_submissions.py": "aa5cdcc013e1a7fce84e8ac5a9f6ad89ec6e09aeac68971f0ccf120df30838ce",
+        "tests/test_work_window.py": "3f07a0c557c36df549e9d2f86ba1f78e182793a85c781ef7bb988b2c2ddaccae",
+        "tests/test_workspace.py": "62f61b5795b852e0721db10e02cfa452f1d6ea5b3b5f81e74426dd581a05a126",
+        "tests/uia_fixture.ps1": "abf8e7f71831babf61738f964475cd1b3c2ef0de989035ca914ba72cfbb16207",
+        "toolkit.pyw": "7c96e231cc50780f65e6f45373816f9053afabb189c55d26b2a0fd464cc63c5c",
+        "usage.py": "453e359c17a7208c3344b73f0b7b423dd8f25e5a14c51488979d32f0ec0c6938",
+        "winapi/__init__.py": "f574eaeb8dc239e532fffc65d87a5840a51a5c182b3caede39788c6de9fc624f",
+        "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794",
+        "winapi/appearance.py": "65fabdc2a6a9b1fdc25763b3b15d2f8536573466eaaf908b66c4cc727d9acf72",
+        "winapi/audio.py": "4c15f236e048f4960345a014fd576f607fbbbdfda4e41a670ccad2c38fbb1835",
+        "winapi/clipboard.py": "75a713a43e5bb90847855c0ab63df5d81b3ec6ce24506230a7ba8a71f593c45a",
+        "winapi/composition.py": "50917f1c5e066c60e9100ea312b37ace77bd4821728f7d9fdcc2dd1ae4ae4e5b",
+        "winapi/desktop_shell.py": "25c7295e506b62b59d60b51c23ca873fe60278eedce1f27abc9964fe3cbd40ae",
+        "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+        "winapi/notification_input.py": "36a4dd8d6f19306e4e7cccce027b774607e7cbfc2a4d14666a310ebcf8725506",
+        "winapi/processes.py": "37f1307ae963a4f905eab066693111d1084c311337c60415c6047d3f548ed727",
+        "winapi/protection.py": "415201ab5cdf0c756d801b22e121c526aeed4f1371b37f0260e0cb47f9816371",
+        "winapi/recording.py": "37cc8d93a40a88f565f5699e1f359ed1a31accd2fa19677227d7ccbc8d49c451",
+        "winapi/screen.py": "73db11e10822c62038a29b47a5ba44fb4e374801626299ed15f3e918c06ad690",
+        "winapi/shapes.py": "c32ed0656d5da7a96485d4978b21e3e29ae50ff3449cea5b0ea837dd09b66505",
+        "winapi/shell.py": "6fa69cee312dbf54af301dc9364ec297d2b68b11f9e79bb9fb050099228ac2fb",
+        "winapi/system.py": "a4a815fdfd07e7f438c52bea28aa521a8b88f3a93d4ba442c643eb9913edeabb",
+        "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4"
+      }
+    },
+    "later_changes": "Only evidence documentation is updated after these code checks."
+  },
+  "checks": {
+    "ruff": {
+      "command": [
+        ".venv/bin/ruff",
+        "check",
+        "."
+      ],
+      "returncode": 0,
+      "started_at": 1792746876.1734655,
+      "seconds": 0.03751826286315918,
+      "log": "/tmp/toolkit-agentic-final-ruff.log",
+      "log_artifact": {
+        "path": "/tmp/toolkit-agentic-final-ruff.log",
+        "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+        "bytes": 19
+      }
+    },
+    "mypy": {
+      "command": [
+        ".venv/bin/mypy",
+        "."
+      ],
+      "returncode": 0,
+      "started_at": 1792746876.1894336,
+      "seconds": 29.86810040473938,
+      "log": "/tmp/toolkit-agentic-final-mypy.log",
+      "log_artifact": {
+        "path": "/tmp/toolkit-agentic-final-mypy.log",
+        "sha256": "c61493d6f0c358bd547e1850cf789b0dceeeff9d6f273ea7560a001519c74747",
+        "bytes": 45
+      }
+    },
+    "pyright": {
+      "command": [
+        ".venv/bin/pyright",
+        "--pythonpath",
+        ".venv/bin/python"
+      ],
+      "returncode": 0,
+      "started_at": 1792746876.1609514,
+      "seconds": 59.582817792892456,
+      "log": "/tmp/toolkit-agentic-final-pyright.log",
+      "log_artifact": {
+        "path": "/tmp/toolkit-agentic-final-pyright.log",
+        "sha256": "6d88a1b220adb7a3d62092b6e38431f0b3fe8babe9864fab90e5849766260332",
+        "bytes": 37
+      }
+    },
+    "portable": {
+      "command": [
+        ".venv/bin/python",
+        "selfcheck.py",
+        "--fast",
+        "--durations",
+        "20"
+      ],
+      "returncode": 0,
+      "started_at": 1792746876.1741023,
+      "seconds": 80.22859382629395,
+      "log": "/tmp/toolkit-agentic-final-portable.log",
+      "log_artifact": {
+        "path": "/tmp/toolkit-agentic-final-portable.log",
+        "sha256": "fcf6114d979f1c21d4f43067881e7c5f499dbf6a1b397308e1f9da9ea3807a08",
+        "bytes": 2023
+      },
+      "passed": 654,
+      "failed": 0,
+      "modules_skipped": 0,
+      "native_modules_deferred": 20
+    },
+    "bootstrap": {
+      "command": [
+        "/home/jim/.pyenv/versions/3.12.5/bin/python3.12",
+        "-c",
+        "import sys, runtime, keeper; print(sys.version); print('Bootstrap imports passed')"
+      ],
+      "returncode": 0,
+      "started_at": 1792745188.248075,
+      "seconds": 0.27801084518432617,
+      "log": "/tmp/toolkit-agentic-final-bootstrap.log",
+      "log_artifact": {
+        "path": "/tmp/toolkit-agentic-final-bootstrap.log",
+        "sha256": "72e868f4c19c49dd0ab2d3db8d4c2c7f847595c7a83f84b4b7a1e1baefb6a8dc",
+        "bytes": 74
+      }
+    },
+    "diff": {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "returncode": 0,
+      "started_at": 1792746876.2158458,
+      "seconds": 0.04915308952331543,
+      "log": "/tmp/toolkit-agentic-final-diff.log",
+      "log_artifact": {
+        "path": "/tmp/toolkit-agentic-final-diff.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      }
+    },
+    "windows_full": {
+      "command": [
+        "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\.python\\python.exe",
+        "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\selfcheck.py",
+        "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit",
+        "--durations",
+        "20"
+      ],
+      "started_at": 1792746975.873305,
+      "seconds": 419.6571681499481,
+      "returncode": 0,
+      "isolated_profile": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\check-profile",
+      "log": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\windows-selfcheck.log",
+      "passed": 794,
+      "failed": 0,
+      "modules_skipped": 3,
+      "log_artifact": {
+        "path": "/mnt/c/Users/Jim.Lundin/AppData/Local/Temp/toolkit-agentic-final-1792743371/windows-selfcheck.log",
+        "sha256": "ff0cbe31ec6369c8366cb6fb89012458c1112481c7cf10e32703a5ee2338b724",
+        "bytes": 2775
+      }
+    },
+    "windows_focused": {
+      "command": [
+        "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\.python\\python.exe",
+        "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\focused_windows.py"
+      ],
+      "started_at": 1792746882.522359,
+      "seconds": 23.8068585395813,
+      "returncode": 0,
+      "results": {
+        "tests": [
+          {
+            "test": "tests.test_meeting_events.test_capture_audio_export_and_existing_file_all_gate_a_completion",
+            "passed": true,
+            "seconds": 2.3740397000219673
+          },
+          {
+            "test": "tests.test_meeting_events.test_delivery_failure_leaves_the_recording_saved_and_restart_recovers_it",
+            "passed": true,
+            "seconds": 0.46762070001568645
+          },
+          {
+            "test": "tests.test_meeting_events.test_first_scan_baselines_history_and_new_completions_deliver_once_across_restart",
+            "passed": true,
+            "seconds": 0.5844876999035478
+          },
+          {
+            "test": "tests.test_meeting_events.test_unreadable_initial_history_cannot_be_enabled_and_later_scans_continue_past_damage",
+            "passed": true,
+            "seconds": 0.6717320000752807
+          },
+          {
+            "test": "tests.test_project_context.test_corrupt_context_is_rejected_instead_of_entering_model_input",
+            "passed": true,
+            "seconds": 0.09179400000721216
+          },
+          {
+            "test": "tests.test_publishing.test_durable_publication_records_before_candidate_code_and_remote_push",
+            "passed": true,
+            "seconds": 8.585547099937685
+          },
+          {
+            "test": "tests.test_routines.test_corrupt_saved_trigger_is_rejected_before_work_is_submitted",
+            "passed": true,
+            "seconds": 0.1291077999630943
+          },
+          {
+            "test": "tests.test_routines.test_transcript_trigger_waits_for_capture_tail_and_committed_export",
+            "passed": true,
+            "seconds": 0.48620659997686744
+          },
+          {
+            "test": "tests.test_windows_work_panel.test_background_render_preserves_selection_scroll_draft_and_hidden_state",
+            "passed": true,
+            "seconds": 3.631630999967456
+          },
+          {
+            "test": "tests.test_work_actions.test_exact_approval_is_once_only_and_private_review_never_enters_storage",
+            "passed": true,
+            "seconds": 0.28936140006408095
+          },
+          {
+            "test": "tests.test_work_actions.test_lost_result_commit_recovers_by_readback_without_replaying",
+            "passed": true,
+            "seconds": 0.21119800000451505
+          },
+          {
+            "test": "tests.test_work_actions.test_storage_commit_precedes_effect_and_failure_refuses_the_effect",
+            "passed": true,
+            "seconds": 0.17416439997032285
+          },
+          {
+            "test": "tests.test_work_execution.test_runtime_checks_are_recorded_before_candidate_import_and_failures_remain_fixable",
+            "passed": true,
+            "seconds": 3.9103255999507383
+          },
+          {
+            "test": "tests.test_work_store.test_answer_and_ready_state_commit_together",
+            "passed": true,
+            "seconds": 0.15474179992452264
+          },
+          {
+            "test": "tests.test_work_store.test_batch_reads_validate_the_requested_tasks_pending_input_relationships",
+            "passed": true,
+            "seconds": 0.24272420001216233
+          },
+          {
+            "test": "tests.test_work_store.test_durable_attempt_requires_reconciliation_before_replay_or_completion",
+            "passed": true,
+            "seconds": 0.13520230003632605
+          },
+          {
+            "test": "tests.test_work_store.test_failed_claim_rolls_back_the_execution_identity",
+            "passed": true,
+            "seconds": 0.08646919997408986
+          },
+          {
+            "test": "tests.test_work_store.test_invalid_action_and_reply_rows_do_not_enter_typed_interfaces",
+            "passed": true,
+            "seconds": 0.10704919998534024
+          },
+          {
+            "test": "tests.test_work_store.test_unknown_schema_and_invalid_rows_are_rejected_before_execution",
+            "passed": true,
+            "seconds": 0.08479440002702177
+          }
+        ],
+        "passed": 19,
+        "failed": 0
+      },
+      "log_artifact": {
+        "path": "/mnt/c/Users/Jim.Lundin/AppData/Local/Temp/toolkit-agentic-final-1792743371/windows-focused.log",
+        "sha256": "ed8241366ee51879fa22def9877dbc2f6d8f35d036869eab515ee8d568b546ea",
+        "bytes": 1908
+      }
+    }
+  },
+  "initial_windows_gate": {
+    "metadata": {
+      "command": [
+        "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\.python\\python.exe",
+        "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\selfcheck.py",
+        "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit",
+        "--durations",
+        "20"
+      ],
+      "started_at": 1792745193.5632393,
+      "seconds": 359.2968339920044,
+      "returncode": 1,
+      "isolated_profile": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\check-profile",
+      "log": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\windows-selfcheck.log"
+    },
+    "counts": {
+      "passed": 770,
+      "failed": 19,
+      "modules_skipped": 3
+    },
+    "log": {
+      "path": "/mnt/c/Users/Jim.Lundin/AppData/Local/Temp/toolkit-agentic-final-1792743371/initial-integration/windows-selfcheck.log",
+      "sha256": "ea7619d63b497308d2a603f48a814a1cf9fab23a2d8e46c27d9b0f22d251665f",
+      "bytes": 39472
+    },
+    "disposition": "18 Windows fixture portability corrections; one WorkPanel focus correction. Original failure evidence is retained."
+  },
+  "native_focus": {
+    "plan": {
+      "cwd": "\\\\wsl.localhost\\Ubuntu\\tmp\\toolkit-work-focus-1792746754077518828\\source",
+      "executable": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\.python\\python.exe",
+      "arguments": [
+        "-B",
+        "-m",
+        "pytest",
+        "-q",
+        "-s",
+        "--tb=short",
+        "--durations=4",
+        "-o",
+        "addopts=",
+        "tests/test_windows_work_approvals.py",
+        "tests/test_windows_work_panel.py"
+      ],
+      "environment": {
+        "PYTHONUSERBASE": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-validation-deps-1792740922",
+        "TOOLKIT_BUNDLED_RUNTIME": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\.runtime",
+        "PYTHONPATH": "\\\\wsl.localhost\\Ubuntu\\tmp\\toolkit-work-focus-1792746754077518828\\source",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        "LOCALAPPDATA": "\\\\wsl.localhost\\Ubuntu\\tmp\\toolkit-work-focus-1792746754077518828\\profile"
+      },
+      "source_hashes": {
+        "assistant/work_panel.py": "1fa13312260592b0bf5f3e01b423a6bfd6227faa3b182dcb3e931ac183acf1e2",
+        "assistant/work_window.py": "5e2934eda53544175d5e6005187450e3374863177ebe90f18bf803c84c29447d",
+        "tests/test_windows_work_panel.py": "0312e43aef10e2a3b2d0b19efbddbf3df3bc29cc96345e63b862c62b103ed260"
+      }
+    },
+    "passed": 9,
+    "failed": 0,
+    "seconds": 16.77,
+    "log": {
+      "path": "/tmp/toolkit-work-focus-1792746754077518828/native.log",
+      "sha256": "7c862542dfcd20c4e0212ad3f6127c9f42bc64f98199ea98f7d9217153e3ff7c",
+      "bytes": 607
+    },
+    "original_failure_log": {
+      "path": "/tmp/toolkit-work-focus-1792746651961826011/native.log",
+      "sha256": "393c351a38d6db7cfb3ecdb1b7a3b08820767d0299e1a28bd2623de3e177ee9e",
+      "bytes": 1280
+    },
+    "behavior": "Quiet reopening after explicit activation and Hide preserves the current foreground. Regression executed; it was not skipped."
+  },
+  "mutation_review": {
+    "evidence": {
+      "path": "/home/jim/toolkit/docs/agentic-mutations.json",
+      "sha256": "032160482e8feed021734b72e8aa76b05717c5d697f76f22e7c08c25e713872a",
+      "bytes": 265088
+    },
+    "main_campaigns": 37,
+    "separate_canvas_addenda": 1,
+    "interpretation": "Targeted contract evidence. Historical survivors, preparation errors, failed native baselines and their follow-ups remain recorded. Timeouts, skipped baselines and runner errors are not detections. No whole-project mutation score."
+  },
+  "keyboard": {
+    "events_per_round": 100000,
+    "rounds_per_process": 5,
+    "gc_enabled": true,
+    "observed_peak_live_bytes_in_every_run": 1780,
+    "observed_retained_bytes_in_every_run": 855,
+    "collections_during_latency_in_every_run": 0,
+    "measurements": [
+      {
+        "label": "Linux, earlier baseline and final unrestricted run",
+        "before": {
+          "python": "3.15.1 (main, Oct 22 2026, 01:08:56) [GCC 9.4.0]",
+          "root": "/tmp/toolkit-agentic-baseline-1792739805",
+          "events_per_round": 100000,
+          "rounds": 5,
+          "gc_enabled": true,
+          "assistant_imported": false,
+          "latency_rounds": [
+            {
+              "p50_us": 3.462,
+              "p95_us": 8.789,
+              "p99_us": 12.214,
+              "p999_us": 33.866,
+              "max_us": 273.737
+            },
+            {
+              "p50_us": 3.3,
+              "p95_us": 8.508,
+              "p99_us": 12.441,
+              "p999_us": 35.23,
+              "max_us": 277.509
+            },
+            {
+              "p50_us": 3.518,
+              "p95_us": 8.865,
+              "p99_us": 13.055,
+              "p999_us": 40.278,
+              "max_us": 2460.187
+            },
+            {
+              "p50_us": 3.318,
+              "p95_us": 8.597,
+              "p99_us": 12.146,
+              "p999_us": 33.74,
+              "max_us": 459.623
+            },
+            {
+              "p50_us": 3.249,
+              "p95_us": 7.969,
+              "p99_us": 11.031,
+              "p999_us": 28.349,
+              "max_us": 234.184
+            }
+          ],
+          "median": {
+            "p50_us": 3.318,
+            "p95_us": 8.597,
+            "p99_us": 12.214,
+            "p999_us": 33.866,
+            "max_us": 277.509
+          },
+          "gc_collections_during_latency": 0,
+          "gc_generations": [],
+          "longest_observed_gc_us": 0.0,
+          "traced_peak_bytes": 1780,
+          "traced_retained_bytes": 855,
+          "source": {
+            "miryoku/engine.py": "f9925efa382606ac07154e694a205dba28b851d5e6296a63921a4941fa5fa9a3",
+            "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+            "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+            "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+            "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+            "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+            "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+            "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+            "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+            "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+            "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+            "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+          },
+          "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+        },
+        "after": {
+          "python": "3.15.1 (main, Oct 22 2026, 01:08:56) [GCC 9.4.0]",
+          "root": "/home/jim/toolkit",
+          "events_per_round": 100000,
+          "rounds": 5,
+          "gc_enabled": true,
+          "assistant_imported": false,
+          "latency_rounds": [
+            {
+              "p50_us": 5.187,
+              "p95_us": 13.479,
+              "p99_us": 28.114,
+              "p999_us": 116.092,
+              "max_us": 9283.028
+            },
+            {
+              "p50_us": 5.433,
+              "p95_us": 14.192,
+              "p99_us": 31.07,
+              "p999_us": 176.74,
+              "max_us": 2094.923
+            },
+            {
+              "p50_us": 5.177,
+              "p95_us": 13.512,
+              "p99_us": 28.128,
+              "p999_us": 188.26,
+              "max_us": 6181.118
+            },
+            {
+              "p50_us": 5.302,
+              "p95_us": 13.784,
+              "p99_us": 27.614,
+              "p999_us": 161.046,
+              "max_us": 2052.109
+            },
+            {
+              "p50_us": 5.009,
+              "p95_us": 13.04,
+              "p99_us": 25.085,
+              "p999_us": 104.107,
+              "max_us": 3257.661
+            }
+          ],
+          "median": {
+            "p50_us": 5.187,
+            "p95_us": 13.512,
+            "p99_us": 28.114,
+            "p999_us": 161.046,
+            "max_us": 3257.661
+          },
+          "gc_collections_during_latency": 0,
+          "gc_generations": [],
+          "longest_observed_gc_us": 0.0,
+          "traced_peak_bytes": 1780,
+          "traced_retained_bytes": 855,
+          "source": {
+            "miryoku/engine.py": "f9925efa382606ac07154e694a205dba28b851d5e6296a63921a4941fa5fa9a3",
+            "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+            "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+            "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+            "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+            "protocol.py": "3958654d7a710674fffbf7dabf2960175c970b8e69cc8e85b5c2f6707d4cca43",
+            "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+            "keeper.py": "bb462c12692ca7ef809eddd1932973afe111c8731df6a237253ab92303528482",
+            "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+            "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+            "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+            "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+          },
+          "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+        },
+        "before_artifact": {
+          "path": "/tmp/toolkit-agentic-keyboard-before.json",
+          "sha256": "c2cf53e9cd4c048443abbb4e4a4267171857200ada0740464af2ad55c64df2cb",
+          "bytes": 2417
+        },
+        "after_artifact": {
+          "path": "/tmp/toolkit-agentic-keyboard-after.json",
+          "sha256": "f47e192e818c278bddf8a58795e60044ab3bc8a9b946755adeb3c8382a014648",
+          "bytes": 2411
+        },
+        "commands": {
+          "command": [
+            ".venv/bin/python",
+            "scripts/benchmark_keyboard.py",
+            "--events",
+            "100000",
+            "--rounds",
+            "5",
+            "--output",
+            "/tmp/toolkit-agentic-keyboard-after.json"
+          ],
+          "started_at": 1792747426.8241043,
+          "seconds": 5.96671724319458,
+          "returncode": 0,
+          "log": "/tmp/toolkit-agentic-keyboard-after.log"
+        },
+        "changed_measured_source": [
+          "protocol.py",
+          "keeper.py"
+        ],
+        "worst_event_us": {
+          "before": 2460.187,
+          "after": 9283.028
+        }
+      },
+      {
+        "label": "Windows, earlier baseline and final unrestricted run",
+        "before": {
+          "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+          "root": "\\\\wsl.localhost\\Ubuntu\\tmp\\toolkit-agentic-baseline-1792739805",
+          "events_per_round": 100000,
+          "rounds": 5,
+          "gc_enabled": true,
+          "assistant_imported": false,
+          "latency_rounds": [
+            {
+              "p50_us": 3.0,
+              "p95_us": 7.2,
+              "p99_us": 9.8,
+              "p999_us": 23.3,
+              "max_us": 303.8
+            },
+            {
+              "p50_us": 3.1,
+              "p95_us": 8.4,
+              "p99_us": 13.3,
+              "p999_us": 37.6,
+              "max_us": 368.6
+            },
+            {
+              "p50_us": 3.0,
+              "p95_us": 7.7,
+              "p99_us": 11.1,
+              "p999_us": 30.0,
+              "max_us": 704.2
+            },
+            {
+              "p50_us": 3.0,
+              "p95_us": 7.4,
+              "p99_us": 10.1,
+              "p999_us": 21.7,
+              "max_us": 219.1
+            },
+            {
+              "p50_us": 2.8,
+              "p95_us": 6.3,
+              "p99_us": 8.6,
+              "p999_us": 21.4,
+              "max_us": 373.4
+            }
+          ],
+          "median": {
+            "p50_us": 3.0,
+            "p95_us": 7.4,
+            "p99_us": 10.1,
+            "p999_us": 23.3,
+            "max_us": 368.6
+          },
+          "gc_collections_during_latency": 0,
+          "gc_generations": [],
+          "longest_observed_gc_us": 0.0,
+          "traced_peak_bytes": 1780,
+          "traced_retained_bytes": 855,
+          "source": {
+            "miryoku/engine.py": "f9925efa382606ac07154e694a205dba28b851d5e6296a63921a4941fa5fa9a3",
+            "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+            "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+            "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+            "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+            "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+            "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+            "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+            "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+            "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+            "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+            "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+          },
+          "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+        },
+        "after": {
+          "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+          "root": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit",
+          "events_per_round": 100000,
+          "rounds": 5,
+          "gc_enabled": true,
+          "assistant_imported": false,
+          "latency_rounds": [
+            {
+              "p50_us": 4.9,
+              "p95_us": 13.0,
+              "p99_us": 25.4,
+              "p999_us": 162.9,
+              "max_us": 3516.1
+            },
+            {
+              "p50_us": 4.9,
+              "p95_us": 12.6,
+              "p99_us": 23.5,
+              "p999_us": 114.6,
+              "max_us": 819.1
+            },
+            {
+              "p50_us": 4.6,
+              "p95_us": 12.0,
+              "p99_us": 22.6,
+              "p999_us": 121.3,
+              "max_us": 4492.9
+            },
+            {
+              "p50_us": 4.8,
+              "p95_us": 12.5,
+              "p99_us": 24.2,
+              "p999_us": 145.3,
+              "max_us": 4375.8
+            },
+            {
+              "p50_us": 5.0,
+              "p95_us": 13.0,
+              "p99_us": 25.7,
+              "p999_us": 136.1,
+              "max_us": 3282.4
+            }
+          ],
+          "median": {
+            "p50_us": 4.9,
+            "p95_us": 12.6,
+            "p99_us": 24.2,
+            "p999_us": 136.1,
+            "max_us": 3516.1
+          },
+          "gc_collections_during_latency": 0,
+          "gc_generations": [],
+          "longest_observed_gc_us": 0.0,
+          "traced_peak_bytes": 1780,
+          "traced_retained_bytes": 855,
+          "source": {
+            "miryoku/engine.py": "f9925efa382606ac07154e694a205dba28b851d5e6296a63921a4941fa5fa9a3",
+            "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+            "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+            "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+            "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+            "protocol.py": "3958654d7a710674fffbf7dabf2960175c970b8e69cc8e85b5c2f6707d4cca43",
+            "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+            "keeper.py": "bb462c12692ca7ef809eddd1932973afe111c8731df6a237253ab92303528482",
+            "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+            "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+            "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+            "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+          },
+          "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+        },
+        "before_artifact": {
+          "path": "/tmp/toolkit-agentic-keyboard-windows-before.json",
+          "sha256": "dd15ab576b2c4f8fe84d939633641721fd6fa6ce28097d0bde849e006c95dffd",
+          "bytes": 2489
+        },
+        "after_artifact": {
+          "path": "/mnt/c/Users/Jim.Lundin/AppData/Local/Temp/toolkit-agentic-final-1792743371/keyboard-windows-after.json",
+          "sha256": "bd1e8eff5c7a278f1c4038d305a743721f89e756605c9e81e1d56d715890c090",
+          "bytes": 2527
+        },
+        "commands": {
+          "command": [
+            "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\.python\\python.exe",
+            "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\scripts\\benchmark_keyboard.py",
+            "--root",
+            "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit",
+            "--events",
+            "100000",
+            "--rounds",
+            "5",
+            "--output",
+            "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\keyboard-windows-after.json"
+          ],
+          "started_at": 1792747447.8691387,
+          "seconds": 6.725762605667114,
+          "returncode": 0
+        },
+        "changed_measured_source": [
+          "protocol.py",
+          "keeper.py"
+        ],
+        "worst_event_us": {
+          "before": 704.2,
+          "after": 4492.9
+        }
+      },
+      {
+        "label": "Linux, immediate baseline/current pair on logical processor 2",
+        "before": {
+          "python": "3.15.1 (main, Oct 22 2026, 01:08:56) [GCC 9.4.0]",
+          "root": "/tmp/toolkit-agentic-baseline-1792739805",
+          "events_per_round": 100000,
+          "rounds": 5,
+          "gc_enabled": true,
+          "assistant_imported": false,
+          "latency_rounds": [
+            {
+              "p50_us": 6.397,
+              "p95_us": 18.191,
+              "p99_us": 42.602,
+              "p999_us": 277.811,
+              "max_us": 7772.93
+            },
+            {
+              "p50_us": 5.937,
+              "p95_us": 15.664,
+              "p99_us": 34.114,
+              "p999_us": 218.65,
+              "max_us": 8241.69
+            },
+            {
+              "p50_us": 5.769,
+              "p95_us": 14.958,
+              "p99_us": 29.154,
+              "p999_us": 140.156,
+              "max_us": 1845.383
+            },
+            {
+              "p50_us": 6.619,
+              "p95_us": 18.745,
+              "p99_us": 48.384,
+              "p999_us": 274.954,
+              "max_us": 3775.075
+            },
+            {
+              "p50_us": 5.413,
+              "p95_us": 14.216,
+              "p99_us": 28.663,
+              "p999_us": 149.401,
+              "max_us": 5580.089
+            }
+          ],
+          "median": {
+            "p50_us": 5.937,
+            "p95_us": 15.664,
+            "p99_us": 34.114,
+            "p999_us": 218.65,
+            "max_us": 5580.089
+          },
+          "gc_collections_during_latency": 0,
+          "gc_generations": [],
+          "longest_observed_gc_us": 0.0,
+          "traced_peak_bytes": 1780,
+          "traced_retained_bytes": 855,
+          "source": {
+            "miryoku/engine.py": "f9925efa382606ac07154e694a205dba28b851d5e6296a63921a4941fa5fa9a3",
+            "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+            "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+            "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+            "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+            "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+            "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+            "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+            "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+            "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+            "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+            "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+          },
+          "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+        },
+        "after": {
+          "python": "3.15.1 (main, Oct 22 2026, 01:08:56) [GCC 9.4.0]",
+          "root": "/home/jim/toolkit",
+          "events_per_round": 100000,
+          "rounds": 5,
+          "gc_enabled": true,
+          "assistant_imported": false,
+          "latency_rounds": [
+            {
+              "p50_us": 6.281,
+              "p95_us": 17.631,
+              "p99_us": 41.474,
+              "p999_us": 221.382,
+              "max_us": 5090.537
+            },
+            {
+              "p50_us": 5.764,
+              "p95_us": 15.6,
+              "p99_us": 33.805,
+              "p999_us": 180.457,
+              "max_us": 11009.073
+            },
+            {
+              "p50_us": 5.803,
+              "p95_us": 15.304,
+              "p99_us": 32.585,
+              "p999_us": 161.404,
+              "max_us": 3235.244
+            },
+            {
+              "p50_us": 6.063,
+              "p95_us": 16.825,
+              "p99_us": 36.125,
+              "p999_us": 197.052,
+              "max_us": 2956.341
+            },
+            {
+              "p50_us": 5.68,
+              "p95_us": 14.721,
+              "p99_us": 29.532,
+              "p999_us": 160.376,
+              "max_us": 7310.602
+            }
+          ],
+          "median": {
+            "p50_us": 5.803,
+            "p95_us": 15.6,
+            "p99_us": 33.805,
+            "p999_us": 180.457,
+            "max_us": 5090.537
+          },
+          "gc_collections_during_latency": 0,
+          "gc_generations": [],
+          "longest_observed_gc_us": 0.0,
+          "traced_peak_bytes": 1780,
+          "traced_retained_bytes": 855,
+          "source": {
+            "miryoku/engine.py": "f9925efa382606ac07154e694a205dba28b851d5e6296a63921a4941fa5fa9a3",
+            "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+            "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+            "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+            "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+            "protocol.py": "3958654d7a710674fffbf7dabf2960175c970b8e69cc8e85b5c2f6707d4cca43",
+            "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+            "keeper.py": "bb462c12692ca7ef809eddd1932973afe111c8731df6a237253ab92303528482",
+            "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+            "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+            "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+            "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+          },
+          "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+        },
+        "before_artifact": {
+          "path": "/tmp/toolkit-agentic-keyboard-paired-linux-before.json",
+          "sha256": "1d835868dd9a3f141bf4013701a05e388562a33e580a3fa20028e2673babad7a",
+          "bytes": 2434
+        },
+        "after_artifact": {
+          "path": "/tmp/toolkit-agentic-keyboard-paired-linux-after.json",
+          "sha256": "bb9b45bf3c0c7fd90fd721d5e20682fde8a86a97adb6169a453d16921df3790e",
+          "bytes": 2411
+        },
+        "commands": [
+          {
+            "label": "before",
+            "command": [
+              "/home/jim/toolkit/.venv/bin/python",
+              "/home/jim/toolkit/scripts/benchmark_keyboard.py",
+              "--root",
+              "/tmp/toolkit-agentic-baseline-1792739805",
+              "--events",
+              "100000",
+              "--rounds",
+              "5",
+              "--output",
+              "/tmp/toolkit-agentic-keyboard-paired-linux-before.json"
+            ],
+            "started_at": 1792747507.11313,
+            "seconds": 7.207365274429321,
+            "returncode": 0,
+            "logical_processor": 2
+          },
+          {
+            "label": "after",
+            "command": [
+              "/home/jim/toolkit/.venv/bin/python",
+              "/home/jim/toolkit/scripts/benchmark_keyboard.py",
+              "--root",
+              "/home/jim/toolkit",
+              "--events",
+              "100000",
+              "--rounds",
+              "5",
+              "--output",
+              "/tmp/toolkit-agentic-keyboard-paired-linux-after.json"
+            ],
+            "started_at": 1792747514.3213952,
+            "seconds": 7.490505933761597,
+            "returncode": 0,
+            "logical_processor": 2
+          }
+        ],
+        "changed_measured_source": [
+          "protocol.py",
+          "keeper.py"
+        ],
+        "worst_event_us": {
+          "before": 8241.69,
+          "after": 11009.073
+        }
+      },
+      {
+        "label": "Windows, immediate baseline/current pair on logical processor 2",
+        "before": {
+          "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+          "root": "\\\\wsl.localhost\\Ubuntu\\tmp\\toolkit-agentic-baseline-1792739805",
+          "events_per_round": 100000,
+          "rounds": 5,
+          "gc_enabled": true,
+          "assistant_imported": false,
+          "latency_rounds": [
+            {
+              "p50_us": 6.4,
+              "p95_us": 20.8,
+              "p99_us": 94.5,
+              "p999_us": 3194.0,
+              "max_us": 36537.8
+            },
+            {
+              "p50_us": 6.9,
+              "p95_us": 21.7,
+              "p99_us": 86.8,
+              "p999_us": 2689.2,
+              "max_us": 21226.3
+            },
+            {
+              "p50_us": 7.0,
+              "p95_us": 22.1,
+              "p99_us": 92.3,
+              "p999_us": 2865.1,
+              "max_us": 16386.2
+            },
+            {
+              "p50_us": 6.6,
+              "p95_us": 19.3,
+              "p99_us": 69.8,
+              "p999_us": 2876.7,
+              "max_us": 57953.8
+            },
+            {
+              "p50_us": 5.9,
+              "p95_us": 15.7,
+              "p99_us": 33.6,
+              "p999_us": 1337.9,
+              "max_us": 13078.7
+            }
+          ],
+          "median": {
+            "p50_us": 6.6,
+            "p95_us": 20.8,
+            "p99_us": 86.8,
+            "p999_us": 2865.1,
+            "max_us": 21226.3
+          },
+          "gc_collections_during_latency": 0,
+          "gc_generations": [],
+          "longest_observed_gc_us": 0.0,
+          "traced_peak_bytes": 1780,
+          "traced_retained_bytes": 855,
+          "source": {
+            "miryoku/engine.py": "f9925efa382606ac07154e694a205dba28b851d5e6296a63921a4941fa5fa9a3",
+            "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+            "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+            "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+            "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+            "protocol.py": "e5b92a54a5f8b8e0dca8bb0430383666924147a054dc8e38cd533156f9b53183",
+            "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+            "keeper.py": "c9d61321791b8756e8f72949e18d670668183e938125b56a89819ed04c1898ca",
+            "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+            "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+            "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+            "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+          },
+          "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+        },
+        "after": {
+          "python": "3.15.1 (tags/v3.15.1:c37e74c, Oct 21 2026, 06:24:08) [MSC v.1951 64 bit (AMD64)]",
+          "root": "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit",
+          "events_per_round": 100000,
+          "rounds": 5,
+          "gc_enabled": true,
+          "assistant_imported": false,
+          "latency_rounds": [
+            {
+              "p50_us": 5.7,
+              "p95_us": 15.5,
+              "p99_us": 34.3,
+              "p999_us": 1007.7,
+              "max_us": 14610.3
+            },
+            {
+              "p50_us": 5.1,
+              "p95_us": 12.9,
+              "p99_us": 22.5,
+              "p999_us": 207.4,
+              "max_us": 9456.7
+            },
+            {
+              "p50_us": 5.0,
+              "p95_us": 12.5,
+              "p99_us": 22.4,
+              "p999_us": 189.1,
+              "max_us": 9223.2
+            },
+            {
+              "p50_us": 5.5,
+              "p95_us": 14.8,
+              "p99_us": 31.7,
+              "p999_us": 761.6,
+              "max_us": 17623.7
+            },
+            {
+              "p50_us": 5.0,
+              "p95_us": 12.9,
+              "p99_us": 23.5,
+              "p999_us": 328.6,
+              "max_us": 11763.1
+            }
+          ],
+          "median": {
+            "p50_us": 5.1,
+            "p95_us": 12.9,
+            "p99_us": 23.5,
+            "p999_us": 328.6,
+            "max_us": 11763.1
+          },
+          "gc_collections_during_latency": 0,
+          "gc_generations": [],
+          "longest_observed_gc_us": 0.0,
+          "traced_peak_bytes": 1780,
+          "traced_retained_bytes": 855,
+          "source": {
+            "miryoku/engine.py": "f9925efa382606ac07154e694a205dba28b851d5e6296a63921a4941fa5fa9a3",
+            "miryoku/layout.py": "f8803058192d072324c952006b86a1dce977e49873fe54a85d80c5b70208d775",
+            "miryoku/win.py": "03e2db58fbb81f1236ba7984785c5751ac522c431b7f60d01f27482f2ac50b0d",
+            "miryoku/__main__.py": "eaee19595766339cd7ccff64c7c43e35895db164e5854713ab37684ad2281024",
+            "miryoku.pyw": "9b3a8f8abb6ba66d32d4dd848892fe83760b9b83d7f0328b39e6c5a0703a1a44",
+            "protocol.py": "3958654d7a710674fffbf7dabf2960175c970b8e69cc8e85b5c2f6707d4cca43",
+            "config.py": "f59384baf72033c88ab9c1a3315806f1f5f0b27885aa418f225707d85abe494e",
+            "keeper.py": "bb462c12692ca7ef809eddd1932973afe111c8731df6a237253ab92303528482",
+            "runtime.py": "d13ed26a9cbeddce9d3901994ab54154e356a3b651978536cf24659f682267dc",
+            "winapi/inputs.py": "f92b6c6b18fa843e6d543ff5da97a9ee96c3e504c0628eb8b0c40d0296d35787",
+            "winapi/windows.py": "7e472536bf6ee35154930f8ed62ccb245ae86aed7e73ee468eefb3b34bdcafe4",
+            "winapi/_core.py": "5e6003505de4f4eb958e4dc287a02e27b8a38c37af86b628d368e6b62ada8794"
+          },
+          "scope": "Synthetic engine events; no native input, capture, or agent work. Traced peak is live memory, not total allocation churn."
+        },
+        "before_artifact": {
+          "path": "/mnt/c/Users/Jim.Lundin/AppData/Local/Temp/toolkit-agentic-final-1792743371/keyboard-paired-windows-before.json",
+          "sha256": "b21b577b65afc0ef5e8bd836b6abf808526bc0514e953d84456a8c77ed72805d",
+          "bytes": 2521
+        },
+        "after_artifact": {
+          "path": "/mnt/c/Users/Jim.Lundin/AppData/Local/Temp/toolkit-agentic-final-1792743371/keyboard-paired-windows-after.json",
+          "sha256": "396e84ddc43f56fe844a6c646e532f3bc9a2975fe3efadc030a5860827c50978",
+          "bytes": 2533
+        },
+        "commands": [
+          {
+            "label": "before",
+            "command": [
+              "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\.python\\python.exe",
+              "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\scripts\\benchmark_keyboard.py",
+              "--root",
+              "\\\\wsl.localhost\\Ubuntu\\tmp\\toolkit-agentic-baseline-1792739805",
+              "--events",
+              "100000",
+              "--rounds",
+              "5",
+              "--output",
+              "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\keyboard-paired-windows-before.json"
+            ],
+            "started_at": 1792747536.3989272,
+            "seconds": 15.386753797531128,
+            "returncode": 0,
+            "logical_processor": 2,
+            "eligible_mask": "0xff"
+          },
+          {
+            "label": "after",
+            "command": [
+              "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\.python\\python.exe",
+              "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit\\scripts\\benchmark_keyboard.py",
+              "--root",
+              "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\toolkit",
+              "--events",
+              "100000",
+              "--rounds",
+              "5",
+              "--output",
+              "C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-agentic-final-1792743371\\keyboard-paired-windows-after.json"
+            ],
+            "started_at": 1792747551.8062968,
+            "seconds": 8.10619306564331,
+            "returncode": 0,
+            "logical_processor": 2,
+            "eligible_mask": "0xff"
+          }
+        ],
+        "changed_measured_source": [
+          "protocol.py",
+          "keeper.py"
+        ],
+        "worst_event_us": {
+          "before": 57953.8,
+          "after": 17623.7
+        }
+      }
+    ],
+    "interpretation": "The final unrestricted runs are slower than the earlier baseline. Immediate same-processor baseline/current pairs do not show a consistent code-related increase, and retain substantial scheduling outliers. These observations establish neither a latency improvement nor a guarantee against a small regression. The engine, hook and event data code hashes are unchanged; protocol.py and keeper.py are the changed measured dependencies. Scope is synthetic engine decisions with a silent host, not physical hook or SendInput latency. All recorded runs are retained."
+  },
+  "limits": {
+    "opt_in_desktop_e2e": "Three modules remain skipped by ordinary full selfcheck; no company endpoint or foreground keyboard/mouse automation was enabled.",
+    "full_log_diagnostics": "The passing full Windows log retains three Error streaming response lines and two Tcl cross-thread interpreter teardown RuntimeWarnings. They are not counted as mutation detections or suppressed from the evidence.",
+    "desktop_taskbar": "WSL launch prevents the independent taskbar-recovery helper from breaking away. Toolkit leaves Explorer visible and explains direct Windows launch; the desktop bar, canvas and launcher remain usable.",
+    "canvas_adapters": "Live windows, local file/table observations, Edge excerpts and local drafts are implemented. Dedicated Excel range writes, Teams projections and a verified Outlook object adapter remain adapter work.",
+    "execution": "The durable worker executes one task at a time; waiting releases its slot, and cancellation waits for effect cleanup."
+  },
+  "packaging": {
+    "pins_match_staged_and_installed": true,
+    "pins": {
+      "requirements/python-win64.json": "caf1c9f5b2889309c7a4caee9a451b3630c3f95db4ec07724a77351cd4fcc919",
+      "requirements/windows-py315.lock": "7d190f1bdbf2f1fc16ef1afc0a2606cc29c105accf33763f1247ba3d5593af0f"
+    },
+    "preserve": [
+      ".python",
+      ".runtime"
+    ],
+    "installed": "/mnt/c/Users/Jim.Lundin/Downloads/toolkit-sdk/toolkit",
+    "archive": "/mnt/c/Users/Jim.Lundin/Downloads/toolkit-sdk-python315-win64.zip"
+  },
+  "deployment_records": {
+    "directory": "/mnt/c/Users/Jim.Lundin/AppData/Local/Temp/toolkit-agentic-final-1792743371",
+    "files": [
+      "prepared-zip.json",
+      "stopped.json",
+      "installed-verification.json",
+      "reloaded.json",
+      "live-verification.json",
+      "canvas-opened.json"
+    ],
+    "timing": "Written after the checked documentation snapshot so the source and ZIP remain identical."
+  }
+}

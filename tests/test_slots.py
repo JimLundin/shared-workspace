@@ -1,6 +1,6 @@
 """Every class we define uses slots, so instances can't grow attributes that
-nobody declared. Enums, exceptions, protocols, tuples, ctypes structures
-and SDK lifecycle hooks manage their own storage. TypedDicts describe dicts,
+nobody declared. Enums, exceptions, protocols, tuples, ctypes structures,
+Qt objects, SDK lifecycle hooks, and stdlib threading events manage their own storage. TypedDicts describe dicts,
 not instances of an application class."""
 
 import importlib
@@ -13,7 +13,7 @@ from types import ModuleType
 from typing import is_typeddict
 
 ROOT = Path(__file__).resolve().parent.parent
-PACKAGES = ("miryoku", "assistant", "winapi")
+PACKAGES = ("miryoku", "assistant", "automation", "winapi")
 TOP_LEVEL = ("protocol", "config", "usage", "keeper", "selfcheck")
 
 
@@ -40,6 +40,8 @@ def exempt(cls: type) -> bool:
         or ("typing", "Protocol") in bases
         or any(module in ("ctypes", "_ctypes") for module, _ in bases)
         or ("agents.lifecycle", "RunHooksBase") in bases
+        or ("PySide6.QtCore", "QObject") in bases
+        or ("threading", "Event") in bases
     )
 
 

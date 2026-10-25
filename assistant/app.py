@@ -1,11 +1,10 @@
-"""The assistant program: a tray icon; a hidden window the layout posts its tool
-and app keys to; a worker thread for slow jobs; the agent; and the layout itself,
-which it starts, and restarts if it crashes (not if you quit it on purpose).
+"""The assistant owns the tray, conversation views, microphone, and meetings.
+
+Durable work executes in the supervised automation process. The keyboard sends
+its tool requests here without depending on either work storage or model calls.
 """
 
 import contextlib
-import importlib
-import json
 import os
 import queue
 import sys
@@ -15,16 +14,20 @@ import traceback
 from collections.abc import Callable, Mapping
 from enum import Enum, auto
 from pathlib import Path
-from typing import Final
+from typing import Final, assert_never
 
 import keeper
 import usage
+from automation.bridge import BridgeClient
+from automation.context import ContextStore
+from automation.ipc import MeetingCommand, MeetingFailed, MeetingSucceeded, StartMeeting
+from automation.routines import RoutineStore
+from automation.store import TaskStore
 from config import APPS
 from miryoku.layout import Layer, Scancode
 from protocol import (
     ASSISTANT_WINDOW,
     LAYOUT_WINDOW,
-    MAGIC,
     WM_INDICATOR,
     WM_KEY_STATE,
     WM_LAYOUT_STATE,
@@ -37,34 +40,34 @@ from protocol import (
     decode_indicator,
 )
 from usage import DIRECTORY, Detail
-from winapi import audio, clipboard, inputs, recording, screen, shell, system, windows
+from winapi import audio, recording, screen, shell, system, windows
 from winapi.shapes import Rect, Window
 
-from . import commands, uia
 from .activity import ActivityTracker, ContextSnapshot, Observation
-from .agent_execution import AgentExecution
-from .agent_runner import AgentRunner
-from .browser import Browser, Product
+from .canvas_requests import CanvasRequests
 from .desktop import WinDesktop
 from .features import Assistant
-from .geometry import Shot, half
 from .icons import State, dot
 from .keymap import indicator_text
-from .llm import MAX_SECONDS, RATE, Json, Missing, Settings
+from .llm import MAX_SECONDS, RATE, Missing, Settings
+from .machine import WinMachine as WinMachine  # noqa: PLC0414 (compatibility re-export)
+from .meeting_events import TranscriptEvents
+from .meeting_followup_store import FollowupStore
+from .meeting_requests import MeetingRequests
+from .meeting_store import MeetingArchive
+from .meeting_workflow import MeetingWorkflow
 from .meetings import Meetings
 from .overlay import OverlayState, load_enabled, save_enabled
 from .recording_state import RecordingAction, RecordingState
 from .report import write_report
-from .teams import Teams
 from .ui import Ui
+from .work_agent import WorkAgent
+from .work_window import WorkSnapshot
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 LOCK_NAME: Final = "Local\\toolkit-assistant"
 LOG: Final = DIRECTORY / "assistant.log"
-JOURNAL: Final = DIRECTORY / "agent.jsonl"
-"""Everything the agent did: one JSON object per action."""
 WM_TRAY: Final = system.WM_APP + 20
-_EXTENDED_VKS: Final = frozenset({0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2C, 0x2D, 0x2E, 0x5B, 0x5D, 0x90})
 
 
 def log(text: str) -> None:
@@ -79,14 +82,6 @@ def pythonw() -> str:
     """The windowless Python, so the layout doesn't open a console."""
     candidate = Path(sys.executable).with_name("pythonw.exe")
     return str(candidate) if candidate.exists() else sys.executable
-
-
-def warm_agent() -> None:
-    """Load the SDK after startup, off the UI and input threads, before the first voice request."""
-    try:
-        importlib.import_module("assistant.sdk")
-    except Exception:
-        log(traceback.format_exc())
 
 
 # ---- the tray icon ---------------------------------------------------------------------
@@ -117,7 +112,7 @@ class Tray:
                 icon.destroy()
 
 
-# ---- the agent's machine ---------------------------------------------------------------
+# ---- the request context ---------------------------------------------------------------
 
 
 def foreground_context() -> Observation:
@@ -128,176 +123,6 @@ def foreground_context() -> Observation:
     if windows.process_id(handle) == os.getpid():
         return "toolkit"
     return Window(handle, windows.title(handle), windows.exe(handle), windows.is_minimized(handle))
-
-
-def rectangle_data(area: Rect) -> dict[str, Json]:
-    return {"x": area.left, "y": area.top, "width": area.width, "height": area.height}
-
-
-class WinMachine:
-    """What the agent's tools act on, done with Windows calls."""
-
-    __slots__ = ("background_browser", "desktop", "meetings", "teams_client", "ui")
-
-    def __init__(self, desktop: WinDesktop, ui: Ui) -> None:
-        self.desktop = desktop
-        self.ui = ui
-        self.background_browser = Browser(DIRECTORY / "browser-profile", source=Product.EDGE)
-        self.teams_client = Teams(DIRECTORY / "teams", environment=os.environ)
-        self.meetings: Meetings | None = None
-
-    def meeting(self, operation: str, source: str = "both", title: str = "Meeting") -> str:
-        if self.meetings is None:
-            raise OSError("Meeting recording is unavailable.")
-        if operation == "start":
-            if source not in ("both", "microphone"):
-                raise OSError("Meeting source must be both or microphone.")
-            self.meetings.start("both" if source == "both" else "microphone", title)
-        elif operation == "stop":
-            self.meetings.stop()
-        elif operation == "retry":
-            self.meetings.retry()
-        elif operation == "list":
-            return self.meetings.recent()
-        elif operation != "status":
-            raise OSError("Unknown meeting action.")
-        return self.meetings.describe()
-
-    def browse(self, operation: str, arguments: dict[str, Json], cancel: threading.Event) -> tuple[str, bytes | None]:
-        result = self.background_browser.request(operation, arguments, cancel)
-        return result.text, result.image
-
-    def teams(self, operation: str, arguments: dict[str, Json], cancel: threading.Event) -> str:
-        return self.teams_client.request(operation, arguments, cancel)
-
-    def close_background(self) -> None:
-        try:
-            self.background_browser.close()
-        finally:
-            self.teams_client.cancel_sign_in()
-
-    def run_powershell(
-        self, command: str, timeout_s: float, *, cwd: str | None = None, cancel: threading.Event | None = None,
-    ) -> tuple[int, str]:
-        return commands.powershell(command, cwd=cwd, timeout_s=timeout_s, cancel=cancel)
-
-    def screenshot(self, *, area: Rect | None = None, handle: int = 0, monitor: int = -1, longest: int = 1280) -> tuple[bytes, Shot]:
-        if not windows.foreground():
-            raise OSError("The interactive desktop is unavailable or locked.")
-        if area is None:
-            if handle:
-                if not windows.exists(handle) or windows.is_minimized(handle):
-                    raise OSError("The requested window is closed or minimized; inspect or restore it first.")
-                area = windows.visible_rect(handle)
-            elif monitor == -2:
-                area = screen.virtual_screen()
-            elif monitor >= 0:
-                monitors = screen.monitors()
-                if monitor >= len(monitors):
-                    raise OSError("That monitor is unavailable; call desktop_state for current monitor indexes.")
-                area = monitors[monitor].area
-            else:
-                area = screen.monitor_of(windows.foreground()).area
-        desktop = screen.virtual_screen()
-        area = Rect(max(area.left, desktop.left), max(area.top, desktop.top), min(area.right, desktop.right), min(area.bottom, desktop.bottom))
-        if area.width <= 0 or area.height <= 0:
-            raise OSError("The requested area is outside the desktop.")
-        return self.desktop.capture(area, longest)
-
-    def desktop_state(self) -> str:
-        x, y = inputs.cursor_position()
-        data: dict[str, Json] = {
-            "coordinates": "physical screen pixels", "foreground": windows.foreground(), "cursor": {"x": x, "y": y},
-            "monitors": [{"index": index, "bounds": rectangle_data(monitor.area), "work": rectangle_data(monitor.work),
-                          "primary": monitor.primary} for index, monitor in enumerate(screen.monitors())],
-            "windows": [{"handle": window.handle, "title": window.title, "app": window.exe, "minimized": window.minimized,
-                         "bounds": rectangle_data(windows.outer_rect(window.handle))} for window in windows.windows()],
-        }
-        return json.dumps(data, ensure_ascii=False)
-
-    def window_action(self, handle: int, action: str, bounds: Rect | None = None) -> str:
-        if not windows.exists(handle):
-            raise OSError("The window is no longer available; list windows again.")
-        if action == "close":
-            if not system.post_message(handle, system.WM_CLOSE, 0, 0):
-                raise OSError("Windows rejected the close request.")
-            return "Close requested. Inspect the window for any unsaved-work dialog."
-        if action in ("minimize", "maximize", "restore"):
-            windows.show(handle, {"minimize": windows.SW_MINIMIZE, "maximize": windows.SW_MAXIMIZE, "restore": windows.SW_RESTORE}[action])
-        else:
-            if windows.is_maximized(handle) or windows.is_minimized(handle):
-                windows.show(handle, windows.SW_RESTORE)
-            if action in ("snap_left", "snap_right"):
-                bounds = half(screen.monitor_of(handle).work, "left" if action == "snap_left" else "right",
-                              windows.outer_rect(handle), windows.visible_rect(handle))
-            if bounds is None:
-                raise OSError("Moving a window requires bounds.")
-            windows.move(handle, bounds)
-        state: dict[str, Json] = {"handle": handle, "bounds": rectangle_data(windows.outer_rect(handle)),
-                                  "minimized": windows.is_minimized(handle), "maximized": windows.is_maximized(handle)}
-        return json.dumps(state)
-
-    def inspect_ui(self, request: dict[str, Json], cancel: threading.Event) -> tuple[int, str]:
-        handle = request.get("handle") or windows.foreground()
-        if not isinstance(handle, int) or not windows.exists(handle):
-            return 1, "No accessible window is available; list windows again or unlock the desktop."
-        return commands.powershell(uia.script({**request, "handle": handle}), timeout_s=20, cancel=cancel)
-
-    def move_mouse(self, x: int, y: int) -> None:
-        inputs.move_mouse(x, y, screen.virtual_screen(), MAGIC)
-
-    def mouse_button(self, button: str, down: bool) -> None:
-        inputs.mouse_button(button, down, MAGIC)
-
-    def click(self, x: int, y: int, button: str, count: int) -> None:
-        inputs.click(x, y, button, count, screen.virtual_screen(), MAGIC)
-
-    def type_text(self, text: str) -> None:
-        inputs.type_text(text, MAGIC)
-
-    def paste_text(self, text: str) -> None:
-        self.desktop.paste(text)
-
-    def press_keys(self, strokes: list[tuple[int, bool]]) -> None:
-        inputs.send_keys([inputs.KeyStroke(vk, down, vk in _EXTENDED_VKS) for vk, down in strokes], MAGIC)
-
-    def scroll(self, x: int, y: int, clicks: int, *, horizontal: bool = False) -> None:
-        inputs.move_mouse(x, y, screen.virtual_screen(), MAGIC)
-        inputs.scroll(clicks, MAGIC, horizontal=horizontal)
-
-    def windows(self) -> list[Window]:
-        return windows.windows()
-
-    def focus(self, handle: int) -> bool:
-        return windows.focus(handle)
-
-    def get_clipboard(self) -> str | None:
-        return clipboard.get_text(self.desktop.owner)
-
-    def set_clipboard(self, text: str) -> None:
-        clipboard.set_text(self.desktop.owner, text)
-
-    def open(self, target: str) -> None:
-        os.startfile(target)
-
-    def ask_user(self, question: str, *, cancel: threading.Event | None = None) -> str | None:
-        return self.ui.agent_input(question, question=True, cancel=cancel)
-
-    def confirm(self, title: str, detail: str, *, cancel: threading.Event | None = None) -> bool:
-        return self.ui.agent_input(title, detail, cancel=cancel) == "approve"
-
-    def review(self, summary: str, diff: str) -> bool:
-        return True  # the keeper owns the optional review of its frozen candidate
-
-    def install(self, summary: str) -> None:
-        keeper.ask("install", summary)
-
-
-def write_journal(entry: Mapping[str, Json]) -> None:
-    with contextlib.suppress(OSError):
-        JOURNAL.parent.mkdir(parents=True, exist_ok=True)
-        with JOURNAL.open("a", encoding="utf-8") as file:
-            file.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
 # ---- the program -----------------------------------------------------------------------
@@ -328,17 +153,24 @@ class _Menu(Enum):
     OVERLAY = 11
     MEETING = 12
     TRANSCRIPTS = 13
+    WORK = 14
+    CANVAS = 15
+    LAUNCHER = 16
+    FOLLOWUPS = 17
 
 
 class AssistantApp:
     __slots__ = (
-        "_recording_phase", "activity", "agent", "assistant", "desktop", "jobs", "layout", "machine", "meetings", "mic_event", "overlay",
+        "_recording_phase", "activity", "agent", "assistant", "desktop", "followups", "jobs", "layout", "meetings", "mic_event", "overlay",
         "settings", "tray", "ui", "window", "worker",
     )
 
-    def __init__(self, settings: Settings | Missing) -> None:
+    def __init__(self, settings: Settings | Missing, ui: Ui) -> None:
         self._recording_phase = "idle"
-        self.ui = Ui(on_agent_waiting=lambda waiting: self.show(State.NEEDS_INPUT if waiting else State.AGENT), on_recording=self.recording_action)
+        self.ui = ui
+        self.ui.configure_controls(
+            on_agent_waiting=lambda waiting: self.show(State.NEEDS_INPUT if waiting else State.AGENT), on_recording=self.recording_action,
+        )
         self.overlay = OverlayState(enabled=load_enabled())
         self.jobs: queue.Queue[Callable[[], None] | None] = queue.Queue()
         self.window = shell.AppWindow(ASSISTANT_WINDOW, self.on_message)
@@ -354,21 +186,35 @@ class AssistantApp:
             # The tracker and runner refer to each other; observe after composition.
             return self.activity.snapshot()
 
-        self.machine = WinMachine(self.desktop, self.ui)
-        self.agent = AgentRunner(
-            AgentExecution(
-                usable, self.machine, journal=write_journal, record=lambda details: self.record("agent", details),
-                report_error=log, close_background=self.machine.close_background, context=context,
-            ),
+        work_folder = DIRECTORY / "work"
+        tasks = TaskStore(work_folder / "work.sqlite3")
+        routines = RoutineStore(tasks.path)
+        saved_context = ContextStore(tasks.path)
+        self.agent = WorkAgent(
+            tasks, routines, saved_context, BridgeClient(work_folder),
             lambda runner: self.ui.agent(
-                None, runner.stop, on_problem=self.problem, on_reset=runner.new_conversation, on_submit=runner.start, reveal=False,
+                None, runner.stop, on_problem=self.problem, on_reset=runner.new_conversation, on_submit=runner.start,
+                on_work=self.show_work, reveal=False,
             ),
-            on_done=self.agent_done, report_error=log, on_start=lambda: self.show(State.AGENT), context=context,
+            on_snapshot=self.work_changed, on_done=self.agent_done, report_error=log,
+            on_start=lambda: self.show(State.AGENT), context=context, meeting=self.meeting_command,
+            browser_app=self.ui.browser_app,
+            canvas_requests=CanvasRequests(work_folder / "canvas-requests"),
         )
+        archive = MeetingArchive(DIRECTORY / "meetings")
+        followup_folder = work_folder / "meeting-followups"
+        self.followups = MeetingWorkflow(
+            archive, MeetingRequests(followup_folder), FollowupStore(followup_folder / "packages"),
+            submit_identified=self.agent.submit_identified, read_work=self.agent.snapshot,
+            retain_work=lambda ids: self.agent.watch(ids, owner="meetings"),
+            publish=self.ui.meetings_changed, report_error=log,
+        )
+        self.ui.configure_meetings(self.followups, self.open_meeting_file)
+        events = TranscriptEvents(archive, routines, on_error=log, on_change=self.refresh_work)
         self.meetings = Meetings(
-            usable, lambda source: recording.MeetingAudio(computer_audio=source == "both"), on_update=self.recording_changed,
+            usable, lambda source: recording.MeetingAudio(computer_audio=source == "both"), archive=archive,
+            on_update=self.recording_changed, on_recovery=events.recover, on_complete=events.completed,
         )
-        self.machine.meetings = self.meetings
         self.activity = ActivityTracker(
             foreground_context, self.agent.running, enabled=os.environ.get("TOOLKIT_AGENT_CONTEXT", "recent").lower() != "off",
         )
@@ -377,7 +223,7 @@ class AssistantApp:
             usable,
             record=self.record,
             submit=self.jobs.put,
-            run_agent=self.agent.voice,
+            run_agent=self.canvas_voice,
             show_agent=self.agent.show,
             stop_agent=self.agent.stop,
             missing=missing,
@@ -393,24 +239,39 @@ class AssistantApp:
     def run(self) -> None:
         self.activity.start()
         self.worker.start()
+        self.agent.start_worker()
+        self.followups.start()
         self.meetings.start_worker()
+        if os.environ.get("TOOLKIT_DESKTOP", "on").lower() != "off":
+            self.ui.desktop(self.agent.submit_canvas, self.agent.command, self.agent.snapshot,
+                            watch=self.agent.watch,
+                            show_agent=self.agent.show, show_work=self.show_work, stop=self.agent.stop,
+                            overlay=self.toggle_overlay, on_problem=self.problem)
         if (layout_window := windows.find(LAYOUT_WINDOW)) is not None:
             system.post_message(layout_window, WM_QUERY_LAYOUT_STATE, 0, 0)
         keeper.ready()  # tells the keeper this version came up
         if self.settings.api_key:
-            threading.Thread(target=warm_agent, name="agent warmup", daemon=True).start()
             threading.Thread(target=self.agent.prepare, name="agent panel warmup", daemon=True).start()
         system.run_message_loop()
 
     def quit(self) -> None:
         try:
+            self.ui.close_desktop()
+        except OSError as error:
+            log(str(error))
+        try:
             self.meetings.close()
         except OSError as error:
             log(str(error))
-        self.agent.stop()
-        self.machine.close_background()
+        self.followups.close()
+        self.followups.wait_closed()
+        self.agent.close()
+        if not self.agent.wait_closed(timeout=5):
+            log("The work frontend did not finish closing before assistant shutdown.")
         self.activity.close()
         self.ui.close_agent()
+        self.ui.close_work()
+        self.ui.close()
         self.jobs.put(None)
         self.desktop.mic.close()
         self.tray.remove()
@@ -470,9 +331,57 @@ class AssistantApp:
         except (OSError, ValueError) as error:
             self.problem(str(error))
 
+    def refresh_work(self) -> None:
+        self.agent.refresh()
+        self.followups.refresh()
+
+    def work_changed(self, snapshot: WorkSnapshot) -> None:
+        self.ui.work(self.agent.command, on_problem=self.problem, reveal=False).publish(snapshot)
+
+    def show_work(self) -> None:
+        self.ui.work(self.agent.command, on_problem=self.problem)
+        self.agent.refresh()
+
+    def show_meetings(self) -> None:
+        self.show_work()
+        self.ui.show_meetings()
+        self.followups.refresh()
+
+    def open_meeting_file(self, path: Path) -> None:
+        def open_file() -> None:
+            try:
+                os.startfile(path)
+            except OSError:
+                self.problem("Windows could not open this file. You can still review it in Meetings.")
+        self.jobs.put(open_file)
+
+    def meeting_command(self, command: StartMeeting | MeetingCommand) -> MeetingSucceeded | MeetingFailed:
+        """Execute the worker's validated request with the existing capture owner."""
+        try:
+            match command:
+                case StartMeeting(source, title):
+                    self.meetings.start(source, title)
+                case MeetingCommand.STOP:
+                    self.meetings.stop()
+                case MeetingCommand.RETRY:
+                    self.meetings.retry()
+                case MeetingCommand.LIST:
+                    return MeetingSucceeded(self.meetings.recent())
+                case MeetingCommand.STATUS:
+                    pass
+                case _:
+                    assert_never(command)
+            return MeetingSucceeded(self.meetings.describe())
+        except (OSError, ValueError) as error:
+            return MeetingFailed(str(error))
+
     def agent_done(self) -> None:
         if self.assistant.listening is None:
             self.assistant.idle()
+
+    def canvas_voice(self, text: str) -> None:
+        if not self.ui.submit_canvas_voice(text, self.agent.voice):
+            self.agent.voice(text)
 
     def problem(self, message: str) -> None:
         log(message)
@@ -554,9 +463,13 @@ class AssistantApp:
             shell.MenuItem(0),
             shell.MenuItem(_Menu.ASK.value, "Ask\u2026\tHold V + P"),
             shell.MenuItem(_Menu.AGENT.value, "Agent session\tHold V + L"),
+            shell.MenuItem(_Menu.WORK.value, "Work\u2026"),
+            shell.MenuItem(_Menu.CANVAS.value, "Workspace canvas\tCtrl+Alt+D"),
+            shell.MenuItem(_Menu.LAUNCHER.value, "Desktop launcher\tCtrl+Alt+Space"),
             shell.MenuItem(_Menu.STOP_AGENT.value, "Stop agent\tHold V + \u00d6", enabled=self.agent.running()),
             shell.MenuItem(_Menu.MEETING.value, "Stop recording" if self.meetings.snapshot().capturing else "Record a meeting"),
             shell.MenuItem(_Menu.TRANSCRIPTS.value, "Transcripts"),
+            shell.MenuItem(_Menu.FOLLOWUPS.value, "Meeting follow-up\u2026"),
             shell.MenuItem(0),
             shell.MenuItem(_Menu.UNDO.value, "Undo the last update"),
             shell.MenuItem(_Menu.USAGE.value, "Usage report"),
@@ -579,12 +492,20 @@ class AssistantApp:
                 self.assistant.handle(Tool.ASK, True)
             case _Menu.AGENT.value:
                 self.assistant.handle(Tool.AGENT_TYPED, True)
+            case _Menu.WORK.value:
+                self.show_work()
+            case _Menu.CANVAS.value:
+                self.ui.show_desktop()
+            case _Menu.LAUNCHER.value:
+                self.ui.show_desktop(launcher=True)
             case _Menu.STOP_AGENT.value:
                 self.agent.stop()
             case _Menu.MEETING.value:
                 self.recording_action("stop" if self.meetings.snapshot().capturing else "start")
             case _Menu.TRANSCRIPTS.value:
                 self.recording_action("folder")
+            case _Menu.FOLLOWUPS.value:
+                self.show_meetings()
             case _Menu.UNDO.value:
                 keeper.ask("undo")
             case _Menu.USAGE.value:
@@ -605,7 +526,32 @@ def run(settings: Settings | Missing) -> Exit:
     if lock is None:
         return Exit.ALREADY_RUNNING
     try:
-        AssistantApp(settings).run()
+        ui = Ui()
+        errors: queue.Queue[BaseException] = queue.Queue()
+
+        def control() -> None:
+            try:
+                AssistantApp(settings, ui).run()
+            except BaseException as error:
+                errors.put(error)
+            finally:
+                try:
+                    ui.close()
+                except BaseException as error:
+                    errors.put(error)
+
+        controller = threading.Thread(target=control, name="assistant control", daemon=True)
+        controller.start()
+        try:
+            ui.run()
+        finally:
+            if controller.is_alive() and (window := windows.find(ASSISTANT_WINDOW)) is not None:
+                system.post_message(window, system.WM_CLOSE, 0, 0)
+            controller.join(timeout=10)
+        if controller.is_alive():
+            raise OSError("The assistant control thread did not finish closing.")
+        if not errors.empty():
+            raise errors.get_nowait()
         return Exit.QUIT
     finally:
         system.release_lock(lock)

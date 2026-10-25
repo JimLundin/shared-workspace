@@ -30,7 +30,7 @@ import unittest
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-_WINDOWS_ONLY = ("WinDLL", "WINFUNCTYPE", "windll", "tkinter", "_tkinter", "winreg", "msvcrt", "_winapi")
+_WINDOWS_ONLY = ("WinDLL", "WINFUNCTYPE", "windll", "winreg", "msvcrt", "_winapi", "PySide6", "shiboken6", "win32more")
 """Signs that an import failed only because this isn't Windows."""
 
 

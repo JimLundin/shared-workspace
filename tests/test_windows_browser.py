@@ -17,7 +17,9 @@ import msvcrt
 
 from assistant.browser import MAX_OUTPUT, Browser, BrowserError, InterruptedError, Product, edge_path, read_endpoint
 from assistant.browser_session import NativeSessions
+from assistant.browser_values import Group, Tab, group_of, tab_of
 from assistant.llm import Json
+from assistant.qt import QImage
 
 from .browser_fixture import fixture
 from .test_browser import decoded
@@ -192,6 +194,63 @@ def test_attached_browser_shares_fixture_session_without_reusing_or_closing_pers
             assert next(tab for tab in tabs if tab["id"] == blank["target_id"])["url"] == "about:blank"
             assert personal.process is not None and personal.process.poll() is None
             assert not attached.profile.exists()
+    finally:
+        attached.close()
+        personal.close()
+
+
+def test_grouped_screenshots_repaint_the_requested_inactive_tab(tmp_path: Path) -> None:
+    installed()
+    personal = Browser(tmp_path / "fixture-personal")
+    attached = Browser(
+        tmp_path / "unused", source=Product.EDGE,
+        opener=NativeSessions(tmp_path / "unused", profiles=lambda _: personal.profile),
+    )
+    try:
+        with fixture() as url:
+            original = request(personal, "open", url=url)
+            request(attached, "attach")
+            page = request(attached, "open", url=url)
+            target, identity = page["target_id"], page["tab_id"]
+            assert isinstance(target, str) and isinstance(identity, int)
+            assert target != original["target_id"]
+
+            def state() -> tuple[frozenset[int], Tab, Group]:
+                view = request(attached, "tabs", view="strip", limit=40)
+                rows, groups = view["tabs"], view["groups"]
+                assert isinstance(rows, list) and isinstance(groups, list)
+                tabs = tuple(tab_of(row) for row in rows)
+                current = next(tab for tab in tabs if tab.id == identity)
+                native_groups = tuple(group_of(row) for row in groups)
+                group = next(group for group in native_groups if group.id == current.group_id)
+                return frozenset(tab.id for tab in tabs if tab.active), current, group
+
+            active, before, group = state()
+            assert active and not before.active and group.collapsed
+            for color in ((255, 0, 0), (0, 0, 255)):
+                css = f"rgb({color[0]}, {color[1]}, {color[2]})"
+                expression = """(() => {
+                    document.body.replaceChildren();
+                    document.documentElement.style.backgroundColor = COLOR;
+                    document.body.style.cssText = 'margin:0;min-height:100vh;background:' + COLOR;
+                    return document.visibilityState;
+                })()""".replace("COLOR", json.dumps(css))
+                painted = attached.request("evaluate", {"target_id": target, "expression": expression}, threading.Event())
+                visibility = cast(Json, json.loads(painted.text))
+                assert visibility in ("hidden", "visible")
+                shot = attached.request("screenshot", {"target_id": target}, threading.Event()).image
+                assert shot is not None
+                restored = attached.request("evaluate", {"target_id": target, "expression": "document.visibilityState"}, threading.Event())
+                assert cast(Json, json.loads(restored.text)) == visibility
+                image = QImage()
+                assert image.loadFromData(shot)
+                assert not image.isNull() and image.width() >= 4 and image.height() >= 4
+                for x, y in ((1, 1), (3, 1), (2, 2), (1, 3), (3, 3)):
+                    pixel = image.pixelColor(image.width() * x // 4, image.height() * y // 4).getRgb()
+                    assert pixel == (*color, 255), (color, x, y, pixel)
+                current_active, current, current_group = state()
+                assert current_active == active and not current.active
+                assert current.group_id == before.group_id and current_group == group
     finally:
         attached.close()
         personal.close()

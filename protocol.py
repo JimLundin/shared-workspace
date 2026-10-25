@@ -11,6 +11,7 @@ from typing import Final
 
 # The keeper owns these (it stops the programs); re-exported here for the programs.
 from keeper import ASSISTANT_WINDOW as ASSISTANT_WINDOW  # noqa: PLC0414 (an explicit re-export)
+from keeper import AUTOMATION_WINDOW as AUTOMATION_WINDOW  # noqa: PLC0414 (an explicit re-export)
 from keeper import LAYOUT_WINDOW as LAYOUT_WINDOW  # noqa: PLC0414 (an explicit re-export)
 from keeper import WM_QUIT_LAYOUT as WM_QUIT_LAYOUT  # noqa: PLC0414 (an explicit re-export)
 

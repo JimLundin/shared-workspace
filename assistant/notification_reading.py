@@ -1,4 +1,4 @@
-"""Reading-paced notification playback; geometry and time are supplied by Tk."""
+"""Reading-paced notification playback; geometry and time are supplied by the UI."""
 
 from dataclasses import dataclass
 from typing import Final, assert_never

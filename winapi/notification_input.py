@@ -1,9 +1,9 @@
-"""Wheel input over color-keyed notification glass, only in the assistant process.
+"""Wheel input over translucent notification glass, only in the assistant process.
 
 Empty glass pixels pass native hit testing through to the desktop. A small mouse
-hook routes vertical wheel messages within the current card bounds to their Tk
+hook routes vertical wheel messages within the current card bounds to their Qt
 text widgets. It never handles keys or activates a window. Its dedicated message
-thread does no Tk work, and removes the hook when there are no scrolling cards.
+thread does no widget work, and removes the hook when there are no scrolling cards.
 """
 
 import ctypes
@@ -74,8 +74,8 @@ class WheelRouter:
             for region in self.regions:
                 bounds = region.bounds
                 if bounds.left <= x < bounds.right and bounds.top <= y < bounds.bottom:
-                    # A bounded queue keeps the hook independent of Tk work.
-                    # Posting WM_MOUSEWHEEL directly does not work when Tk's
+                    # A bounded queue keeps the hook independent of widget work.
+                    # Posting WM_MOUSEWHEEL directly does not work when the widget's
                     # nonactivating windows have no keyboard focus.
                     self.events.append(Scroll(region.target, delta))
                     return True

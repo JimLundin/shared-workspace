@@ -1,11 +1,20 @@
 """Publish through real local Git repositories; never contact GitHub in tests."""
 
 import shutil
+import sqlite3
+import threading
+from collections.abc import Callable
+from contextlib import closing
 from pathlib import Path
+from unittest import TestCase
 
 from assistant.publishing import PublishError, git, publish_source
+from automation.actions import Resources, plan
+from automation.execution import ApprovalReview, WorkExecution
+from automation.task import ActionVerified, ApprovalDecision, Waiting
 from keeper import copy_source
 
+from .test_work_actions import claimed
 from .test_workspace import live_tree
 
 
@@ -70,6 +79,71 @@ def test_remote_divergence_blocks_publishing(tmp_path: Path) -> None:
         assert "remote base differs" in str(error)
     else:
         raise AssertionError("diverged base must be refused")
+
+
+def test_durable_publication_records_before_candidate_code_and_remote_push(tmp_path: Path) -> None:
+    store, claim, clock = claimed(tmp_path)
+    live, workspace, remote = repository(tmp_path / "repo")
+    work = WorkExecution(claim, store, Resources(), clock=clock)
+    marker = tmp_path / "candidate-executed"
+    (workspace / "probe.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).touch()\n", encoding="utf-8",
+    )
+
+    def approve(title: str, detail: str) -> bool:
+        work.bind("publish_changes", {"summary": "Reviewed update", "publication_review": detail})
+        return True
+
+    def execute(perform: Callable[[], str]) -> str:
+        return work.actions.execute(
+            plan("publish_changes", work.arguments), perform, bool, threading.Event(),
+            verify=lambda _: ActionVerified("Remote readback matched the published commit."),
+        )
+
+    with closing(sqlite3.connect(tmp_path / "work.sqlite3")) as database, database:
+        database.execute("CREATE TRIGGER refuse_publication BEFORE INSERT ON actions BEGIN SELECT RAISE(ABORT,'cannot record'); END")
+    with TestCase().assertRaises(sqlite3.DatabaseError):
+        publish_source(live, workspace, "Reviewed update", approve, lambda: False,
+                       remote=str(remote), branch="toolkit/agent-durable", execute=execute)
+    assert not marker.exists() and not git(remote, "for-each-ref", "refs/heads/toolkit/")
+    with closing(sqlite3.connect(tmp_path / "work.sqlite3")) as database, database:
+        database.execute("DROP TRIGGER refuse_publication")
+    result = publish_source(live, workspace, "Reviewed update", approve, lambda: False,
+                            remote=str(remote), branch="toolkit/agent-durable", execute=execute)
+    assert marker.exists() and "Published" in result
+    assert git(remote, "show", "refs/heads/toolkit/agent-durable:config.py") == "GREETING = 'hello'"
+    assert isinstance(store.actions("task")[0].outcome, ActionVerified)
+
+
+def test_durable_publication_approval_is_bound_to_the_frozen_candidate_and_destination(tmp_path: Path) -> None:
+    store, claim, clock = claimed(tmp_path)
+    live, workspace, remote = repository(tmp_path / "repo")
+    reviews: list[ApprovalReview] = []
+
+    def display(review: ApprovalReview) -> bool:
+        reviews.append(review)
+        return True
+
+    work = WorkExecution(claim, store, Resources(), review=display, clock=clock)
+
+    def approve(title: str, detail: str) -> bool:
+        work.bind("publish_changes", {"summary": "Update", "publication_review": detail})
+        return work.approve(title, detail)
+
+    with TestCase().assertRaisesRegex(PublishError, "cancelled"):
+        publish_source(live, workspace, "Update", approve, lambda: False, remote=str(remote), branch="toolkit/agent-durable")
+    assert isinstance(work.disposition, Waiting)
+    assert store.finish(claim.run, work.disposition, at=clock()) is not None
+    assert store.answer("task", reviews[0].request.id, ApprovalDecision.APPROVED, at=clock()) is not None
+    resumed = store.claim("worker", "new-run", at=clock())
+    assert resumed is not None
+    work = WorkExecution(resumed, store, Resources(), review=display, clock=clock)
+    (workspace / "config.py").write_text("GREETING = 'changed after review'\n", encoding="utf-8")
+    with TestCase().assertRaisesRegex(PublishError, "cancelled"):
+        publish_source(live, workspace, "Update", approve, lambda: False, remote=str(remote), branch="toolkit/agent-durable")
+    assert len(reviews) == 2 and reviews[0].fingerprint != reviews[1].fingerprint
+    assert "changed after review" in reviews[1].detail and str(remote) in reviews[1].detail
+    assert not git(remote, "for-each-ref", "refs/heads/toolkit/")
 
 
 if shutil.which("git") is None:

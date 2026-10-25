@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' qrc:; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Toolkit · connected work</title>
+<link rel="stylesheet" href="canvas.css">
+<link rel="stylesheet" href="shell.css">
+</head>
+<body>
+<svg style="display:none" aria-hidden="true"><defs>
+  <symbol id="grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.2"/><rect x="14" y="3" width="7" height="7" rx="1.2"/><rect x="3" y="14" width="7" height="7" rx="1.2"/><rect x="14" y="14" width="7" height="7" rx="1.2"/></symbol>
+  <symbol id="canvas" viewBox="0 0 24 24"><rect x="2" y="3" width="8" height="11" rx="1.3"/><rect x="14" y="6" width="8" height="15" rx="1.3"/><path d="M2 19h8"/></symbol>
+  <symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+  <symbol id="minus" viewBox="0 0 24 24"><path d="M4 12h16"/></symbol>
+  <symbol id="expand" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></symbol>
+  <symbol id="arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+  <symbol id="external" viewBox="0 0 24 24"><path d="M14 3h7v7M21 3 10 14M10 4H4v16h16v-6"/></symbol>
+  <symbol id="chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="down" viewBox="0 0 24 24"><path d="m5 9 7 7 7-7"/></symbol>
+  <symbol id="park" viewBox="0 0 24 24"><path d="M3 17v4h18v-4M12 3v12m-5-5 5 5 5-5"/></symbol>
+  <symbol id="link" viewBox="0 0 24 24"><path d="m10 14 4-4M8 16l-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m4 0 2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(1 -1)"/></symbol>
+  <symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M9 22h6"/></symbol>
+  <symbol id="keyboard" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M5 9h1m3 0h1m3 0h1m3 0h2M5 12h1m3 0h1m3 0h1m3 0h2M7 16h10"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="doc" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6"/></symbol>
+  <symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></symbol>
+  <symbol id="table" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h18M3 15h18M9 3v18"/></symbol>
+  <symbol id="chat" viewBox="0 0 24 24"><path d="M3 4h18v13H9l-6 4zM7 8h10M7 12h7"/></symbol>
+  <symbol id="mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m3 6 9 7 9-7"/></symbol>
+  <symbol id="refresh" viewBox="0 0 24 24"><path d="M20 7A9 9 0 1 0 21 14M20 2v6h-6"/></symbol>
+  <symbol id="layers" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7zm-10 10 10 5 10-5M2 17l10 5 10-5"/></symbol>
+  <symbol id="agent" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4M5 5l3 3m8 8 3 3M5 19l3-3M16 8l3-3"/></symbol>
+  <symbol id="wifi" viewBox="0 0 24 24"><path d="M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0M9 16a5 5 0 0 1 6 0M12 20h.01"/></symbol>
+  <symbol id="battery" viewBox="0 0 24 24"><rect x="2" y="6" width="17" height="12" rx="2"/><path d="M22 10v4M5 9h10v6H5z"/></symbol>
+</defs></svg>
+<section class="desktop" id="desktop" aria-label="Shared workspace canvas">
+  <div class="wallpaper" aria-hidden="true"></div>
+  <header class="os-bar">
+    <div class="bar-left">
+      <button class="brand" data-action="launcher" aria-label="Open launcher"><span class="dot"></span>toolkit</button>
+      <span class="bar-separator"></span>
+      <button class="workspace-name" data-action="spaces"><svg class="ico"><use href="#layers"/></svg><span id="workspace-title">My workspace</span><svg class="ico"><use href="#down"/></svg></button>
+      <button class="workspace-link" data-action="work" aria-label="Open durable work overview">All work</button>
+    </div>
+    <div class="bar-right">
+      <button class="bar-layer" id="bar-layer" data-action="keyboard">BASE</button>
+      <button class="bar-status" data-action="agent"><span class="dot" id="agent-dot"></span><span id="agent-status">Agent ready</span></button>
+      <button class="bar-stop" data-action="stop_agent" id="stop-agent" aria-label="Stop agent" hidden><svg class="ico"><use href="#close"/></svg></button>
+      <button class="bar-status" data-action="record" id="record"><svg class="ico"><use href="#mic"/></svg><span>Record</span></button>
+      <span class="bar-time" id="clock"></span>
+      <button class="icon-button" data-action="settings" aria-label="Desktop settings">···</button>
+    </div>
+  </header>
+  <div class="canvas-tools">
+    <div class="breadcrumb"><strong id="canvas-title">My workspace</strong><svg class="ico"><use href="#chevron"/></svg><span id="view-description"></span><span class="example-tag" id="example-tag" hidden>Example workspace</span></div>
+    <div class="tools-right"><button class="button ghost add-source" data-action="add">Add to canvas <svg class="ico"><use href="#plus"/></svg></button><div class="view-switch" aria-label="Canvas views"><button data-view="canvas" aria-pressed="true"><svg class="ico"><use href="#canvas"/></svg>Canvas</button><button data-view="focus" aria-pressed="false"><svg class="ico"><use href="#expand"/></svg>Focus</button><button data-view="overview" aria-pressed="false"><svg class="ico"><use href="#grid"/></svg>Overview</button></div></div>
+  </div>
+  <div class="viewport" id="viewport" tabindex="0" aria-label="Canvas. Drag empty space to pan. Control and wheel to zoom.">
+    <div class="grid-paper" aria-hidden="true"></div>
+    <div class="world" id="world">
+      <div class="group-outline" id="source-group" hidden aria-hidden="true"></div>
+      <div class="group-heading" id="group-heading" hidden><svg class="ico"><use href="#layers"/></svg><span>Working set</span><small>Apps stay connected to their source</small></div>
+      <span class="group-badge" id="group-badge" hidden></span>
+      <svg class="wires" id="wires" aria-hidden="true"></svg>
+      <div class="source-tray" id="source-tray" hidden><span>Your working set<br><span style="color:#7e93aa">Keep only the useful parts in view.</span></span><button data-action="add"><svg class="ico"><use href="#plus"/></svg>Add an app or source</button></div>
+    </div>
+    <div class="empty-workspace" id="empty-workspace" hidden><div class="empty-diagram" aria-hidden="true"><span><svg class="ico"><use href="#doc"/></svg></span><i></i><span><svg class="ico"><use href="#agent"/></svg></span></div><h1>Your work, connected.</h1><p>Bring an app, a document, or an idea.<br>Give the useful parts a place to work together.</p><div><button class="button primary" data-action="add">Add to canvas <svg class="ico"><use href="#plus"/></svg></button><button class="button ghost" data-action="example">Explore the example <svg class="ico"><use href="#arrow"/></svg></button></div></div>
+  </div>
+  <form class="composer" id="composer" aria-label="Ask about selected content" hidden>
+    <div class="scope-row" id="scope-row"></div>
+    <div class="compose-row"><input class="request" id="request" aria-label="Ask Toolkit about the selection" maxlength="8000" placeholder="What would you like to do with these?" autocomplete="off"><span class="voice-key" title="Hold N to speak about the selected sources"><kbd>N</kbd>Speak</span><button class="button primary" type="submit">Ask Toolkit <svg class="ico"><use href="#arrow"/></svg></button></div>
+  </form>
+  <div class="canvas-bottom"><div class="parked-tray" id="parked-tray"></div><div class="zoom-bar"><button data-action="zoom_out" aria-label="Zoom out"><svg class="ico"><use href="#minus"/></svg></button><span id="zoom-label">100%</span><button data-action="zoom_in" aria-label="Zoom in"><svg class="ico"><use href="#plus"/></svg></button><button class="fit" data-action="fit" aria-label="Fit canvas"><svg class="ico"><use href="#expand"/></svg></button></div></div>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <div class="scrim" id="scrim" hidden><section class="dialog" id="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabindex="-1"></section></div>
+  <div class="sr-only" id="announcement" role="status" aria-live="polite"></div>
+</section>
+<script src="bridge.js"></script>
+<script src="meeting.js"></script>
+<script src="apps.js"></script>
+<script src="canvas.js"></script>
+</body>
+</html>

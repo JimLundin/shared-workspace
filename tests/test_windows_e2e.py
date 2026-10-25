@@ -19,13 +19,14 @@ if sys.platform != "win32" or os.environ.get("TOOLKIT_E2E") != "1":
     raise unittest.SkipTest("end-to-end tests run on Windows, with TOOLKIT_E2E=1")
 
 import ctypes  # noqa: E402
-import tkinter as tk  # noqa: E402
 
+from assistant.qt import QtCore, QtWidgets  # noqa: E402
+from assistant.qt_ui import application  # noqa: E402
 from protocol import LAYOUT_WINDOW, WM_QUIT_LAYOUT  # noqa: E402
 from winapi import inputs, system, windows  # noqa: E402 (Windows only)
 
 UNDER_WINE = hasattr(ctypes.WinDLL("ntdll"), "wine_get_version")
-"""Wine garbles typed Unicode text (KEYEVENTF_UNICODE) into Tk; real Windows doesn't."""
+"""Wine garbles typed Unicode text (KEYEVENTF_UNICODE) into native text boxes; real Windows doesn't."""
 
 SCANCODES = {
     "2": 0x03, "3": 0x04, "4": 0x05, "5": 0x06, "6": 0x07, "8": 0x09, "9": 0x0A,
@@ -68,18 +69,24 @@ def layout() -> Generator[None]:
 
 
 @contextmanager
-def text_box() -> Generator[tuple[tk.Tk, tk.Entry]]:
-    root = tk.Tk()
-    entry = tk.Entry(root, width=40)
-    entry.pack()
-    root.update()
-    root.focus_force()
-    entry.focus_set()
-    root.update()
+def text_box() -> Generator[tuple[QtWidgets.QWidget, QtWidgets.QLineEdit]]:
+    app = application()
+    root = QtWidgets.QWidget()
+    root.setGeometry(300, 300, 500, 80)
+    layout = QtWidgets.QVBoxLayout(root)
+    entry = QtWidgets.QLineEdit()
+    layout.addWidget(entry)
+    root.show()
+    root.activateWindow()
+    entry.setFocus()
+    app.processEvents()
     try:
         yield root, entry
     finally:
-        root.destroy()
+        root.hide()
+        root.deleteLater()
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+
 
 
 def tap(*names: str) -> None:
@@ -89,12 +96,13 @@ def tap(*names: str) -> None:
 
 
 def test_layout_types_colemak_dh_and_expands_snippets() -> None:
-    with layout(), text_box() as (root, entry):
+    with layout(), text_box() as (_root, entry):
         tap("2", "3", "4", "5")  # top row moved up: q w f p
         tap("q", "w", "e", "r")  # home row taps: a r s t
-        assert wait_for(lambda: entry.get() == "qwfparst", root.update), entry.get()
+        assert wait_for(lambda: entry.text() == "qwfparst", QtWidgets.QApplication.processEvents), entry.text()
         tap(";", ";", "r", "l", "a")  # , , t h x: a snippet
         if UNDER_WINE:  # the trigger is erased; what's typed instead can't be checked here
-            assert wait_for(lambda: len(entry.get()) > len("qwfparst") and "," not in entry.get(), root.update), entry.get()
+            assert wait_for(lambda: len(entry.text()) > len("qwfparst") and "," not in entry.text(),
+                            QtWidgets.QApplication.processEvents), entry.text()
         else:
-            assert wait_for(lambda: entry.get() == "qwfparstThanks!", root.update), entry.get()
+            assert wait_for(lambda: entry.text() == "qwfparstThanks!", QtWidgets.QApplication.processEvents), entry.text()

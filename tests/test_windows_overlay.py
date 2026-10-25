@@ -1,18 +1,18 @@
-"""Live key feedback on a hidden Tk canvas, without taking focus or sending input."""
+"""Live key feedback on a hidden Qt canvas, without taking focus or sending input."""
+# pyright: reportPrivateUsage=false
 
 import sys
 import unittest
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Protocol, cast
 from unittest.mock import patch
 
 if sys.platform != "win32":
     raise unittest.SkipTest("Windows overlay")
 
-import tkinter as tk
-
-from assistant.ui import KeymapOverlay
+from assistant.qt import Qt, QtCore, QtGui, QtWidgets
+from assistant.qt_ui import application
+from assistant.ui import KeymapCanvas, KeymapOverlay
 from miryoku.layout import AGENT, Layer, Scancode
 from winapi.shapes import Rect
 
@@ -20,16 +20,9 @@ WORK = Rect(0, 0, 1920, 1040)
 Q, M = Scancode(0x10), Scancode(0x32)
 
 
-class CanvasReading(Protocol):
-    """The concrete Tk return type missing from its itemcget stub."""
-
-    def itemcget(self, tag: str, option: str) -> str: ...
-
-
 @contextmanager
-def hidden_overlay() -> Generator[tuple[tk.Tk, KeymapOverlay, tk.Canvas]]:
-    root = tk.Tk()
-    root.withdraw()
+def hidden_overlay() -> Generator[tuple[QtWidgets.QApplication, KeymapOverlay, KeymapCanvas]]:
+    root = application()
     try:
         with (
             patch("assistant.ui.windows.make_overlay"),
@@ -40,28 +33,43 @@ def hidden_overlay() -> Generator[tuple[tk.Tk, KeymapOverlay, tk.Canvas]]:
         ):
             overlay = KeymapOverlay(root)
             overlay.show(None, "BASE", WORK, visible=True)
-            canvas = cast("tk.Canvas", next(
-                child for window in root.winfo_children() for child in window.winfo_children() if child.winfo_class() == "Canvas"
-            ))
+            canvas = overlay._canvas
             try:
                 yield root, overlay, canvas
             finally:
                 overlay.show(None, "BASE", WORK, visible=False)
+                overlay._window.deleteLater()
+                overlay._handle.deleteLater()
     finally:
-        root.destroy()
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
 
 
-def key_style(canvas: tk.Canvas, name: str) -> tuple[str, ...]:
-    reading = cast("CanvasReading", canvas)
-    return tuple(reading.itemcget(f"key:{name}:{part}", "fill") for part in ("background", "physical", "label", "hold"))
+def key_style(canvas: KeymapCanvas, name: str) -> tuple[str, ...]:
+    background, foreground = canvas.colors(name)
+    return background, foreground, foreground, foreground
 
 
-def check_chord_feedback(overlay: KeymapOverlay, canvas: tk.Canvas) -> None:
+def test_overlay_drag_retains_physical_pixels_at_fractional_display_scale() -> None:
+    with hidden_overlay() as (_, overlay, _), patch("assistant.ui.save_position"):
+        overlay._move((1000, 600))
+        for kind, logical, physical, pressed in (
+            (QtCore.QEvent.Type.MouseButtonPress, (800, 480), (1000, 600), Qt.MouseButton.LeftButton),
+            (QtCore.QEvent.Type.MouseMove, (820, 500), (1025, 625), Qt.MouseButton.LeftButton),
+            (QtCore.QEvent.Type.MouseButtonRelease, (820, 500), (1025, 625), Qt.MouseButton.NoButton),
+        ):
+            event = QtGui.QMouseEvent(kind, QtCore.QPointF(5, 5), QtCore.QPointF(*logical),
+                                     Qt.MouseButton.LeftButton, pressed, Qt.KeyboardModifier.NoModifier)
+            with patch("assistant.ui.inputs.cursor_position", return_value=physical):
+                QtWidgets.QApplication.sendEvent(overlay._handle, event)
+        assert overlay._position == (1025, 625) and overlay._drag is None
+
+
+def check_chord_feedback(overlay: KeymapOverlay, canvas: KeymapCanvas) -> None:
     now = 1.0
     with patch("assistant.ui.time.monotonic", side_effect=lambda: now):
         normal_q, normal_m, normal_b = (key_style(canvas, name) for name in ("Q", "M", "B"))
         normal_n = key_style(canvas, "N")
-        items = canvas.find_all()
+        items = tuple(canvas.boxes.items())
         overlay.set_pressed(frozenset({Q, M, AGENT}))
         pressed_q, pressed_m = key_style(canvas, "Q"), key_style(canvas, "M")
         assert pressed_q != normal_q and pressed_m != normal_m
@@ -76,10 +84,10 @@ def check_chord_feedback(overlay: KeymapOverlay, canvas: tk.Canvas) -> None:
         assert key_style(canvas, "N") == normal_n
         overlay.set_pressed(frozenset())
         assert key_style(canvas, "M") == normal_m
-        assert canvas.find_all() == items
+        assert tuple(canvas.boxes.items()) == items
 
 
-def check_feedback_across_layers(overlay: KeymapOverlay, canvas: tk.Canvas) -> None:
+def check_feedback_across_layers(overlay: KeymapOverlay, canvas: KeymapCanvas) -> None:
     now = 1.0
     with patch("assistant.ui.time.monotonic", side_effect=lambda: now):
         overlay.show(Layer.SYM, "SYM", WORK, visible=True)
@@ -100,7 +108,7 @@ def check_feedback_across_layers(overlay: KeymapOverlay, canvas: tk.Canvas) -> N
         assert key_style(canvas, "M") == normal_m  # restores the blue layer indicator
 
 
-def check_hiding_and_resetting(overlay: KeymapOverlay, canvas: tk.Canvas) -> None:
+def check_hiding_and_resetting(overlay: KeymapOverlay, canvas: KeymapCanvas) -> None:
     now = 1.0
     with patch("assistant.ui.time.monotonic", side_effect=lambda: now):
         overlay.show(None, "BASE", WORK, visible=True)
@@ -127,6 +135,6 @@ def test_overlay_renders_chords_flashes_layer_changes_and_resets() -> None:
         overlay.set_pressed(frozenset({Q}))
         overlay.set_pressed(frozenset())
         assert key_style(canvas, "Q") != normal
-        root.after(250, root.quit)
-        root.mainloop()
+        QtCore.QTimer.singleShot(250, root.quit)
+        root.exec()
         assert key_style(canvas, "Q") == normal

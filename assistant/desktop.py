@@ -1,4 +1,4 @@
-"""The `Desktop` the assistant's features use, done with Windows calls and Tk."""
+"""The `Desktop` the assistant's features use, done with Windows calls and Qt."""
 
 import os
 import subprocess

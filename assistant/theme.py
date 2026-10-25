@@ -1,4 +1,4 @@
-"""Shared appearance for Toolkit's native Tk windows."""
+"""Shared appearance for Toolkit's native windows."""
 
 from typing import Final
 

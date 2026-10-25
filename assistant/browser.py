@@ -191,8 +191,31 @@ class Browser:
             raise BrowserError("That page is closed or is not in the connected browser. Call browser_tabs for current ids.")
         if target not in self.sessions:
             self.sessions[target] = text(self._call("Target.attachToTarget", {"targetId": target, "flatten": True}, cancel), "sessionId")
-            self._call("Page.enable", {}, cancel, session=self.sessions[target])
         return self.sessions[target]
+
+    def _reset_capture(self, session: str, cancel: threading.Event) -> None:
+        try:
+            self._call("Emulation.setFocusEmulationEnabled", {"enabled": False}, cancel, session=session)
+        except BaseException as error:
+            # Detaching also releases the browser's temporary visible capturer.
+            try:
+                self.close()
+            except Exception as cleanup_error:
+                error.add_note(f"Browser session cleanup also failed: {cleanup_error}")
+            raise
+
+    def _capture(self, session: str, cancel: threading.Event) -> dict[str, Json]:
+        try:
+            self._call("Emulation.setFocusEmulationEnabled", {"enabled": True}, cancel, session=session)
+            result = self._call("Page.captureScreenshot", {"format": "png", "captureBeyondViewport": False}, cancel, session=session)
+        except BaseException as error:
+            try:
+                self._reset_capture(session, cancel)
+            except Exception as cleanup_error:
+                error.add_note(f"Browser capture cleanup also failed: {cleanup_error}")
+            raise
+        self._reset_capture(session, cancel)
+        return result
 
     def _world(self, session: str, frame: str, cancel: threading.Event) -> tuple[int, dict[str, Json]]:
         tree = mapping(self._call("Page.getFrameTree", {}, cancel, session=session).get("frameTree", {}))
@@ -463,7 +486,7 @@ class Browser:
             return self._snapshot(target, args, cancel)
         session = self._session(target, cancel)
         if operation == "screenshot":
-            result = self._call("Page.captureScreenshot", {"format": "png", "captureBeyondViewport": False}, cancel, session=session)
+            result = self._capture(session, cancel)
             try:
                 image = base64.b64decode(text(result, "data"), validate=True)
                 if len(image) < 33 or image[:16] != b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR":

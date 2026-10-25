@@ -1,4 +1,4 @@
-"""Conversation bubbles, lifetimes and sizing are independent of Tk and clocks."""
+"""Conversation bubbles, lifetimes and sizing are independent of widgets and clocks."""
 
 from dataclasses import replace
 

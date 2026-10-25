@@ -139,12 +139,14 @@ The delegated scopes are:
 |---|---|
 | `User.Read` | Identify the signed-in user when creating a chat. |
 | `User.ReadBasic.All` | Resolve recipients by name or email. |
-| `Chat.ReadBasic` | List chats and their basic membership. |
+| `Chat.Read` | List chats and read bounded message history for the requested work and result verification. |
 | `Chat.Create` | Get or create a one-to-one chat. |
 | `ChatMessage.Send` | Send the user's requested message. |
 | `offline_access` | Refresh the saved sign-in. |
 
 This does not request application-wide message access or migration permissions.
+Existing sign-ins granted only `Chat.ReadBasic` may require renewed Microsoft
+consent before message readback is available.
 
 | Tool | Use |
 |---|---|
@@ -153,6 +155,7 @@ This does not request application-wide message access or migration permissions.
 | `teams_sign_in` / `teams_finish_sign_in` | Start and finish delegated sign-in. |
 | `teams_find_users` | Resolve a name, email or user principal name. |
 | `teams_list_chats` | List recent chats with basic members and bounded pagination. |
+| `teams_read_messages` | Read bounded history or one exact message in an identified chat to inspect the requested result. |
 | `teams_open_chat` | Get or create a one-to-one chat for a resolved user ID. |
 | `teams_send_message` | Send plain text to an identified chat when requested by the user. |
 | `teams_sign_out` | Remove Toolkit's stored API credentials; browser sign-in is separate. |

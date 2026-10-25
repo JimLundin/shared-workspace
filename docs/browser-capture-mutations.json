@@ -1,0 +1,427 @@
+{
+  "format": 1,
+  "interpretation": [
+    "All three mutations were run only in isolated source copies.",
+    "The exact behavioral assertion or expected exception failed; setup errors and timeouts do not count.",
+    "GPU launch configuration is established by unchanged source; actual GPU device usage was not sampled.",
+    "Both focused Windows checks passed while every sampled session observation reported locked.",
+    "Full Windows selfcheck, application workflows and deployment have separate receipts."
+  ],
+  "mutations": [
+    {
+      "after": "            # Detaching also releases the browser's temporary visible capturer.\n            try:\n                pass\n",
+      "baseline_sha256": "23d351323a047bb8730e65b1c9b39b07f008918b6179580a8ea3baae7089918c",
+      "before": "            # Detaching also releases the browser's temporary visible capturer.\n            try:\n                self.close()\n",
+      "directory": "portable-mutant",
+      "id": "omit-disconnect-on-reset-error",
+      "intended_assertion": "assert not channel.replies and channel.closed",
+      "mutant_sha256": "e864b42246ca6c1c4bee07daf0c26ebceb8f2a74ecd9d07f0b1fb36f861076ac",
+      "note": "Replace only the disconnect call with a no-op; pass keeps the nested try suite syntactically valid.",
+      "run": {
+        "command": [
+          "/home/jim/toolkit/.venv/bin/python",
+          "-B",
+          "-c",
+          "import json, pathlib, sys\nimport assistant.browser as browser\nexpected = pathlib.Path.cwd() / \"assistant/browser.py\"\nassert pathlib.Path(browser.__file__).resolve() == expected.resolve(), browser.__file__\nprint(json.dumps({\"loaded_browser\": browser.__file__, \"python\": sys.version}), flush=True)\nimport pytest\nraise SystemExit(pytest.main(sys.argv[1:]))\n",
+          "-q",
+          "--color=no",
+          "-p",
+          "no:cacheprovider",
+          "--tb=long",
+          "tests/test_browser.py::test_browser_failed_focus_reset_discards_the_image_and_detaches_a_personal_browser"
+        ],
+        "cwd": "/tmp/toolkit-capture-validation-v2-1792791173094202224-qa4yhg53/portable-mutant",
+        "environment_overrides": {
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+          "PYTHONDONTWRITEBYTECODE": "1",
+          "PYTHONPATH": "/tmp/toolkit-capture-validation-v2-1792791173094202224-qa4yhg53/portable-mutant"
+        },
+        "exit_code": 1,
+        "intended_behavior": true,
+        "log": "/tmp/toolkit-capture-validation-v2-1792791173094202224-qa4yhg53/portable-mutant.log",
+        "outcome": "killed by intended closed-channel assertion",
+        "seconds": 0.5706929049920291,
+        "source_browser_sha256": "e864b42246ca6c1c4bee07daf0c26ebceb8f2a74ecd9d07f0b1fb36f861076ac",
+        "test_browser_sha256": "889d9d6280c2db973a4836ee6bf1d07cd92aa8d074f9723a96632ad04389de8f"
+      },
+      "status": "killed by intended closed-channel assertion",
+      "test": "tests/test_browser.py::test_browser_failed_focus_reset_discards_the_image_and_detaches_a_personal_browser",
+      "test_sha256": "889d9d6280c2db973a4836ee6bf1d07cd92aa8d074f9723a96632ad04389de8f"
+    },
+    {
+      "after": "        return result\n",
+      "baseline_sha256": "23d351323a047bb8730e65b1c9b39b07f008918b6179580a8ea3baae7089918c",
+      "before": "        self._reset_capture(session, cancel)\n        return result\n",
+      "directory": "native-mutant",
+      "id": "omit-successful-capture-reset",
+      "intended_assertion": "assert cast(Json, json.loads(restored.text)) == visibility",
+      "mutant_sha256": "73dd2369b286b60ebff774fc7a700ccd53b46ce3dade0dab6f5516c7a4f95a21",
+      "run": {
+        "command": [
+          "C:\\Users\\Jim.Lundin\\Downloads\\toolkit-sdk\\toolkit\\.python\\python.exe",
+          "-B",
+          "-u",
+          "focused.py"
+        ],
+        "cwd": "/mnt/c/Users/Jim.Lundin/AppData/Local/Temp/toolkit-gpu-production-omit-reset-mutant-1792791226150730678",
+        "exit_code": 1,
+        "harness_sha256": "deee4de9d7c96618dd70d178dbeb85d5bf64e5aa2c97d6ca3ffcb583859b638b",
+        "intended_behavior": true,
+        "outcome": "killed by intended document-visibility restoration assertion",
+        "receipt_sha256": "3dfce6694ff8049264060556816778b4c63cbf4d63b37ade69081c9c8d0b2329",
+        "result": {
+          "checks": [
+            {
+              "exception": "AssertionError",
+              "passed": false,
+              "seconds": 4.686142900027335,
+              "test": "test_grouped_screenshots_repaint_the_requested_inactive_tab",
+              "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-gpu-production-omit-reset-mutant-1792791226150730678\\focused.py\", line 67, in main\n    selfcheck._call(getattr(test_windows_browser, name))\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-gpu-production-omit-reset-mutant-1792791226150730678\\source\\selfcheck.py\", line 90, in _call\n    test(**arguments)\n    ~~~~^^^^^^^^^^^^^\n  File \"C:\\Users\\Jim.Lundin\\AppData\\Local\\Temp\\toolkit-gpu-production-omit-reset-mutant-1792791226150730678\\source\\tests\\test_windows_browser.py\", line 244, in test_grouped_screenshots_repaint_the_requested_inactive_tab\n    assert cast(Json, json.loads(restored.text)) == visibility\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n"
+            }
+          ],
+          "full_suite_gate": false,
+          "harness_valid": true,
+          "kind": "omit-reset-mutant",
+          "launch_evidence": "Complete frozen source verified; process command lines and GPU device usage are not sampled.",
+          "launch_source_preserves_gpu_and_enables_surface": true,
+          "monitor_errors": [],
+          "passed": false,
+          "scratch": "C:\\Windows\\Temp\\tgp-deansqkh",
+          "session_samples": [
+            {
+              "connection_state": 0,
+              "locked": true,
+              "session": 1,
+              "time_ns": 1792791373456331400
+            },
+            {
+              "connection_state": 0,
+              "locked": true,
+              "session": 1,
+              "time_ns": 1792791373988196700
+            },
+            {
+              "connection_state": 0,
+              "locked": true,
+              "session": 1,
+              "time_ns": 1792791374655117500
+            },
+            {
+              "connection_state": 0,
+              "locked": true,
+              "session": 1,
+              "time_ns": 1792791375173429500
+            },
+            {
+              "connection_state": 0,
+              "locked": true,
+              "session": 1,
+              "time_ns": 1792791375678136100
+            },
+            {
+              "connection_state": 0,
+              "locked": true,
+              "session": 1,
+              "time_ns": 1792791376190261800
+            },
+            {
+              "connection_state": 0,
+              "locked": true,
+              "session": 1,
+              "time_ns": 1792791376715854900
+            },
+            {
+              "connection_state": 0,
+              "locked": true,
+              "session": 1,
+              "time_ns": 1792791377236035400
+            },
+            {
+              "connection_state": 0,
+              "locked": true,
+              "session": 1,
+              "time_ns": 1792791377747794100
+            }
+          ],
+          "source_manifest_sha256": "2a9071c1b2c200923d64b57ec624e5f53af9a41929fcc5e20e34113fb94055e6",
+          "source_unchanged": true,
+          "unlocked_at_every_sample": false
+        },
+        "source_manifest_sha256": "2a9071c1b2c200923d64b57ec624e5f53af9a41929fcc5e20e34113fb94055e6"
+      },
+      "status": "killed by intended document-visibility restoration assertion",
+      "test": "tests/test_windows_browser.py::test_grouped_screenshots_repaint_the_requested_inactive_tab",
+      "test_sha256": "280992ada9b676a0ad9207f7ce9bac4fae545fd80ea99631b889cef36af4b733"
+    },
+    {
+      "after": "        except BaseException:\n            # Detaching also releases the browser's temporary visible capturer.\n            self.close()\n            raise\n",
+      "baseline_sha256": "23d351323a047bb8730e65b1c9b39b07f008918b6179580a8ea3baae7089918c",
+      "before": "        except BaseException as error:\n            # Detaching also releases the browser's temporary visible capturer.\n            try:\n                self.close()\n            except Exception as cleanup_error:\n                error.add_note(f\"Browser session cleanup also failed: {cleanup_error}\")\n            raise\n",
+      "directory": "precedence-mutant",
+      "expected_wrong_exception": "OSError: The owned browser processes did not finish exiting in time.",
+      "id": "revert-reset-error-precedence",
+      "intended_assertion": "with TestCase().assertRaisesRegex(BrowserError, \"^Focus reset failed$\") as failure:",
+      "mutant_sha256": "05ffe04fa7676030253d8704522c2473b5a89b4857963898601ca282377f6c29",
+      "run": {
+        "command": [
+          "/home/jim/toolkit/.venv/bin/python",
+          "-B",
+          "-c",
+          "import json, pathlib, sys\nimport assistant.browser as browser\nexpected = pathlib.Path.cwd() / \"assistant/browser.py\"\nassert pathlib.Path(browser.__file__).resolve() == expected.resolve(), browser.__file__\nprint(json.dumps({\"loaded_browser\": browser.__file__, \"python\": sys.version}), flush=True)\nimport pytest\nraise SystemExit(pytest.main(sys.argv[1:]))\n",
+          "-q",
+          "--color=no",
+          "-p",
+          "no:cacheprovider",
+          "--tb=long",
+          "tests/test_browser.py::test_browser_preserves_focus_reset_failure_when_owned_process_cleanup_also_fails"
+        ],
+        "cwd": "/tmp/toolkit-capture-validation-v2-1792791173094202224-qa4yhg53/precedence-mutant",
+        "environment_overrides": {
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+          "PYTHONDONTWRITEBYTECODE": "1",
+          "PYTHONPATH": "/tmp/toolkit-capture-validation-v2-1792791173094202224-qa4yhg53/precedence-mutant"
+        },
+        "exit_code": 1,
+        "intended_behavior": true,
+        "log": "/tmp/toolkit-capture-validation-v2-1792791173094202224-qa4yhg53/precedence-mutant.log",
+        "outcome": "killed by intended exception-type expectation: cleanup OSError replaced reset BrowserError",
+        "seconds": 0.667866678966675,
+        "source_browser_sha256": "05ffe04fa7676030253d8704522c2473b5a89b4857963898601ca282377f6c29",
+        "test_browser_sha256": "889d9d6280c2db973a4836ee6bf1d07cd92aa8d074f9723a96632ad04389de8f"
+      },
+      "status": "killed by intended exception-type expectation: cleanup OSError replaced reset BrowserError",
+      "test": "tests/test_browser.py::test_browser_preserves_focus_reset_failure_when_owned_process_cleanup_also_fails",
+      "test_sha256": "889d9d6280c2db973a4836ee6bf1d07cd92aa8d074f9723a96632ad04389de8f"
+    }
+  ],
+  "native_baseline": {
+    "exit_code": 0,
+    "receipt_sha256": "019274c7a7416d00cda2ecfe4b30eb7b6a2d13e284fabd011846efce2a47ff7b",
+    "result": {
+      "checks": [
+        {
+          "passed": true,
+          "seconds": 8.12010790000204,
+          "test": "test_attached_browser_shares_fixture_session_without_reusing_or_closing_personal_tabs"
+        },
+        {
+          "passed": true,
+          "seconds": 5.900291300029494,
+          "test": "test_grouped_screenshots_repaint_the_requested_inactive_tab"
+        }
+      ],
+      "full_suite_gate": false,
+      "harness_valid": true,
+      "kind": "baseline",
+      "launch_evidence": "Complete frozen source verified; process command lines and GPU device usage are not sampled.",
+      "launch_source_preserves_gpu_and_enables_surface": true,
+      "monitor_errors": [],
+      "passed": true,
+      "scratch": "C:\\Windows\\Temp\\tgp-krlnt2wt",
+      "session_samples": [
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791339592035600
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791340095830200
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791340637933000
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791341149660000
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791341651978200
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791342164330700
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791342687050000
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791343211660200
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791343757923200
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791344289624700
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791344827682000
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791345331826100
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791345860093900
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791346390545900
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791346903781700
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791347414860000
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791347932149900
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791348547134300
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791349163306700
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791349725277900
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791350314329100
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791350831445200
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791351347878500
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791351853666300
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791352366638100
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791352875322200
+        },
+        {
+          "connection_state": 0,
+          "locked": true,
+          "session": 1,
+          "time_ns": 1792791353376692200
+        }
+      ],
+      "source_manifest_sha256": "5fe3786c75d0228803b1602e0cc7e8f40e4d596e18a857cdf33c49fc0e011dc1",
+      "source_unchanged": true,
+      "unlocked_at_every_sample": false
+    },
+    "stage": "/mnt/c/Users/Jim.Lundin/AppData/Local/Temp/toolkit-gpu-production-baseline-1792791215899093993"
+  },
+  "portable_baseline": {
+    "command": [
+      "/home/jim/toolkit/.venv/bin/python",
+      "-B",
+      "-c",
+      "import json, pathlib, sys\nimport assistant.browser as browser\nexpected = pathlib.Path.cwd() / \"assistant/browser.py\"\nassert pathlib.Path(browser.__file__).resolve() == expected.resolve(), browser.__file__\nprint(json.dumps({\"loaded_browser\": browser.__file__, \"python\": sys.version}), flush=True)\nimport pytest\nraise SystemExit(pytest.main(sys.argv[1:]))\n",
+      "-q",
+      "--color=no",
+      "-p",
+      "no:cacheprovider",
+      "--tb=long",
+      "tests/test_browser.py"
+    ],
+    "cwd": "/tmp/toolkit-capture-validation-v2-1792791173094202224-qa4yhg53/source",
+    "environment_overrides": {
+      "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "PYTHONPATH": "/tmp/toolkit-capture-validation-v2-1792791173094202224-qa4yhg53/source"
+    },
+    "exit_code": 0,
+    "intended_behavior": true,
+    "log": "/tmp/toolkit-capture-validation-v2-1792791173094202224-qa4yhg53/portable-baseline.log",
+    "outcome": "18 passing portable tests",
+    "seconds": 0.5122583329793997,
+    "source_browser_sha256": "23d351323a047bb8730e65b1c9b39b07f008918b6179580a8ea3baae7089918c",
+    "test_browser_sha256": "889d9d6280c2db973a4836ee6bf1d07cd92aa8d074f9723a96632ad04389de8f"
+  },
+  "portable_snapshot_manifest_sha256": "f1333d8e5a70a00d985ba30828b1b13ecd7ca3f192c48a554a9015728fbae301",
+  "recorded_date": "2026-10-23",
+  "scope": "Capture cleanup and fresh inactive-tab screenshots; separate from the 122-fault browser-app campaign and full release gate.",
+  "source_files": {
+    "assistant/browser.py": "23d351323a047bb8730e65b1c9b39b07f008918b6179580a8ea3baae7089918c",
+    "assistant/browser_session.py": "b4ea99f9e436e1f81aa42c4e0eee00494a8e74500717869a2c0f429cabacd55a",
+    "tests/test_browser.py": "889d9d6280c2db973a4836ee6bf1d07cd92aa8d074f9723a96632ad04389de8f",
+    "tests/test_windows_browser.py": "280992ada9b676a0ad9207f7ce9bac4fae545fd80ea99631b889cef36af4b733"
+  }
+}

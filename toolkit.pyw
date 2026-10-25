@@ -1,4 +1,4 @@
-"""Double-click launcher: the keeper, which runs the layout and the assistant."""
+"""Double-click launcher: the keeper runs the layout, assistant, and automation."""
 
 from runtime import activate, bootstrap
 

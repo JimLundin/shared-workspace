@@ -16,8 +16,16 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e .
       - run: python selfcheck.py --durations 10
-  standards:
+  canvas-bridge:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/test_canvas_bridge.mjs
+  standards:
+    runs-on: windows-latest # Type-check against the actual native Qt/WinRT dependencies.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

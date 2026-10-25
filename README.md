@@ -3,26 +3,33 @@
 A personal toolkit for a Windows laptop: extract and run, with its own Python
 and no admin installation. It changes itself: ask its agent for a new feature or a fix,
 and it edits, tests, installs and reloads the change without another approval.
-It undoes the update by itself if it fails. Three programs:
+It undoes the update by itself if it fails. Four main processes:
 
 - **the layout** (`miryoku/`): Colemak Mod-DH in the Miryoku style on the
   laptop's own ISO keyboard: home row mods, layers, caps word, snippets;
 - **the assistant** (`assistant/`): dictation, rewriting, questions, screen
   reading, app switching, window placement, and an agent, all through your
-  company's OpenAI-style endpoint. It lives in the notification area (the tray);
-- **the keeper** (`keeper.py`): runs the other two, restarts them if they crash,
+  company's OpenAI-style endpoint, with tray controls and a shared desktop canvas;
+- **the automation worker** (`automation/`): runs durable tasks, standing
+  instructions, and recovery independently of the conversation window;
+- **the keeper** (`keeper.py`): runs the other three, restarts them if they crash,
   and installs the agent's changes to them (see *Changing the toolkit*).
 
-The agent uses **OpenAI Agents SDK 0.24.0**. Every Toolkit window uses **Tkinter**,
-included with its bundled Python, on one shared UI thread. The layout, keeper and
-quick AI features use the standard library and our typed Win32 bindings (`winapi/`).
+The agent uses **OpenAI Agents SDK 0.24.0**. Every interface uses **Qt 6.12**:
+the desktop canvas, launcher, conversation bubbles, History, Work, prompts,
+keyboard overlays, and keeper dialogs. The assistant has one Qt event loop;
+the keeper owns its own protected Qt UI. Tkinter and Tcl/Tk are excluded from
+the bundled interpreter. The keyboard process uses only the standard library
+and our typed Win32 bindings (`winapi/`), independently of the assistant.
+The [Qt implementation notes](docs/qt-interface.md) include native canvas captures
+and the migration checks.
 
 ## Start
 
 1. Extract **`toolkit-sdk-python315-win64.zip`** into a folder you can write to.
-   It includes **Windows x64 Python 3.15.1 and Tk 9.0.4** in `.python`, with
-   matching agent dependencies in `.runtime`. Keep both folders beside
-   `StartToolkit.cmd` and `toolkit.pyw`. Python, Tk and the dependencies require
+   It includes **Windows x64 Python 3.15.1** in `.python`, with
+   matching agent and Qt dependencies in `.runtime`. Keep both folders beside
+   `StartToolkit.cmd` and `toolkit.pyw`. Python, Qt and the dependencies require
    no installer or separate downloads on the laptop.
    Set the Windows keyboard layout to **English (US)**.
 2. Set these environment variables (Start → "Edit environment variables for your
@@ -169,6 +176,13 @@ This uses Windows WASAPI and the existing configured transcription endpoint;
 there are no new dependencies. Chunk sizing and previous-chunk context follow
 the [official OpenAI speech-to-text documentation](https://developers.openai.com/api/docs/guides/speech-to-text).
 
+Choose **Meeting follow-up…** from the tray, or **Meetings** in Work, to select
+completed recording segments and prepare sourced notes, actions and email drafts.
+The Qt editors retain unfinished writing across background updates, link claims
+to the exact saved transcript lines, and can put the notes on the shared canvas.
+See [meeting follow-through](docs/meeting-followup.md) for source selection,
+saved versions, editing and Outlook handoff.
+
 ## The agent
 
 Hold **N**, beside B, to speak a task and release it to send. This works on every
@@ -178,9 +192,9 @@ between them remains visible and clickable. There is no standing toolbar or
 message field, and notifications never take keyboard focus.
 Windows supplies the background blur, rounded glass edges and soft shadows;
 text remains opaque. Your requests have a subtle blue tint; assistant bubbles
-use lilac. Dark surroundings keep the glass highly transparent, while light
-backgrounds add enough shading to keep the text readable. Captions stay inside
-the glass. Windows controls the native glass corner radius.
+use lilac. Uniform dark and light backgrounds keep the glass highly transparent,
+with light or dark text to match. Mixed backgrounds use a stronger tint for
+legibility. Captions stay inside the glass, with the same adaptive contrast.
 Disabling Windows transparency uses solid surfaces; high-contrast mode uses the
 system's foreground and background colors.
 
@@ -224,7 +238,7 @@ requests share the same conversation until **New chat** or Toolkit exits.
 The history window can still be moved, resized, snapped to either screen edge,
 or given a transparent background from its menu. Notifications use its remembered
 monitor and always stack in the right corner. Each bubble fits its content up to
-280 logical pixels wide, keeping its right edge anchored as it grows. Longer
+360 logical pixels wide (280 for your requests), keeping its right edge anchored as it grows. Longer
 entries share the available height, with space reserved for the
 voice-reply hint. A small scroll marker shows progress through overflowing text.
 
@@ -310,11 +324,52 @@ It stops after 80 steps (`AGENT_MAX_STEPS`). The journal records tool names and
 success status. Browser and Teams arguments and results stay out of persistent
 journals and activity details, including form values and sign-in codes.
 
+## Durable work
+
+The [shared desktop canvas](docs/desktop-canvas.md) attaches requests, selected
+sources, and results to these same durable task identities. Saved cards reconnect
+after a restart, including tasks outside the recent-work list. An unconfirmed
+submission stays attached and can be retried with its original identity.
+
+Open **Work…** from the tray or conversation menu. Voice requests, typed
+requests, and standing instructions use the same saved task journal. The Work
+window has three tabs:
+
+- **Tasks** shows instructions, progress, questions, results, and verification
+  evidence. Pause, resume, cancel, redirect a task, or create a follow-up.
+- **Standing instructions** runs saved instructions once, at an interval, when
+  a selected file changes, or after a transcript finishes. New instructions
+  start disabled. Enable the editable meeting-notes template to produce notes
+  and action items from future completed transcripts.
+- **Context** stores preferences and project notes you choose to save. Notes
+  retain their source and expiry; expired text is excluded from fresh context.
+
+Closing a view or choosing **New chat** keeps saved work. **Stop agent** cancels
+the current conversation's active and queued tasks; individual tasks have their
+own controls in Work. On restart, interrupted tasks recover from saved progress.
+A task with an unknown action outcome checks what happened before repeating an
+effect. Endpoint failures and other blockers wait for an explicit resume.
+
+The worker executes one task at a time, and a task waiting for a reply releases
+its execution slot. Questions survive restarts. In optional approval mode,
+approvals identify an exact operation and require its visible preview; use
+**Request fresh preview** if that preview was lost during a restart.
+
+Completed transcripts trigger only after their final text has been saved.
+Duplicate delivery creates one task, missed intervals coalesce, and disabling
+an instruction prevents new handoffs. A handoff already accepted remains a
+saved task that can be cancelled separately. Meeting-note outputs live under
+`%LOCALAPPDATA%\toolkit\work\work-results`, each in its task's folder.
+
+The [interactive architecture](docs/agentic-pc.html) explains the work flow.
+The [implementation guide](docs/agentic-implementation.md) records the interfaces
+and verification requirements.
+
 ## Changing the toolkit
 
 Ask the agent, by voice or typed: "add a snippet for my email address", "make
 the indicator smaller", "add a key that opens my timesheet". It works on a copy
-of the source (`%LOCALAPPDATA%\toolkit\workspace`), never the running files. Draft
+of the source in its own folder under `%LOCALAPPDATA%\toolkit\workspaces`. Draft
 edits stay available for follow-up requests in the same conversation, then:
 
 1. **Check and fix**: every Python file, including the `.pyw` launchers, compiles.
@@ -330,7 +385,7 @@ edits stay available for follow-up requests in the same conversation, then:
    checks or changes to the candidate during checks prevent installation.
 4. **Install and restart**: the keeper saves the current version and durable
    recovery state, installs the checked copy, clears old bytecode, and restarts
-   the layout and assistant. File-write failures restore the previous version.
+   the layout, assistant, and automation worker. File-write failures restore the previous version.
 5. **A ten-minute trial** offers Keep and Undo, usable with the mouse. Startup
    failure or a crash undoes the change. Quitting/rebooting during the trial also
    restores the previous version on the next launch; choose Keep before quitting
@@ -377,7 +432,9 @@ change, either select its published branch as the base or merge it first.
 
 Toolkit uses the [OpenAI Agents SDK](https://developers.openai.com/api/docs/guides/agents/quickstart)
 through `assistant/sdk.py`. Its `Runner` owns model turns and tool execution;
-`assistant/agent.py` retains Toolkit's tools, permissions and journal. The SDK
+`assistant/agent.py` retains Toolkit's tools and permissions. The supervised
+automation process owns execution, browser sessions, and the durable action
+journal; the assistant owns views, human input, and audio capture. The SDK
 uses your configured OpenAI-compatible
 [Responses API](https://platform.openai.com/docs/api-reference/responses) endpoint
 for agent tasks and tool calling, with streaming enabled.
@@ -393,20 +450,26 @@ of two retained images.
 Response storage and tracing are disabled. Quick chat and transcription still
 use `assistant/llm.py` and their existing endpoints.
 
-The native notifications in `assistant/agent_toasts.py` and conversation history
-in `assistant/agent_panel.py` share the Tk
-thread in `assistant/ui.py` with prompts, answers, reviews, the key map and
-overlays. `assistant/agent_window.py` owns the session controller and queues
+The notifications in `assistant/agent_toasts.py` and conversation history
+in `assistant/agent_panel.py` share the main UI thread in `assistant/ui.py` with
+prompts, answers, reviews, the key map and overlays. Qt owns the event loop;
+`assistant/qt_ui.py` manages shared composition and UI timers. Closing a view
+leaves that loop available to the remaining views. The hidden Windows message
+window and its message loop have their own application control thread.
+`assistant/agent_window.py` owns the session controller and queues
 immutable snapshots for painting. The model and inline questions stay on worker
 threads. `assistant/notifications.py` projects bounded notifications with pure
 lifetime transitions; expiry never removes session messages. Background updates
 preserve keyboard focus; history preserves selection and scroll position.
-`winapi/appearance.py` applies native glass to the Tk notifications, with no
-desktop capture or new UI dependency. A shared timer rotates existing spinner
-shapes only while needed; it does not rebuild the text. Reading timers also
-observe hover over the glass's transparent pixels.
-Markdown is measured in an unshown widget before each final card layout, so live
-updates never expand visible windows just to measure their text.
+`assistant/toast_card.py` draws the text and controls on a per-pixel transparent
+Qt surface. `winapi/composition.py` places native background blur and a soft
+shadow beneath it, clipped to a 26-pixel rounded shape. The glass tracks Qt's
+actual bounds after display scaling. `winapi/appearance.py` samples neighboring
+background pixels on one bounded worker to select readable text and tint.
+A shared timer rotates existing spinner shapes only while needed; it does not
+rebuild the text. Reading timers also observe hover over transparent pixels.
+`assistant/qt_text.py` measures Markdown in separate text documents before each
+final card layout, so updates never resize visible windows just to measure text.
 Agent messages render
 Markdown headings, nested emphasis, lists and checklists, quotes, code blocks,
 strikethrough and links. Tables use compact labelled rows to fit the narrow
@@ -422,10 +485,12 @@ control identifiers. This adds no Python packages or browser dependencies.
 The full Python distribution and its SHA-256 are pinned in
 `requirements/python-win64.json`; matching dependency artifacts are pinned in
 `requirements/windows-py315.lock`. `.runtime/manifest.json` records both the
-Python version and included wheels. The bundle uses the official full Python
-distribution, including Tk; the smaller embeddable distribution omits Tk.
-The runtime contains the Agents SDK, the small `markdown-it-py` parser and their
-dependencies. Updating either pin requires rebuilding the bundle. The protected
+Python version, included wheels, and excluded interpreter paths. The bundle
+uses the official full Python archive with the pinned exclusions applied:
+Tkinter, Tcl/Tk DLLs, IDLE, and Turtle are omitted.
+The runtime contains the Agents SDK, `markdown-it-py`, PySide6 Essentials,
+Shiboken and the win32more Windows composition bindings, with their dependencies.
+Updating either pin requires rebuilding the bundle. The protected
 bootstrap selects the bundled interpreter and checks the dependency ABI before
 loading native modules. Child commands use the same private Python.
 Workspace checks reuse that installed bundle, including
@@ -438,8 +503,9 @@ All in `%LOCALAPPDATA%\toolkit` (tray menu → Open logs folder):
 | File | |
 |---|---|
 | `usage.jsonl` | which features were used, how long they took, whether they failed. Voice uses include held/audio durations, transcription/submission timing, and transcript/requested/submitted character counts; agent uses include preparation, first response and first tool timings. Never what you typed or said. Tray menu → **Usage report** lists every feature by use, and the ones never used, so they can go. |
-| `agent.jsonl` | every action the agent took, with its arguments |
-| `assistant.log`, `layout.log` | problems and crashes |
+| `work/work.sqlite3` | saved tasks, checkpoints, questions, action fingerprints and outcomes, standing instructions, and explicit context |
+| `assistant.log`, `automation.log`, `layout.log` | problems and crashes |
+| `work/worker.log` | bounded work-process diagnostics; automation failures point here |
 | `agent-ui.log` | desktop view startup timing and errors |
 | `keeper.log` | starts, installs, trials, undos |
 
@@ -447,6 +513,9 @@ What leaves the laptop: recordings (for transcription), the text, selection
 or screen area you used a tool on, and the recent app/window context and request
 screenshot when automatic context is enabled. These go to your configured
 endpoint. The idle activity buffer is not written to disk.
+Task instructions and public progress/results are saved locally for recovery.
+The action journal does not store arbitrary command text, browser/Teams
+payloads, screenshots, credentials, encrypted reasoning, or raw SDK history.
 
 ## How it's built
 
@@ -458,10 +527,15 @@ config.py       your settings: apps, snippets, rewrite prompts, allowed commands
 usage.py        the usage log
 winapi/         typed Win32 bindings: the only ctypes code
 miryoku/        the layout: layout.py (the tables), engine.py (the logic), win.py
+automation/     task.py and store.py (durable work), controller.py (execution),
+                actions.py and execution.py (attempts and verification),
+                routines.py and context.py (standing work and saved knowledge),
+                ipc.py, bridge.py, app.py (the supervised worker)
 assistant/      llm.py (the endpoint), features.py (what each key does), agent.py,
                 workspace.py (the agent's copy of the source), keymap.py;
                 agent_session.py, agent_window.py (conversation and UI scheduling),
-                agent_panel.py, ui.py, theme.py, rich_text.py (the shared Tk UI);
+                agent_toasts.py, toast_card.py, qt_text.py, qt_ui.py (Qt bubbles),
+                agent_panel.py, ui.py, theme.py, rich_text.py (the shared Qt UI);
                 desktop.py and app.py on Windows
 ```
 
@@ -469,10 +543,10 @@ The logic never calls Windows directly: the layout's engine goes through a
 `Host`, the assistant's features through a `Desktop`, the agent through a
 `Machine`, so all of it is tested with fakes. The code is strictly typed, with no
 `Any` outside the boundaries to untyped code (`winapi` for ctypes,
-`assistant/ui.py` and `assistant/agent_panel.py` for Tk,
+the assistant's Qt view modules for GUI bindings,
 `assistant/sdk.py` for SDK integration, and
 `selfcheck.py` for looking inside modules). Our classes use `__slots__`; SDK
-lifecycle subclasses inherit the SDK’s storage. Behaviour changes come with tests.
+lifecycle subclasses and Qt objects inherit their libraries' storage. Behaviour changes come with tests.
 
 ## Development
 
@@ -488,7 +562,7 @@ launcher bootstrap remains readable by older Python associations so they can
 hand off to the bundled 3.15 interpreter before importing the application.
 
 GitHub Actions checks Python 3.15 on Windows and Linux, plus Mypy,
-Pyright and Ruff. Desktop end-to-end tests are available through the manual
+Pyright and Ruff on Windows with the native UI dependencies. Desktop end-to-end tests are available through the manual
 **Windows desktop tests** workflow on a dedicated self-hosted Windows runner
 labelled `toolkit-desktop`; they take control of its keyboard and mouse.
 
@@ -536,5 +610,8 @@ keys and drags the real mouse, and has the keeper install, undo and refuse
 changes on a copy of the toolkit (a few minutes, against a fake endpoint), so
 leave the keyboard alone while it runs.
 
-`tests/test_windows_agent_panel.py` exercises the actual Tk panel, including
+`tests/test_windows_agent_panel.py` exercises the actual Qt panel, including
 queued input, inline responses, cancellation and updates while hidden.
+`tests/test_windows_agent_toasts.py` exercises the Qt bubbles and native glass,
+including attached results, text selection, scrolling, stop targets, display
+scaling, reduced motion and cleanup.

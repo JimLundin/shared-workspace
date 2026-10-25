@@ -42,6 +42,8 @@ def publish_source(
     *,
     remote: str = DEFAULT_REMOTE,
     base: str = "main",
+    branch: str | None = None,
+    execute: Callable[[Callable[[], str]], str] | None = None,
 ) -> str:
     """Freeze, review, test, commit and push. No force push and no edits to live source."""
     if not summary.strip():
@@ -54,40 +56,49 @@ def publish_source(
         diff = source_diff(live, candidate)
         if not diff:
             raise PublishError("There are no source changes to publish.")
-        branch = f"toolkit/agent-{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}"
-        detail = f"Push to {remote}\nNew branch: {branch}\nCommit: {summary}\n\nRun this code and its tests before publishing?\n\n{diff}"
+        destination = branch or f"toolkit/agent-{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}"
+        detail = (f"Push to {remote}\nBase: {base}\nNew branch: {destination}\nCommit: {summary}\nSource SHA-256: {digest}"
+                  f"\n\nRun this code and its tests before publishing?\n\n{diff}")
         if not approve("Publish toolkit changes?", detail):
             raise PublishError("Publishing cancelled; nothing was pushed.")
         if stopped():
             raise PublishError("Publishing stopped; nothing was pushed.")
-        git(root, "-c", "core.autocrlf=false", "clone", "--quiet", "--single-branch", "--branch", base, "--", remote, str(checkout))
-        remote_files, live_files = source_files(checkout), source_files(live)
-        if remote_files != live_files or any(
-            (checkout / name).read_bytes().replace(b"\r\n", b"\n") != (live / name).read_bytes().replace(b"\r\n", b"\n")
-            for name in remote_files
-        ):
-            raise PublishError("The remote base differs from the running source. Update your local toolkit before publishing.")
-        if source_digest(candidate) != digest:
-            raise PublishError("Source changed during review; review it again.")
-        try:
-            checked = subprocess.run(
-                [sys.executable, str(live / "selfcheck.py"), str(candidate)], capture_output=True, timeout=300, check=False
+        def publish() -> str:
+            git(root, "-c", "core.autocrlf=false", "clone", "--quiet", "--single-branch", "--branch", base, "--", remote, str(checkout))
+            remote_files, live_files = source_files(checkout), source_files(live)
+            if remote_files != live_files or any(
+                (checkout / name).read_bytes().replace(b"\r\n", b"\n") != (live / name).read_bytes().replace(b"\r\n", b"\n")
+                for name in remote_files
+            ):
+                raise PublishError("The remote base differs from the running source. Update your local toolkit before publishing.")
+            if source_digest(candidate) != digest:
+                raise PublishError("Source changed during review; review it again.")
+            try:
+                checked = subprocess.run(
+                    [sys.executable, str(live / "selfcheck.py"), str(candidate)], capture_output=True, timeout=300, check=False
+                )
+            except subprocess.TimeoutExpired as error:
+                raise PublishError("Runtime checks timed out; nothing was pushed.") from error
+            if checked.returncode:
+                report = (checked.stdout + checked.stderr).decode(errors="replace")[-3000:]
+                raise PublishError("Runtime checks failed; nothing was pushed.\n" + report)
+            if source_digest(candidate) != digest:
+                raise PublishError("Runtime checks changed the source; review it again.")
+            names = sorted(set(source_files(checkout)) | set(source_files(candidate)))
+            git(checkout, "checkout", "-b", destination)
+            copy_source(candidate, checkout)
+            git(checkout, "add", "-A", "--", *names)
+            git(
+                checkout, "-c", f"user.name={os.environ.get('TOOLKIT_GIT_AUTHOR_NAME', 'Toolkit Agent')}",
+                "-c", f"user.email={os.environ.get('TOOLKIT_GIT_AUTHOR_EMAIL', 'toolkit@localhost')}", "commit", "-m", summary,
             )
-        except subprocess.TimeoutExpired as error:
-            raise PublishError("Runtime checks timed out; nothing was pushed.") from error
-        if checked.returncode:
-            raise PublishError("Runtime checks failed; nothing was pushed.\n" + (checked.stdout + checked.stderr).decode(errors="replace")[-3000:])
-        if source_digest(candidate) != digest:
-            raise PublishError("Runtime checks changed the source; review it again.")
-        names = sorted(set(source_files(checkout)) | set(source_files(candidate)))
-        git(checkout, "checkout", "-b", branch)
-        copy_source(candidate, checkout)
-        git(checkout, "add", "-A", "--", *names)
-        git(
-            checkout, "-c", f"user.name={os.environ.get('TOOLKIT_GIT_AUTHOR_NAME', 'Toolkit Agent')}",
-            "-c", f"user.email={os.environ.get('TOOLKIT_GIT_AUTHOR_EMAIL', 'toolkit@localhost')}", "commit", "-m", summary,
-        )
-        if stopped():
-            raise PublishError("Publishing stopped; nothing was pushed.")
-        git(checkout, "push", "origin", f"HEAD:refs/heads/{branch}")
-        return f"Published {git(checkout, 'rev-parse', 'HEAD')} to {remote}, branch {branch}. Main and the running toolkit were not changed."
+            if stopped():
+                raise PublishError("Publishing stopped; nothing was pushed.")
+            commit = git(checkout, "rev-parse", "HEAD")
+            git(checkout, "push", "origin", f"HEAD:refs/heads/{destination}")
+            actual = git(checkout, "ls-remote", "--exit-code", "origin", f"refs/heads/{destination}")
+            if actual.split() != [commit, f"refs/heads/{destination}"]:
+                raise PublishError("The push returned but remote readback did not match. Inspect the branch before retrying.")
+            return f"Published {commit} to {remote}, branch {destination}. Main and the running toolkit were not changed."
+
+        return publish() if execute is None else execute(publish)

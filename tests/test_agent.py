@@ -13,6 +13,7 @@ from assistant.agent_session import LiveMessage, Succeeded, ToolActivity, ToolSt
 from assistant.geometry import Shot
 from assistant.llm import Json, Settings, ToolCall, settings_from
 from assistant.workspace import Workspace
+from automation.execution import WorkExecution
 from winapi.shapes import Rect, Window
 
 from .fake_endpoint import FakeEndpoint, Received, Reply, fake_endpoint, sse
@@ -242,13 +243,16 @@ class ToolRig:
 
     __slots__ = ("agent", "journal", "machine", "window")
 
-    def __init__(self, *, approvals: bool = False, workspace: Workspace | None = None, machine: FakeMachine | None = None) -> None:
+    def __init__(
+        self, *, approvals: bool = False, workspace: Workspace | None = None, machine: FakeMachine | None = None,
+        work: WorkExecution | None = None,
+    ) -> None:
         self.machine = machine if machine is not None else FakeMachine()
         self.window = FakeWindow()
         self.journal: list[dict[str, Json]] = []
         self.agent = Agent(
             Settings("", "", "", "", "", "", "", agent_approvals=approvals), self.machine, self.window,
-            threading.Event(), journal=self.journal.append, workspace=workspace,
+            threading.Event(), journal=self.journal.append, workspace=workspace, work=work,
         )
 
     def call(self, name: str, **arguments: Json) -> Output:

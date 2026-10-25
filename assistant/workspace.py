@@ -3,26 +3,43 @@ it does here touches the running toolkit; the keeper installs the workspace, aft
 checking it, when asked (see keeper.py)."""
 
 import difflib
-import subprocess
 import sys
 import tempfile
+import threading
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from keeper import LIVE, PROTECTED, WORKSPACE, copy_source, source_digest, source_files
 from selfcheck import compile_all
+
+from . import commands
 
 
 class SourceError(Exception):
     """A change the workspace refuses; its message is for the agent."""
 
 
+@dataclass(frozen=True, slots=True)
+class CheckCompleted:
+    passed: bool
+    report: str
+
+
+@dataclass(frozen=True, slots=True)
+class CheckInterrupted:
+    reason: str
+
+
+type CheckResult = CheckCompleted | CheckInterrupted
+
+
 class Workspace:
     __slots__ = ("live", "prepared", "root")
 
-    def __init__(self, live: Path = LIVE, root: Path = WORKSPACE) -> None:
+    def __init__(self, live: Path = LIVE, root: Path = WORKSPACE, *, resume: bool = False) -> None:
         self.live = live
         self.root = root
-        self.prepared = False
+        self.prepared = resume and (root / ".toolkit-workspace-ready").is_file()
 
     def ensure(self) -> None:
         """Copy source on the first source tool, then keep edits for follow-up requests."""
@@ -32,7 +49,9 @@ class Workspace:
     def reset(self) -> None:
         """Starts over from the running version."""
         self.prepared = False
+        (self.root / ".toolkit-workspace-ready").unlink(missing_ok=True)
         copy_source(self.live, self.root)
+        (self.root / ".toolkit-workspace-ready").write_text("ready", encoding="utf-8")
         self.prepared = True
 
     def files(self) -> list[str]:
@@ -107,6 +126,12 @@ class Workspace:
         return not problems, "\n".join(problems) or "Syntax checks pass."
 
     def check(self, timeout_s: float = 300, *, fast: bool = False) -> tuple[bool, str]:
+        result = self.inspect_check(timeout_s, fast=fast)
+        return (result.passed, result.report) if isinstance(result, CheckCompleted) else (False, result.reason)
+
+    def inspect_check(
+        self, timeout_s: float = 300, *, fast: bool = False, cancel: threading.Event | None = None,
+    ) -> CheckResult:
         """Run the stable selfcheck on a fresh copy so tests cannot leave stale bytecode in the draft."""
         with tempfile.TemporaryDirectory(prefix="toolkit-check-") as scratch:
             candidate = Path(scratch) / "source"
@@ -115,12 +140,9 @@ class Workspace:
             command = [sys.executable, str(self.live / "selfcheck.py"), str(candidate)]
             if fast:
                 command.append("--fast")
-            try:
-                done = subprocess.run(
-                    command, capture_output=True, timeout=timeout_s, check=False
-                )
-            except subprocess.TimeoutExpired:
-                return False, f"the checks took more than {timeout_s:.0f} seconds"
+            code, report = commands.run(command, timeout_s=timeout_s, cancel=cancel)
+            if code == -1:
+                return CheckInterrupted(report)
             if source_digest(candidate) != digest:
-                return False, "Runtime checks changed the candidate source; fix the tests and check again."
-            return done.returncode == 0, (done.stdout + done.stderr).decode("utf-8", errors="replace")
+                return CheckCompleted(False, "Runtime checks changed the candidate source; fix the tests and check again.")
+            return CheckCompleted(code == 0, report)

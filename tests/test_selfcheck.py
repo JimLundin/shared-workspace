@@ -68,6 +68,16 @@ def test_a_module_that_cant_import_fails(tmp_path: Path) -> None:
     assert "doesn't import: tools.needs" in report
 
 
+def test_missing_native_ui_dependencies_are_only_skipped_off_windows(tmp_path: Path) -> None:
+    native = {f"tools/native_{index}.py": f"raise ModuleNotFoundError(\"No module named '{name}'\")\n"
+              for index, name in enumerate(("PySide6", "shiboken6", "win32more"))}
+    code, report = selfcheck(tree(tmp_path, {**SOUND, **native}))
+    if sys.platform == "win32":
+        assert code == 1 and all(f"doesn't import: tools.native_{index}" in report for index in range(3)), report
+    else:
+        assert code == 0 and "2 passed" in report, report
+
+
 def test_a_crashing_test_module_fails(tmp_path: Path) -> None:
     code, report = selfcheck(tree(tmp_path, {**SOUND, "tests/test_bad.py": "raise RuntimeError('boom')\n"}))
     assert code == 1

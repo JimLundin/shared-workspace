@@ -1,5 +1,6 @@
 """Windows bindings at their boundaries, without touching the real keyboard."""
 
+import queue
 import sys
 import threading
 import unittest
@@ -16,6 +17,7 @@ from assistant.activity import ActivityTracker
 from assistant.app import AssistantApp
 from assistant.llm import Settings
 from assistant.meeting_store import MeetingArchive
+from assistant.meeting_workflow import MeetingWorkflow
 from assistant.meetings import Meetings
 from assistant.overlay import OverlayState
 from assistant.ui import Ui
@@ -40,7 +42,7 @@ from tests.test_engine import Harness
 from winapi import inputs, recording, shell, windows
 from winapi.shapes import Rect
 
-from .test_agent_runner import RunnerRig
+from .test_work_agent import WorkRig
 
 
 @contextmanager
@@ -151,15 +153,14 @@ def test_escape_toggle_clears_highlights_with_other_keys_still_held() -> None:
         assert messages[-1] == (WM_KEY_STATE, 0, 0)
 
 
-def test_assistant_routes_physical_chords_and_resets_to_the_overlay() -> None:
-    app = menu_app(LayoutState.ON)
-    app.ui = Ui.__new__(Ui)
+def test_assistant_routes_physical_chords_and_resets_to_the_overlay(tmp_path: Path) -> None:
     shown: list[tuple[frozenset[Scancode], bool]] = []
 
     def show(pressed: frozenset[Scancode], *, reset: bool = False) -> None:
         shown.append((pressed, reset))
 
-    with patch("assistant.app.Ui.show_pressed_keys", side_effect=show):
+    with menu_app(LayoutState.ON, tmp_path) as app, patch("assistant.app.Ui.show_pressed_keys", side_effect=show):
+        app.ui = Ui.__new__(Ui)
         for key, down in ((0x32, 1), (0x10, 1), (0x10, 0), (0, 0)):
             assert app.on_message(1, WM_KEY_STATE, key, down) == 0
     assert shown == [
@@ -318,22 +319,27 @@ def test_layout_query_includes_the_current_locked_layer_for_a_new_overlay() -> N
     assert layers == [(Layer.SYM.value, True, True)]
 
 
-def menu_app(state: LayoutState | None) -> AssistantApp:
+@contextmanager
+def menu_app(state: LayoutState | None, folder: Path) -> Generator[AssistantApp]:
     """Only the state the menu needs; no native windows or microphone are opened."""
     app = AssistantApp.__new__(AssistantApp)
     app.layout = state
     app.overlay = OverlayState(layout_on=state is LayoutState.ON)
     app.window = shell.AppWindow.__new__(shell.AppWindow)
     app.window.handle = 1
-    app.agent = RunnerRig().runner
+    rig = WorkRig(folder)
+    app.agent = rig.agent
     app.settings = Settings("", "", "", "", "", "", "")
     app.meetings = Meetings(
         app.settings, lambda source: recording.MeetingAudio(), archive=MeetingArchive(Path(__file__).parent / "missing-meeting-fixture"),
     )
-    return app
+    try:
+        yield app
+    finally:
+        rig.close()
 
 
-def check_layout_toggle(state: LayoutState) -> None:
+def check_layout_toggle(state: LayoutState, folder: Path) -> None:
     requests: list[int] = []
 
     def choose(window: int, items: Sequence[shell.MenuItem]) -> int:
@@ -353,20 +359,21 @@ def check_layout_toggle(state: LayoutState) -> None:
         return True
 
     with (
+        menu_app(state, folder) as app,
         patch("assistant.app.shell.show_menu", side_effect=choose),
         patch("assistant.app.windows.find", side_effect=find),
         patch("assistant.app.system.post_message", side_effect=post_message),
     ):
-        menu_app(state).menu()
+        app.menu()
     assert requests == [WM_TOGGLE_LAYOUT]
 
 
-def test_layout_status_is_the_toggle_and_shows_its_hotkey() -> None:
+def test_layout_status_is_the_toggle_and_shows_its_hotkey(tmp_path: Path) -> None:
     for state in (LayoutState.ON, LayoutState.OFF):
-        check_layout_toggle(state)
+        check_layout_toggle(state, tmp_path)
 
 
-def test_stopped_layout_has_a_start_action_and_no_active_toggle_hotkey() -> None:
+def test_stopped_layout_has_a_start_action_and_no_active_toggle_hotkey(tmp_path: Path) -> None:
     def inspect_menu(window: int, items: Sequence[shell.MenuItem]) -> int:
         assert items[0].text == "Layout: not running"
         assert not items[0].enabled
@@ -377,11 +384,11 @@ def test_stopped_layout_has_a_start_action_and_no_active_toggle_hotkey() -> None
 
     with patch("assistant.app.shell.show_menu", side_effect=inspect_menu):
         for state in (None, LayoutState.QUIT):
-            menu_app(state).menu()
+            with menu_app(state, tmp_path) as app:
+                app.menu()
 
 
-def test_tray_overlay_toggle_updates_and_remembers_the_preference() -> None:
-    app = menu_app(LayoutState.ON)
+def test_tray_overlay_toggle_updates_and_remembers_the_preference(tmp_path: Path) -> None:
     saved: list[bool] = []
     shown: list[bool] = []
 
@@ -394,6 +401,7 @@ def test_tray_overlay_toggle_updates_and_remembers_the_preference() -> None:
         shown.append(app.overlay.visible)
 
     with (
+        menu_app(LayoutState.ON, tmp_path) as app,
         patch("assistant.app.shell.show_menu", side_effect=choose),
         patch("assistant.app.indicator_area", return_value=Rect(0, 0, 1920, 1040)),
         patch("assistant.app.AssistantApp.show_overlay", side_effect=show_overlay),
@@ -405,7 +413,7 @@ def test_tray_overlay_toggle_updates_and_remembers_the_preference() -> None:
     assert saved == [False, True]
 
 
-def test_assistant_queries_a_layout_that_started_before_it() -> None:
+def test_assistant_queries_a_layout_that_started_before_it(tmp_path: Path) -> None:
     requests: list[int] = []
 
     def post_message(hwnd: int, message: int, wparam: int, lparam: int) -> bool:
@@ -413,15 +421,40 @@ def test_assistant_queries_a_layout_that_started_before_it() -> None:
         requests.append(message)
         return True
 
-    app = menu_app(None)
-    app.activity = ActivityTracker(lambda: "unavailable", lambda: False, enabled=False)
-    app.worker = threading.Thread()
     with (
+        menu_app(None, tmp_path) as app,
         patch("assistant.app.windows.find", return_value=2),
         patch("assistant.app.system.post_message", side_effect=post_message),
         patch("assistant.app.system.run_message_loop"),
         patch("assistant.app.keeper.ready"),
+        patch("assistant.app.Ui.desktop"),
+        patch("assistant.app.MeetingWorkflow.start"),
         patch("threading.Thread.start"),
     ):
+        app.ui = Ui.__new__(Ui)
+        app.followups = MeetingWorkflow.__new__(MeetingWorkflow)
+        app.activity = ActivityTracker(lambda: "unavailable", lambda: False, enabled=False)
+        app.worker = threading.Thread()
         app.run()
     assert requests == [WM_QUERY_LAYOUT_STATE]
+
+
+def test_meeting_file_handoff_keeps_canonical_path_and_reports_shell_failure(tmp_path: Path) -> None:
+    app = AssistantApp.__new__(AssistantApp)
+    app.jobs = queue.Queue()
+    path = tmp_path / "saved-follow-up.eml"
+    opened: list[Path] = []
+    problems: list[str] = []
+
+    def unavailable(target: Path) -> None:
+        opened.append(target)
+        raise OSError("The registered application cannot open this path")
+
+    with patch("assistant.app.os.startfile", side_effect=unavailable), patch.object(AssistantApp, "problem", side_effect=problems.append):
+        app.open_meeting_file(path)
+        assert not opened and not problems
+        job = app.jobs.get_nowait()
+        assert job is not None
+        job()
+    assert opened == [path]
+    assert problems == ["Windows could not open this file. You can still review it in Meetings."]

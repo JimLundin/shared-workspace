@@ -319,6 +319,9 @@ class NativeSessions:
         ]
         if not visible:
             arguments.append("--headless=new")
+            if sys.platform == "win32":
+                # Repaint an offscreen surface without waiting for presentation.
+                arguments.append("--enable-features=CDPScreenshotNewSurface")
         arguments.extend(["--new-window", "about:blank"])
         job: Job | None = None
         owner: Managed | None = None

@@ -11,6 +11,11 @@ dependencies = [
     "markdown-it-py==4.0.0",
     "httpx==0.28.1",
     "websockets==16.1.1",
+    "PySide6-Essentials==6.12.0; sys_platform == 'win32'",
+    "PySide6-WebEngine==6.12.0.140; sys_platform == 'win32'",
+    "win32more-core==0.8.7; sys_platform == 'win32'",
+    "win32more-Microsoft.Windows.SDK.Contracts==0.8.10.0.28000.2705; sys_platform == 'win32'",
+    "win32more-Microsoft.Windows.SDK.Win32Metadata==0.8.71.0.26; sys_platform == 'win32'",
 ]
 
 [tool.mypy]
@@ -27,9 +32,20 @@ warn_unreachable = true
 [[tool.mypy.overrides]]
 # The ctypes, GUI, SDK and inspection boundaries: values inside may be Any
 # until converted; every public signature is concrete, so nothing untyped leaves.
-module = ["winapi", "winapi.*", "assistant.ui", "assistant.agent_panel", "assistant.agent_toasts", "assistant.tk_text", "assistant.sdk", "selfcheck"]
+module = ["winapi", "winapi.*", "assistant.ui", "assistant.agent_panel", "assistant.work_panel", "assistant.agent_toasts", "assistant.qt_text", "assistant.qt_ui", "assistant.toast_card", "assistant.sdk", "selfcheck"]
 disallow_any_expr = false
 disallow_any_explicit = false
+
+[[tool.mypy.overrides]]
+# Native canvas widgets have the same typed Qt signal boundary as the conversation.
+module = ["assistant.canvas_ui", "assistant.canvas_web", "assistant.canvas_widgets", "assistant.canvas_launcher", "assistant.widgets", "assistant.canvas_icons", "assistant.meeting_panel", "keeper_ui"]
+disallow_any_expr = false
+disallow_any_explicit = false
+
+[[tool.mypy.overrides]]
+# Generated WinRT bindings are validated inside the native composition boundary.
+module = ["win32more", "win32more.*"]
+ignore_missing_imports = true
 
 [tool.pyright]
 pythonVersion = "3.15"
@@ -51,10 +67,10 @@ ignore = ["PLR2004", "PLR0911", "PLR0912", "PLR0913"]
 "winapi/*.py" = ["E501", "N816", "PLR0917"]
 
 [tool.setuptools]
-py-modules = ["config", "keeper", "protocol", "runtime", "selfcheck", "usage"]
+py-modules = ["config", "keeper", "keeper_ui", "protocol", "runtime", "selfcheck", "usage"]
 
 [tool.setuptools.packages.find]
-include = ["assistant*", "miryoku*", "winapi*"]
+include = ["assistant*", "automation*", "miryoku*", "winapi*"]
 
 [tool.setuptools.package-data]
-assistant = ["*.ps1"]
+assistant = ["*.ps1", "canvas_assets/*", "canvas_assets/examples/*"]

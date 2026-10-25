@@ -1,4 +1,4 @@
-"""Recording values and decisions, independent of devices, storage, threads, and Tk."""
+"""Recording values and decisions, independent of devices, storage, threads, and widgets."""
 
 from dataclasses import dataclass
 from enum import Enum, auto

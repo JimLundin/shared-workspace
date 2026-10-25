@@ -1,5 +1,5 @@
 # Windows x64 CPython 3.15 dependencies for the bundled interpreter.
-# Native Tk comes from the pinned full Python distribution.
+# Qt renders native controls and the HTML canvas; the Python archive excludes Tcl/Tk.
 annotated-types==0.8.0 --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
 anyio==4.15.1 --hash=sha256:6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101
 attrs==26.1.0 --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309
@@ -44,3 +44,11 @@ typing-inspection==0.4.4 --hash=sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c9
 urllib3==2.8.0 --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3
 uvicorn==0.54.0 --hash=sha256:505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf
 websockets==16.1.1 --hash=sha256:6abbd3e82c731c8e531714466acd5d87b5e88ac3243465337ba71d68e23ae7e3
+
+PySide6-Essentials==6.12.0 --hash=sha256:c9a95102aa23c1f86516a30d5a9be37552d324eee7e567eb7508973f1218cb42
+PySide6-Addons==6.12.0 --hash=sha256:98d8d62010da6605344cee83e5c96fb846170a1f2d924523f10f5d92078b02b0
+PySide6-WebEngine==6.12.0.140 --hash=sha256:f9b61b1d457a591ee590a6b80515f25a3e61e2576a2a0a70566380f9d9de4ab0
+shiboken6==6.12.0 --hash=sha256:a1906cb8116869178c64b6bab52623bbc8b4ceed7b30bfc3c9aa0f6e67f6438e
+win32more-core==0.8.7 --hash=sha256:7420eeb98bcd99a67943c046a24d02accf19a3241571ce691108adc4676ca7d7
+win32more-Microsoft.Windows.SDK.Contracts==0.8.10.0.28000.2705 --hash=sha256:3e5d0373719a41c0a1e19dbe78f2110c7d50f718419f13872febfb9f3d171d73
+win32more-Microsoft.Windows.SDK.Win32Metadata==0.8.71.0.26 --hash=sha256:e08d06c31630e85b0df3cccb35ad9b3c80e69ac6b2d1b708a4d66289b9769baf

@@ -107,7 +107,7 @@ def test_teams_setup_is_offline_and_unconfigured_status_is_actionable(tmp_path: 
     result = decoded(teams.request("configure", CONFIG, threading.Event()))
     assert result["configured"] and decoded((teams.folder / "config.json").read_text()) == CONFIG
     assert not teams.store.path.exists() and not http.received
-    assert set(SCOPES) == {"User.Read", "User.ReadBasic.All", "Chat.ReadBasic", "Chat.Create", "ChatMessage.Send"}
+    assert set(SCOPES) == {"User.Read", "User.ReadBasic.All", "Chat.Read", "Chat.Create", "ChatMessage.Send"}
 
 
 def test_environment_overrides_cannot_silently_ignore_saved_configuration(tmp_path: Path) -> None:
@@ -289,6 +289,48 @@ def test_consent_denial_does_not_leak_graph_diagnostics_and_stop_prevents_sends(
         stop.set()
         with TestCase().assertRaisesRegex(GraphError, "Stopped"):
             teams.request("send_message", {"chat_id": "fixture-chat", "text": "never"}, stop)
+        assert len(http.received) == 1
+
+
+def test_message_readback_binds_chat_and_message_ids_without_retaining_content(tmp_path: Path) -> None:
+    with integration(tmp_path, signed_in=True) as (teams, http):
+        before = {file.name: file.read_bytes() for file in tmp_path.iterdir() if file.is_file()}
+        http.replies.append((200, {
+            "id": "message/one?", "createdDateTime": "2026-10-23T12:00:00Z",
+            "body": {"contentType": "text", "content": "private sent message"},
+        }))
+        result = decoded(teams.request("read_messages", {"chat_id": "chat/one?", "message_id": "message/one?"}, threading.Event()))
+        sent = http.received[-1]
+        assert sent.method == "GET" and sent.body is None
+        assert sent.url == GRAPH + "/chats/chat%2Fone%3F/messages/message%2Fone%3F"
+        assert result["chat_id"] == "chat/one?" and "private sent message" in str(result["messages"])
+        assert {file.name: file.read_bytes() for file in tmp_path.iterdir() if file.is_file()} == before
+        assert "fixture-access-secret" not in str(result)
+        http.replies.append((200, {"id": "wrong-message", "body": {"contentType": "text", "content": "wrong"}}))
+        with TestCase().assertRaisesRegex(GraphError, "different message"):
+            teams.request("read_messages", {"chat_id": "chat/one?", "message_id": "expected-message"}, threading.Event())
+
+
+def test_recent_message_readback_is_bounded_validated_and_cancellable(tmp_path: Path) -> None:
+    with integration(tmp_path, signed_in=True) as (teams, http):
+        values: list[Json] = [{"id": str(index), "createdDateTime": "2026-10-23T12:00:00Z",
+                               "body": {"contentType": "text", "content": "x" * 11_000}} for index in range(30)]
+        http.replies.append((200, {"value": values, "@odata.nextLink": "https://untrusted.invalid/never-followed"}))
+        output = teams.request("read_messages", {"chat_id": "release-chat", "limit": 20}, threading.Event())
+        result = decoded(output)
+        assert len(output) <= MAX_OUTPUT and result["more_available"]
+        assert len(http.received) == 1 and http.received[0].method == "GET"
+        assert parse_qs(urlsplit(http.received[0].url).query)["$top"] == ["20"]
+        invalid_inputs: tuple[dict[str, Json], ...] = (
+            {"chat_id": ""}, {"chat_id": "release-chat", "limit": 21}, {"chat_id": "release-chat", "limit": True},
+        )
+        for invalid in invalid_inputs:
+            with TestCase().assertRaises(GraphError):
+                teams.request("read_messages", invalid, threading.Event())
+        stop = threading.Event()
+        stop.set()
+        with TestCase().assertRaises(GraphError):
+            teams.request("read_messages", {"chat_id": "release-chat"}, stop)
         assert len(http.received) == 1
 
 

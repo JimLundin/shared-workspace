@@ -25,8 +25,8 @@ from .test_agent import calls, says
 if sys.platform != "win32" or os.environ.get("TOOLKIT_E2E") != "1":
     raise unittest.SkipTest("end-to-end tests run on Windows, with TOOLKIT_E2E=1")
 
-import tkinter as tk
-
+from assistant.qt import QtCore, QtWidgets
+from assistant.qt_ui import application
 from protocol import ASSISTANT_WINDOW, MAGIC
 from winapi import clipboard, inputs, screen, system, windows
 from winapi.shapes import Rect
@@ -81,7 +81,7 @@ def type_ascii(text: str) -> None:
 
 @contextmanager
 def toolkit(endpoint: FakeEndpoint, home: Path, live: Path = ROOT) -> Generator[None]:
-    """The toolkit as the user starts it: the keeper, running the layout and the assistant
+    """The toolkit as the user starts it: the keeper, running layout, assistant, and automation
     from `live`. Logs and state go under `home` (it's LOCALAPPDATA)."""
     env = {
         **os.environ, "OPENAI_BASE_URL": endpoint.url, "OPENAI_API_KEY": "k", "TOOLKIT_CHAT_MODEL": "chat",
@@ -104,24 +104,28 @@ def toolkit(endpoint: FakeEndpoint, home: Path, live: Path = ROOT) -> Generator[
 
 def both_ready(home: Path) -> bool:
     state = home / "toolkit" / "keeper"
-    return (state / "ready-layout").exists() and (state / "ready-assistant").exists()
+    return (state / "ready-layout").exists() and (state / "ready-assistant").exists() and (state / "ready-automation").exists()
 
 
 @contextmanager
-def text_box(text: str) -> Generator[tuple[tk.Tk, tk.Entry]]:
-    root = tk.Tk()
-    root.geometry("500x80+300+300")
-    entry = tk.Entry(root, width=40)
-    entry.pack()
-    entry.insert(0, text)
-    root.update()
-    windows.focus(int(root.wm_frame(), 16))
-    entry.focus_set()
-    root.update()
+def text_box(text: str) -> Generator[tuple[QtWidgets.QWidget, QtWidgets.QLineEdit]]:
+    app = application()
+    root = QtWidgets.QWidget()
+    root.setGeometry(300, 300, 500, 80)
+    layout = QtWidgets.QVBoxLayout(root)
+    entry = QtWidgets.QLineEdit(text)
+    layout.addWidget(entry)
+    root.show()
+    root.activateWindow()
+    entry.setFocus()
+    app.processEvents()
     try:
         yield root, entry
     finally:
-        root.destroy()
+        root.hide()
+        root.deleteLater()
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+
 
 
 def logs(home: Path) -> str:
@@ -139,14 +143,12 @@ def test_the_toolkit_end_to_end() -> None:
 
 
 def run_everything(home: Path) -> None:
-    keeper = tk.Tk()  # this process's own windows keep answering, like any real program
-    keeper.withdraw()
+    keeper = application()  # This process keeps answering native window messages.
     with fake_endpoint() as endpoint, toolkit(endpoint, home):
         in_a_text_box(endpoint)
-        screen_text(endpoint, keeper.update)
-        ask(endpoint, keeper.update)
-        agent(endpoint, home, keeper.update)
-    keeper.destroy()
+        screen_text(endpoint, keeper.processEvents)
+        ask(endpoint, keeper.processEvents)
+        agent(endpoint, home, keeper.processEvents)
     used = (home / "toolkit" / "usage.jsonl").read_text(encoding="utf-8")
     for feature in ('"fix"', '"snap_left"', '"screen_text"', '"ask"', '"agent_typed"'):
         assert feature in used, feature
@@ -156,27 +158,28 @@ def in_a_text_box(endpoint: FakeEndpoint) -> None:
     with text_box("helo wrld") as (root, entry):
         # Rewrite: the selection is copied, sent, and replaced by the answer.
         endpoint.replies = [answered("Hello, world.")]
-        entry.select_range(0, "end")
-        root.update()
+        entry.selectAll()
+        QtWidgets.QApplication.processEvents()
         chord(TAB, FIX)
-        assert wait_for(lambda: entry.get() == "Hello, world.", root.update), entry.get()
+        assert wait_for(lambda: entry.text() == "Hello, world.", QtWidgets.QApplication.processEvents), entry.text()
         assert b"helo wrld" in endpoint.last.body
 
         # The layer indicator: shown while Nav is held, without taking the keyboard.
-        frame = int(root.wm_frame(), 16)
+        frame = int(root.winId())
         work = next(m.work for m in screen.monitors() if m.primary)
         middle = work.left + work.width // 2
         bottom = Rect(middle - 40, work.bottom - 60, middle + 40, work.bottom - 30)
         inputs.send_scancodes([(SPACE, True)], extra=0)
-        assert wait_for(lambda: lit(bottom), root.update), "no indicator"
+        assert wait_for(lambda: lit(bottom), QtWidgets.QApplication.processEvents), "no indicator"
         assert windows.foreground() == frame, "the indicator took the focus"
         inputs.send_scancodes([(SPACE, False)], extra=0)
-        assert wait_for(lambda: not lit(bottom), root.update), "the indicator stayed"
+        assert wait_for(lambda: not lit(bottom), QtWidgets.QApplication.processEvents), "the indicator stayed"
 
         # Window keys: snap the window to the left half of the screen.
         chord(DELETE, SNAP_LEFT)
         work = screen.monitor_of(frame).work
-        assert wait_for(lambda: abs(root.winfo_x() - work.left) < 20 and root.winfo_width() > work.width // 2 - 40, root.update), root.geometry()
+        assert wait_for(lambda: abs(windows.outer_rect(frame).left - work.left) < 20 and windows.outer_rect(frame).width > work.width // 2 - 40,
+                        QtWidgets.QApplication.processEvents), root.geometry()
 
 
 def screen_text(endpoint: FakeEndpoint, pump: Callable[[], None]) -> None:

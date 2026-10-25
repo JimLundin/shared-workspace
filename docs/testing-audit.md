@@ -73,7 +73,7 @@ This audit ran ordinary Windows integrations, not those manual desktop E2Es.
   are now asserted rather than merely exercised. The native UIA scenario fell
   from 42.6s to 10.0s in the recorded runs.
 * **Copied runtime:** the native smoke test starts a fresh copied-source process,
-  imports the inherited SDK and panel, and constructs a real Tk window. It no
+  imports the inherited SDK and panel, and constructs a real Qt window. It no
   longer reruns the entire panel scenario that the suite already executes.
 * **Recovery synchronization:** the transcript recovery test waits for the
   existing public `on_update` completion signal, then closes the worker and
@@ -236,20 +236,35 @@ Nine mutations in the current campaign preserve observable behavior:
   inside turns; requests still precede their turn, and the sole recording card
   still follows the conversation. Tests do not require arbitrary numeric ranks.
 
-The 37 native conversation checks cover the attached result, reversing a
+The Qt renderer's 37 native conversation checks cover the attached result, reversing a
 disclosure transition without losing selection, immediate keyboard disclosure,
 independent step scrolling and its overflow marker, full glass hit targets,
-solid/high-contrast fallback, and asynchronous material observation. A live
+solid/high-contrast fallback, fractional DPI alignment, recording transcript
+tail-following, and asynchronous material observation. All 37 passed on Windows
+with the pinned Python 3.15.1 and Qt 6.12.0 runtime. A live
 50-sample desktop measurement found a median 28.0 ms and p95 34.5 ms for the four
 background pixels with GC enabled. Those reads therefore run in one bounded
-worker, not in a Tk callback; observations from an old rectangle are discarded.
+worker, not in a UI callback; observations from an old rectangle are discarded.
 A follow-up run measured the nonblocking result poll at 0.0012 ms median and
 0.0119 ms maximum; the first worker submission took 2.89 ms.
-Native validation also exposed Tk invalidating its wrapped text-height cache
-after a material color change. Paging could then use an incorrect, even negative,
-scroll range. A failing regression now checks that a material change preserves
-the long reply's range and reading position; resolving text metrics after the
-style update fixes the failure without changing the reading model.
+The earlier Tk renderer exposed a wrapped-height cache failure after material
+changes. The Qt replacement retains that behavioral regression: recoloring must
+preserve a long reply's range and reading position. Native validation also caught
+Qt's insertion cursor taking a waiting reply to its ending. Restoring both its
+position and selection anchor preserves the reading order without selecting new
+text; recordings explicitly follow their latest transcript line.
+At 125% display scaling, repeatedly applying the same requested frame could undo
+Qt's final pixel rounding and flood native movement messages during a burst.
+A regression failed on the redundant movement before the fix. Unchanged frames
+now leave the foreground alone, and the composition layer follows its painted
+bounds. The burst test and shadow-alignment checks pass. These changes leave the
+decision functions in the combined-bubble mutation campaign unchanged.
+
+The extracted bundle exposed an import-order interaction between PySide6 6.12
+and Python 3.15's lazy `ThreadPoolExecutor` export. Importing Qt before that export
+was resolved made SDK requests fail in `asyncio.to_thread`. A subprocess
+regression reproduces the failure in a fresh interpreter. The shared Qt import
+boundary resolves the executor first; it does not patch Python or vendor files.
 
 Reproduce the current decision campaigns with pytest installed:
 
