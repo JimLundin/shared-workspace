@@ -1,0 +1,130 @@
+{
+  "empty": {
+    "samples": 5,
+    "memory": [],
+    "metrics": {
+      "rss_bytes": {
+        "median": 444035072,
+        "minimum": 443138048,
+        "maximum": 445652992,
+        "median_delta_from_empty": 0
+      },
+      "pss_bytes": {
+        "median": 188293120,
+        "minimum": 186807296,
+        "maximum": 189363200,
+        "median_delta_from_empty": 0
+      },
+      "private_bytes": {
+        "median": 90165248,
+        "minimum": 88551424,
+        "maximum": 90652672,
+        "median_delta_from_empty": 0
+      }
+    }
+  },
+  "turso-default": {
+    "samples": 5,
+    "memory": [
+      {
+        "descriptor": {
+          "initial": 4000,
+          "maximum": 65536,
+          "shared": true
+        },
+        "initial_buffer_bytes": 262144000,
+        "current_buffer_bytes": 276955136,
+        "shared": true
+      }
+    ],
+    "metrics": {
+      "rss_bytes": {
+        "median": 530898944,
+        "minimum": 530550784,
+        "maximum": 532992000,
+        "median_delta_from_empty": 86863872
+      },
+      "pss_bytes": {
+        "median": 272864256,
+        "minimum": 271144960,
+        "maximum": 273607680,
+        "median_delta_from_empty": 84571136
+      },
+      "private_bytes": {
+        "median": 172392448,
+        "minimum": 172163072,
+        "maximum": 172851200,
+        "median_delta_from_empty": 82227200
+      }
+    }
+  },
+  "turso-minimum": {
+    "samples": 5,
+    "memory": [
+      {
+        "descriptor": {
+          "initial": 1009,
+          "maximum": 65536,
+          "shared": true
+        },
+        "initial_buffer_bytes": 66125824,
+        "current_buffer_bytes": 80936960,
+        "shared": true
+      }
+    ],
+    "metrics": {
+      "rss_bytes": {
+        "median": 519143424,
+        "minimum": 517455872,
+        "maximum": 519897088,
+        "median_delta_from_empty": 75108352
+      },
+      "pss_bytes": {
+        "median": 260848640,
+        "minimum": 260208640,
+        "maximum": 261969920,
+        "median_delta_from_empty": 72555520
+      },
+      "private_bytes": {
+        "median": 161423360,
+        "minimum": 160690176,
+        "maximum": 161931264,
+        "median_delta_from_empty": 71258112
+      }
+    }
+  },
+  "sqlite": {
+    "samples": 5,
+    "memory": [
+      {
+        "descriptor": {
+          "initial": 128,
+          "maximum": 32768
+        },
+        "initial_buffer_bytes": 8388608,
+        "current_buffer_bytes": 8388608,
+        "shared": false
+      }
+    ],
+    "metrics": {
+      "rss_bytes": {
+        "median": 476737536,
+        "minimum": 475652096,
+        "maximum": 477708288,
+        "median_delta_from_empty": 32702464
+      },
+      "pss_bytes": {
+        "median": 217823232,
+        "minimum": 217478144,
+        "maximum": 218805248,
+        "median_delta_from_empty": 29530112
+      },
+      "private_bytes": {
+        "median": 117145600,
+        "minimum": 116793344,
+        "maximum": 117936128,
+        "median_delta_from_empty": 26980352
+      }
+    }
+  }
+}

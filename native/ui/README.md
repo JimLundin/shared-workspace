@@ -27,11 +27,15 @@ native store and is read again on launch.
 Speech uses the native `workspace-voice` plugin with session identities. iOS
 transcripts retain their addressed context; Windows opens its OS dictation
 control after the command field is focused. QR rendering is local. Camera scans
-only fill a ticket for explicit joining; tickets are not logged. Network
+only fill a ticket for explicit joining; tickets are not logged. Invitations stay
+under a copy/paste disclosure by default, with explicit workspace selection. The
+shared Host interface accepts optional observed joining stages; adapters without
+them retain a generic waiting state. Retry guidance uses the last observed stage,
+and saving progress does not stand in for a committed result. Network
 unavailability is separate from a readable local store.
 
-Validation at this checkpoint: production build; 19 public-interface unit tests;
-5 browser checks; 3 targeted mutants caught by their intended assertions. Browser
+Validation at this checkpoint: production build; 21 public-interface unit tests;
+8 browser checks; 3 targeted mutants caught by their intended assertions. Browser
 fixtures are exclusively under `tests/`, not imported by the production entry.
 They validate UI behavior, not real Turso/Iroh/native speech/camera operation.
 The ordinary-browser check verifies that a missing bridge stays unavailable.

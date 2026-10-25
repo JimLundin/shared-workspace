@@ -1,0 +1,9 @@
+{
+  "status": "killed",
+  "mutation": "Disable terminal DNS dot normalization",
+  "baseline_relay_source_sha256": "a1836021c9a1df09e422b023beed5bf9377979e7958284a3b7e0646caccca705",
+  "baseline_wasm_sha256": "b1975d4f425df97231b25ccf98a8d34bf63bcb573c30ff2f08672a52ecfa374c",
+  "mutant_wasm_sha256": "8f1781c7d70100f66ea72b92f820bf579da96e1e2061813a8449bae20b8dbde9",
+  "observed_failure": "Real WebKit endpoint online/address times out while Chromium completes with the same build",
+  "timestamp": "2026-10-25T17:27:58.249Z"
+}

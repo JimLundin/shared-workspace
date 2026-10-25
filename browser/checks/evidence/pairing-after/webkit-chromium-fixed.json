@@ -1,0 +1,1183 @@
+{
+  "kind": "browser-pairing-diagnosis-v1",
+  "passed": true,
+  "mode": "pair",
+  "laptop_state": "active",
+  "empty_workspace": false,
+  "laptop_engine": "webkit",
+  "phone_engine": "chromium",
+  "started_at": "2026-10-25T17:34:13.969Z",
+  "stages": [
+    {
+      "stage": "fixture.build",
+      "elapsed_ms": 14
+    },
+    {
+      "stage": "laptop.browser.launch",
+      "elapsed_ms": 391,
+      "engine": "webkit"
+    },
+    {
+      "stage": "laptop.browser.ready",
+      "elapsed_ms": 1441,
+      "capabilities": {
+        "secure_context": true,
+        "cross_origin_isolated": true,
+        "opfs": true,
+        "web_locks": true,
+        "visibility": "visible"
+      }
+    },
+    {
+      "stage": "laptop.open.begin",
+      "elapsed_ms": 1442,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.open.completed",
+      "elapsed_ms": 1863,
+      "duration_ms": 421,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.host.ready",
+      "elapsed_ms": 1863,
+      "network": "active",
+      "workspaces": 0
+    },
+    {
+      "stage": "laptop.command.begin",
+      "elapsed_ms": 1863,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.command.completed",
+      "elapsed_ms": 1876,
+      "duration_ms": 13,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.command.begin",
+      "elapsed_ms": 1876,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.command.completed",
+      "elapsed_ms": 1886,
+      "duration_ms": 10,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.invite.begin",
+      "elapsed_ms": 1886,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.invite.completed",
+      "elapsed_ms": 3026,
+      "duration_ms": 1140,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 2,
+        "sent_bytes": 107,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "invitation.measured",
+      "elapsed_ms": 3048,
+      "url_bytes": 287,
+      "url_characters": 287,
+      "encoded_ticket_bytes": 234,
+      "qr_error_correction": "M",
+      "qr_modules": 65,
+      "qr_version": 12,
+      "workspace_count": 1,
+      "workspace_id_format": "UUID",
+      "device_name": "Web browser"
+    },
+    {
+      "stage": "phone.browser.launch",
+      "elapsed_ms": 3049,
+      "engine": "chromium"
+    },
+    {
+      "stage": "phone.browser.ready",
+      "elapsed_ms": 3414,
+      "capabilities": {
+        "secure_context": true,
+        "cross_origin_isolated": true,
+        "opfs": true,
+        "web_locks": true,
+        "visibility": "visible"
+      }
+    },
+    {
+      "stage": "phone.open.begin",
+      "elapsed_ms": 3414,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.open.completed",
+      "elapsed_ms": 3795,
+      "duration_ms": 381,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.host.ready",
+      "elapsed_ms": 3795,
+      "network": "active",
+      "workspaces": 0
+    },
+    {
+      "stage": "laptop.snapshot.begin",
+      "elapsed_ms": 3796,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 2,
+        "sent_bytes": 107,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.snapshot.completed",
+      "elapsed_ms": 3801,
+      "duration_ms": 5,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 2,
+        "sent_bytes": 107,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.before_join",
+      "elapsed_ms": 3803,
+      "network": "active",
+      "visibility": "visible"
+    },
+    {
+      "stage": "phone.join.begin",
+      "elapsed_ms": 3803,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.join.progress",
+      "elapsed_ms": 5161,
+      "observed_stages": [
+        "checking_invitation",
+        "connecting_relay",
+        "contacting_device",
+        "saving_workspace"
+      ],
+      "last_stage": "saving_workspace"
+    },
+    {
+      "stage": "phone.join.completed",
+      "elapsed_ms": 5161,
+      "duration_ms": 1358,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 15,
+        "sent_bytes": 8710,
+        "received_frames": 11,
+        "received_bytes": 6423,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.snapshot.begin",
+      "elapsed_ms": 5162,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 12,
+        "sent_bytes": 7993,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.snapshot.completed",
+      "elapsed_ms": 5167,
+      "duration_ms": 5,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 12,
+        "sent_bytes": 7993,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "pairing.confirmed",
+      "elapsed_ms": 5167,
+      "selected_workspaces": 1,
+      "resources": 1
+    },
+    {
+      "stage": "phone.join.begin",
+      "elapsed_ms": 5169,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 15,
+        "sent_bytes": 8710,
+        "received_frames": 11,
+        "received_bytes": 6423,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.join.progress",
+      "elapsed_ms": 5351,
+      "observed_stages": [
+        "checking_invitation",
+        "connecting_relay",
+        "contacting_device",
+        "saving_workspace"
+      ],
+      "last_stage": "saving_workspace"
+    },
+    {
+      "stage": "phone.join.completed",
+      "elapsed_ms": 5351,
+      "duration_ms": 182,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 41,
+        "sent_bytes": 23854,
+        "received_frames": 29,
+        "received_bytes": 19158,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.command.begin",
+      "elapsed_ms": 5351,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 41,
+        "sent_bytes": 23854,
+        "received_frames": 29,
+        "received_bytes": 19158,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.command.completed",
+      "elapsed_ms": 5364,
+      "duration_ms": 12,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 42,
+        "sent_bytes": 23939,
+        "received_frames": 30,
+        "received_bytes": 19225,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.sync.begin",
+      "elapsed_ms": 5364,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 42,
+        "sent_bytes": 23939,
+        "received_frames": 30,
+        "received_bytes": 19225,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.sync.completed",
+      "elapsed_ms": 5881,
+      "duration_ms": 517,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 86,
+        "sent_bytes": 48349,
+        "received_frames": 65,
+        "received_bytes": 41906,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.snapshot.begin",
+      "elapsed_ms": 5881,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 67,
+        "sent_bytes": 43542,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.snapshot.completed",
+      "elapsed_ms": 5885,
+      "duration_ms": 4,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 67,
+        "sent_bytes": 43542,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.setForeground.begin",
+      "elapsed_ms": 5885,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 67,
+        "sent_bytes": 43542,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.setForeground.completed",
+      "elapsed_ms": 5914,
+      "duration_ms": 29,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 70,
+        "sent_bytes": 43797,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.setForeground.begin",
+      "elapsed_ms": 5915,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 89,
+        "sent_bytes": 48604,
+        "received_frames": 68,
+        "received_bytes": 43462,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.setForeground.completed",
+      "elapsed_ms": 5924,
+      "duration_ms": 9,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 89,
+        "sent_bytes": 48604,
+        "received_frames": 69,
+        "received_bytes": 43547,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.command.begin",
+      "elapsed_ms": 5924,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 70,
+        "sent_bytes": 43797,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.command.completed",
+      "elapsed_ms": 5935,
+      "duration_ms": 11,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 70,
+        "sent_bytes": 43797,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.command.begin",
+      "elapsed_ms": 5935,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 89,
+        "sent_bytes": 48604,
+        "received_frames": 69,
+        "received_bytes": 43547,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.command.completed",
+      "elapsed_ms": 5944,
+      "duration_ms": 9,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 89,
+        "sent_bytes": 48604,
+        "received_frames": 69,
+        "received_bytes": 43547,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.setForeground.begin",
+      "elapsed_ms": 5944,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 70,
+        "sent_bytes": 43797,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.setForeground.completed",
+      "elapsed_ms": 5949,
+      "duration_ms": 5,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 70,
+        "sent_bytes": 43797,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.setForeground.begin",
+      "elapsed_ms": 5950,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 89,
+        "sent_bytes": 48604,
+        "received_frames": 69,
+        "received_bytes": 43547,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.setForeground.completed",
+      "elapsed_ms": 5953,
+      "duration_ms": 3,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 89,
+        "sent_bytes": 48604,
+        "received_frames": 69,
+        "received_bytes": 43547,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.sync.begin",
+      "elapsed_ms": 5953,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 89,
+        "sent_bytes": 48604,
+        "received_frames": 69,
+        "received_bytes": 43547,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.sync.completed",
+      "elapsed_ms": 7017,
+      "duration_ms": 1064,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 168,
+        "sent_bytes": 95876,
+        "received_frames": 142,
+        "received_bytes": 88846,
+        "socket_errors": 0,
+        "socket_closes": 1,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.sync.begin",
+      "elapsed_ms": 7017,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 145,
+        "sent_bytes": 90732,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.sync.completed",
+      "elapsed_ms": 7183,
+      "duration_ms": 166,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 164,
+        "sent_bytes": 100226,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.snapshot.begin",
+      "elapsed_ms": 7184,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 180,
+        "sent_bytes": 102389,
+        "received_frames": 158,
+        "received_bytes": 98100,
+        "socket_errors": 0,
+        "socket_closes": 1,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.snapshot.completed",
+      "elapsed_ms": 7187,
+      "duration_ms": 3,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 180,
+        "sent_bytes": 102389,
+        "received_frames": 158,
+        "received_bytes": 98100,
+        "socket_errors": 0,
+        "socket_closes": 1,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.command.begin",
+      "elapsed_ms": 7187,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 180,
+        "sent_bytes": 102389,
+        "received_frames": 158,
+        "received_bytes": 98100,
+        "socket_errors": 0,
+        "socket_closes": 1,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.command.completed",
+      "elapsed_ms": 7196,
+      "duration_ms": 9,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 180,
+        "sent_bytes": 102389,
+        "received_frames": 159,
+        "received_bytes": 98167,
+        "socket_errors": 0,
+        "socket_closes": 1,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.sync.begin",
+      "elapsed_ms": 7197,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 180,
+        "sent_bytes": 102389,
+        "received_frames": 159,
+        "received_bytes": 98167,
+        "socket_errors": 0,
+        "socket_closes": 1,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.sync.completed",
+      "elapsed_ms": 7731,
+      "duration_ms": 534,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 228,
+        "sent_bytes": 131433,
+        "received_frames": 200,
+        "received_bytes": 121864,
+        "socket_errors": 0,
+        "socket_closes": 1,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.sync.begin",
+      "elapsed_ms": 7731,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 200,
+        "sent_bytes": 122194,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.sync.completed",
+      "elapsed_ms": 7899,
+      "duration_ms": 168,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 214,
+        "sent_bytes": 131278,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.snapshot.begin",
+      "elapsed_ms": 7900,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 214,
+        "sent_bytes": 131278,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.snapshot.completed",
+      "elapsed_ms": 7903,
+      "duration_ms": 3,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 214,
+        "sent_bytes": 131278,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.snapshot.begin",
+      "elapsed_ms": 7903,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 238,
+        "sent_bytes": 136450,
+        "received_frames": 209,
+        "received_bytes": 129219,
+        "socket_errors": 0,
+        "socket_closes": 1,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.snapshot.completed",
+      "elapsed_ms": 7907,
+      "duration_ms": 4,
+      "traffic": {
+        "sockets": 2,
+        "sent_frames": 238,
+        "sent_bytes": 136450,
+        "received_frames": 209,
+        "received_bytes": 129219,
+        "socket_errors": 0,
+        "socket_closes": 1,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.browser.launch",
+      "elapsed_ms": 7929,
+      "engine": "chromium"
+    },
+    {
+      "stage": "phone.browser.ready",
+      "elapsed_ms": 8101,
+      "capabilities": {
+        "secure_context": true,
+        "cross_origin_isolated": true,
+        "opfs": true,
+        "web_locks": true,
+        "visibility": "visible"
+      }
+    },
+    {
+      "stage": "phone.open.begin",
+      "elapsed_ms": 8101,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.open.completed",
+      "elapsed_ms": 8427,
+      "duration_ms": 326,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.host.ready",
+      "elapsed_ms": 8427,
+      "network": "active",
+      "workspaces": 1
+    },
+    {
+      "stage": "phone.snapshot.begin",
+      "elapsed_ms": 8427,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.snapshot.completed",
+      "elapsed_ms": 8431,
+      "duration_ms": 4,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.sync.begin",
+      "elapsed_ms": 8431,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "phone.sync.completed",
+      "elapsed_ms": 9761,
+      "duration_ms": 1330,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 13,
+        "sent_bytes": 7633,
+        "received_frames": 9,
+        "received_bytes": 4744,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    }
+  ],
+  "assertions": [
+    "single-workspace-invitation-stays-within-300-bytes",
+    "single-workspace-invitation-qr-stays-within-69-modules",
+    "join-receipt-follows-saving-stage-1",
+    "join-progress-precedes-receipt-1",
+    "join-transfers-selected-workspace",
+    "join-transfers-exact-note",
+    "inviter-confirms-joining-member",
+    "join-receipt-follows-saving-stage-2",
+    "join-progress-precedes-receipt-2",
+    "legacy-json-invite-with-dotted-relay-remains-compatible",
+    "legacy-invite-retry-adds-no-operation",
+    "receiving-engine-edit-reaches-inviter",
+    "mixed-engines-preserve-offline-conflict",
+    "mixed-engine-reconciliation-reaches-inviter",
+    "receiving-browser-restart-retains-identity",
+    "receiving-browser-restart-retains-history",
+    "restarted-receiving-browser-exchanges-with-inviter"
+  ],
+  "engines": [
+    {
+      "role": "laptop",
+      "engine": "webkit",
+      "browser_version": "27.2",
+      "capabilities": {
+        "secure_context": true,
+        "cross_origin_isolated": true,
+        "opfs": true,
+        "web_locks": true,
+        "visibility": "visible"
+      }
+    },
+    {
+      "role": "phone",
+      "engine": "chromium",
+      "browser_version": "156.0.8078.4",
+      "capabilities": {
+        "secure_context": true,
+        "cross_origin_isolated": true,
+        "opfs": true,
+        "web_locks": true,
+        "visibility": "visible"
+      }
+    },
+    {
+      "role": "phone",
+      "engine": "chromium",
+      "browser_version": "156.0.8078.4",
+      "capabilities": {
+        "secure_context": true,
+        "cross_origin_isolated": true,
+        "opfs": true,
+        "web_locks": true,
+        "visibility": "visible"
+      }
+    }
+  ],
+  "relay_observations": [
+    {
+      "role": "laptop",
+      "origin": "wss://euc1-1.relay.n0.iroh.link"
+    },
+    {
+      "role": "phone",
+      "origin": "wss://euc1-1.relay.n0.iroh.link"
+    }
+  ],
+  "join_attempts": [
+    {
+      "role": "phone",
+      "stages": [
+        "checking_invitation",
+        "connecting_relay",
+        "contacting_device",
+        "saving_workspace"
+      ],
+      "last_stage": "saving_workspace",
+      "elapsed_ms": [
+        2,
+        6,
+        1115,
+        1328
+      ],
+      "receipt_received": true,
+      "stages_observed_at_receipt": 4
+    },
+    {
+      "role": "phone",
+      "stages": [
+        "checking_invitation",
+        "connecting_relay",
+        "contacting_device",
+        "saving_workspace"
+      ],
+      "last_stage": "saving_workspace",
+      "elapsed_ms": [
+        1,
+        2,
+        2,
+        173
+      ],
+      "receipt_received": true,
+      "stages_observed_at_receipt": 4
+    }
+  ],
+  "limits": [
+    "Desktop WebKit is not physical iPhone Safari evidence.",
+    "This isolates the real BrowserHost facade; the deployed PWA and camera scan are separate paths.",
+    "An explicitly paused host is a control, not proof that the reported visible laptop was backgrounded.",
+    "Worker WebSocket events may be absent in WebKit; zero observed frames do not prove no connection attempt.",
+    "No invitation text, QR image, seed, raw payload, database or browser profile is exported."
+  ],
+  "source_hashes": {
+    "browser/app/package-lock.json": "183fd6eb9d5c8e3c8445d99bcb74fac3390d16041b61f68385d59418351d52f9",
+    "browser/app/src/invitation.ts": "cf143f7d1240ef06af71ed8260ba08bc6de378adaaff5cd91b0f72d1b2b3f5e5",
+    "browser/checks/index.html": "a1549648b7fcd7b246ae9b5194f2564de6316611086132cf80b2337e018d371d",
+    "browser/checks/package-lock.json": "4e1f24d0646f5dfaca3be2ee28be413058ccdf8bfacc9017d72aee75634d798c",
+    "browser/checks/page.ts": "6530ec09d44470b01a033de68a213107b6d0b787cfe3475cc2de6b53eb006f98",
+    "browser/checks/pairing-diagnose.mjs": "bbb3b5ac15acbbcc8ba8966fa349993528400a4888fdddbbbe4c8c42558ab071",
+    "browser/host-wasm/Cargo.lock": "d42756c79012e7b6e82e0b280947ebf616dcbfc55f6fddc30f58c27dc6c90048",
+    "browser/host-wasm/pkg/browser_workspace_host.d.ts": "3eff7c840e2a7f5cdc6e8dec6eefa2085d327ae90abdd9100d40cf7404c006f5",
+    "browser/host-wasm/pkg/browser_workspace_host.js": "9f50afdedc5e80377d93364c2d44542fdae80d26bc3c317694f2172387e459e9",
+    "browser/host-wasm/pkg/browser_workspace_host_bg.wasm": "b1975d4f425df97231b25ccf98a8d34bf63bcb573c30ff2f08672a52ecfa374c",
+    "browser/host-wasm/pkg/browser_workspace_host_bg.wasm.d.ts": "25ff50e9173f8b140f2c3bb11f5bc558f912bbb5d36edd8351dfbe0c774a511d",
+    "browser/host-wasm/src/browser_relay.rs": "a1836021c9a1df09e422b023beed5bf9377979e7958284a3b7e0646caccca705",
+    "browser/host-wasm/src/domain.rs": "0d51b56de0e39b9124bd4fd41d1b5b629e731d3f48a214454a637932a003d876",
+    "browser/host-wasm/src/lib.rs": "afe57e32f876b3dee835760016a1df0e44fea19fdbad43981e55d1a82fda2dfa",
+    "browser/host-wasm/src/transport.rs": "e69da69c75eee6cf48b8cb2ec63bcd199298deba9da5a99a594d1234f6392b5e",
+    "browser/host/package-lock.json": "bd39995299cbb1b4c55cddb78ff355af99be439c30611067e0c8a7e48cf17b8a",
+    "browser/host/src/host.ts": "1cf1eca4618d6384a7e3f891a4d0323d7948fa9994a63355c29ab97b405fa83e",
+    "browser/host/src/invitation.ts": "b393ef1039a284018fa5f9114685b0be08b2e4e076cf2fb1208c20dfa454bfbf",
+    "browser/host/src/owner.ts": "d505fea03a011459d700f44598eba54700ccba2b04f48faf60cb41e9947a5e21",
+    "browser/host/src/store.ts": "834097d1cc8d995bb152a89693661cffe14d24de40ece3804e1ebf354d47b9ce",
+    "browser/host/src/types.ts": "3b5a3ff5da0c85e26bb2667fe3a5d965762cdbeba997e3e04e4dbba2ab8420c4",
+    "browser/host/src/worker.ts": "5c5691a6efc1a65326457a56901857db7ca827932ff6dbdc85dc6b685761b818",
+    "native/core/src/model.rs": "7510d0523a7d95ff97e1b48b7e22a08c6507e74af78f86cbc4ccb85f1575b959",
+    "native/ui/src/protocol.ts": "2cb6392116aa8e2566484f38e887194d926ee55d479f7945446ef488f2bd322a"
+  },
+  "assets": {
+    "assets/browser_workspace_host_bg-Wx6Hkgba.wasm": "b1975d4f425df97231b25ccf98a8d34bf63bcb573c30ff2f08672a52ecfa374c",
+    "assets/index-CPugPKNm.js": "1880874117b384a977c40463cdb92f8643e05b7864820be29dcfcb65c2fe7ad2",
+    "assets/owner-Cvw8ZkJ4.js": "e1859111b4b09f4d6370cf55aa4f55f10efb5ec903a8b1441a6207234fe4685f",
+    "assets/turso.wasm32-wasi-KrOvB4jh.wasm": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9",
+    "assets/types-9ia9prHv.js": "7e2502a557286adac4cb6480e95e19558ba6cda5f41bda10aa51f4d15b2ea61f",
+    "assets/worker-C3Ftajuj.js": "f05a971994e5bf0fd25ef55f621f171c29f7e9cb2df1ccce0381376552f5bceb",
+    "assets/worker-jNMu-fDB.js": "3131e76f0edcaf1006bf3cef5fc0607d6df597b512993e9e12b6566b3de53097",
+    "index.html": "a98c56975ed692677322e3824f702149ad65ea92fd6d5efbaf5d5f4ed14d7f6a"
+  },
+  "invitation": {
+    "url_bytes": 287,
+    "url_characters": 287,
+    "encoded_ticket_bytes": 234,
+    "qr_error_correction": "M",
+    "qr_modules": 65,
+    "qr_version": 12,
+    "workspace_count": 1,
+    "workspace_id_format": "UUID",
+    "device_name": "Web browser"
+  },
+  "final_traffic": [
+    {
+      "role": "laptop",
+      "sockets": 2,
+      "sent_frames": 222,
+      "sent_bytes": 136147,
+      "received_frames": 0,
+      "received_bytes": 0,
+      "socket_errors": 0,
+      "socket_closes": 0,
+      "page_errors": 0
+    },
+    {
+      "role": "phone",
+      "sockets": 2,
+      "sent_frames": 238,
+      "sent_bytes": 136450,
+      "received_frames": 209,
+      "received_bytes": 129219,
+      "socket_errors": 0,
+      "socket_closes": 1,
+      "page_errors": 0
+    },
+    {
+      "role": "phone",
+      "sockets": 1,
+      "sent_frames": 13,
+      "sent_bytes": 7633,
+      "received_frames": 9,
+      "received_bytes": 4744,
+      "socket_errors": 0,
+      "socket_closes": 0,
+      "page_errors": 0
+    }
+  ],
+  "browser_cleanup": [
+    {
+      "role": "phone",
+      "closed": true
+    },
+    {
+      "role": "phone",
+      "closed": true
+    },
+    {
+      "role": "laptop",
+      "closed": true
+    }
+  ],
+  "static_server_closed": true,
+  "profiles_removed": true,
+  "source_unchanged": true,
+  "finished_at": "2026-10-25T17:34:23.831Z",
+  "duration_ms": 9862
+}

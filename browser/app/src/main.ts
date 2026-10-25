@@ -56,6 +56,10 @@ async function start(): Promise<void> {
   closeHost = () => host.close();
   app = mountApp(root, {
     host, voice: new BrowserVoice(), invitationUrl: ticket => invitationLink(base, ticket),
+    ...(typeof navigator.share === 'function' ? { shareInvitation: async (url: string): Promise<'shared' | 'cancelled'> => {
+      try { await navigator.share({ title: 'Shared workspaces', url }); return 'shared'; }
+      catch (error) { if (error instanceof DOMException && error.name === 'AbortError') return 'cancelled'; throw error; }
+    } } : {}),
     ...(initialInvite ? { initialInvite } : {}),
     scanner: { async available() { return false; }, async scan() { throw new Error('Open the invitation with your camera app, or paste a ticket.'); }, async cancel() {} },
   });

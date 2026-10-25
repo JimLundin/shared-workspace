@@ -9,6 +9,7 @@ import { VoiceSession } from './voice-session.ts';
 import type { VoiceCapability, VoicePort } from './voice-session.ts';
 import type { ScannerPort } from './scanner.ts';
 import { loadPresentation, savePresentation } from './presentation.ts';
+import { joinStageCopy, joinStages } from './pairing.ts';
 
 const escape = (value: unknown): string => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]!));
 const attr = (value: unknown): string => escape(JSON.stringify(value));
@@ -18,12 +19,14 @@ const shortId = (value: string): string => value.length > 14 ? value.slice(0, 10
 const time = (ms: number): string => new Date(ms).toLocaleString();
 const count = (n: number, singular: string, plural = singular + 's'): string => `${n} ${n === 1 ? singular : plural}`;
 
-export type AppOptions = Readonly<{ host: Host; voice: VoicePort; scanner: ScannerPort; pollMs?: number; id?: () => string; initialInvite?: string; invitationUrl?: (ticket: string) => string }>;
+export type AppOptions = Readonly<{ host: Host; voice: VoicePort; scanner: ScannerPort; pollMs?: number; id?: () => string; initialInvite?: string; invitationUrl?: (ticket: string) => string; shareInvitation?: (url: string) => Promise<'shared' | 'cancelled'> }>;
 export function mountApp(root: HTMLElement, options: AppOptions): { session: WorkspaceSession; dispose(): void } {
   const session = new WorkspaceSession(options.host, options.id);
   let capability: VoiceCapability = { type: 'unavailable', reason: 'Checking this host’s voice input…' };
   let command: CommandDraft | null = null, commandOpen = false, workspaceTitleDraft = '', joinTicket = options.initialInvite ?? '', scanAvailable = false, scanning = false, scanMessage = '', localMessage = '';
   let scanEpoch = 0;
+  const disclosures = new Set<string>();
+  let sharingInvitation = false;
   let selectedSpaces = new Set<string>(), presentationDevice: string | null = null, deferredRender = false, composing = false, disposed = false;
   let inviteQr: { ticket: string; svg: string | null } | null = null;
   const byId = <T extends HTMLElement>(id: string): T | null => root.querySelector<T>('#'+id);
@@ -80,10 +83,69 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
     return `<header class="main-header"><div><h1>${escape(workspace.title)}</h1><p>Material retained on this device · ${count(workspace.members.length,'participating device')}</p></div><div class="modes" aria-label="Workspace view">${(['canvas','focus','overview'] as const).map(mode=>button(mode[0]!.toUpperCase()+mode.slice(1),'mode',{mode},view.mode===mode?'active':'')).join('')}</div></header>${renderCommand(snapshot)}${renderEditor(snapshot)}<div class="work-set"><span>${count(workspace.placements.length,'reference')}</span><div class="row">${button('Add a note','new-note',{workspaceId},'small primary',writing())}${button('Share this workspace','share',{workspaceId},'small')}</div></div>${view.closed.length?`<div class="row reopen"><span class="pill">${count(view.closed.length,'local view')} closed</span>${button('Reopen views','reopen',{},'small')}</div>`:''}${focused?`<div class="card-tabs">${button('← Work list','mode',{mode:'canvas'},'small')}${placements.filter(p=>p.resource_id!==view.focused).map(p=>{const r=snapshot.resources.find(r=>r.id===p.resource_id);return r?button(escape(titleOf(r)),'focus',{resourceId:r.id},'small quiet'):''}).join('')}</div>`:''}<div class="board ${focused?'focus':view.mode==='overview'?'overview':''}">${visible.map(p=>card(p.resource_id,p.source_workspace_id,snapshot,Boolean(focused))).join('')}</div>${!workspace.placements.length?'<div class="empty"><h2>Bring an idea into this workspace.</h2><p>Add a note or speak a command. Your first save is saved on this device.</p></div>':''}<p class="local-note">Focus, order and closed views stay on this device.</p>`;
   }
   function devices(snapshot: Snapshot): string {
-    const network = snapshot.network.type==='active'?'Peer connections are active. Peer reachability is shown per exchange.':snapshot.network.type==='unavailable'?'Network unavailable: '+snapshot.network.detail:snapshot.network.type==='paused'?'Network is paused. Local notes remain available.':'Network is closed. Local notes remain available.';
-    const pairing=session.state.pairing, expired=pairing.type==='invite'&&Date.now()>=pairing.invite.expires_at_ms;
-    if(pairing.type==='invite'&&inviteQr?.ticket!==pairing.invite.ticket){let svg:string|null=null;try{const qr=qrcode(0,'M');qr.addData(options.invitationUrl?.(pairing.invite.ticket) ?? pairing.invite.ticket);qr.make();svg=qr.createSvgTag({cellSize:3,margin:0,scalable:true})}catch{}inviteQr={ticket:pairing.invite.ticket,svg}}
-    return `<section class="devices"><header class="main-header"><div><h1>Your devices</h1><p>${escape(snapshot.device_name)} · ${escape(shortId(snapshot.device_id))}</p></div>${button(session.state.syncing?'Exchanging…':'Synchronize','sync',{},'small primary',session.state.syncing)}</header><p class="context-note">${escape(network)}</p>${renderCommand(snapshot)}${snapshot.peers.map(p=>`<article class="device-card"><div class="row between"><h2>${escape(p.name)}</h2><span class="resource-id">${escape(shortId(p.id))}</span></div><p>${p.workspace_ids.map(id=>escape(snapshot.workspaces.find(w=>w.id===id)?.title??'Unavailable workspace')).join(' · ')}</p><p class="${p.state.type==='unreachable'?'unreachable':''}">${p.state.type==='never_synced'?'No completed exchange observed.':p.state.type==='syncing'?'Exchange in progress.':p.state.type==='synced'?`Last exchange: ${escape(time(p.state.at_ms))} · ${count(p.state.imported,'imported operation')}.`:`Exchange failed at ${escape(time(p.state.at_ms))}: ${escape(p.state.detail)}`}</p></article>`).join('')}${!snapshot.peers.length?'<div class="empty"><h2>No devices paired yet.</h2><p>Create an invitation here, or join with a ticket from your other device.</p></div>':''}<h2 class="section-title">Pair another device</h2>${pairing.type==='failed'?`<div class="notice">${escape(pairing.message)}</div>`:''}<div class="pair-grid"><section class="pair-panel"><h2>Share selected workspaces</h2><p>The invitation authorizes another device to join only the workspaces you choose.</p><form id="invite-form">${snapshot.workspaces.map(w=>`<label class="workspace-check"><input type="checkbox" name="workspace" value="${escape(w.id)}" ${selectedSpaces.has(w.id)?'checked':''}>${escape(w.title)}</label>`).join('')}${!snapshot.workspaces.length?'<p>Create a workspace before making an invitation.</p>':''}<button id="create-invite" class="primary" type="submit" ${!selectedSpaces.size||pairing.type==='creating'||pairing.type==='joining'?'disabled':''}>${pairing.type==='creating'?'Creating invitation…':'Create invitation'}</button></form>${pairing.type==='invite'?`<div class="ticket-actions"><p>This invitation shares: ${pairing.workspaceIds.map(id=>escape(snapshot.workspaces.find(w=>w.id===id)?.title??'Original workspace')).join(', ')}.</p><p>${expired?'Invitation expired. Create another to continue.':'Expires '+escape(time(pairing.invite.expires_at_ms))+(options.invitationUrl ? '. Open with the camera on your other device.' : '. Scan with the native app on your other device.')}</p>${!expired&&inviteQr?.svg?`<div class="qr" role="img" aria-label="Pairing invitation QR code">${inviteQr.svg}</div>`:!expired?'<p>The ticket is too large for a QR code. Use copy and paste.</p>':''}<label for="invite-ticket">Pairing ticket</label><textarea id="invite-ticket" class="ticket" readonly spellcheck="false" autocomplete="off">${escape(pairing.invite.ticket)}</textarea><div class="row">${options.invitationUrl ? button('Copy invitation link','copy-link',{},'small',expired) : ''}${button('Copy ticket','copy-ticket',{},'small',expired)}${button('Hide invitation','hide-ticket',{},'small')}</div></div>`:''}</section><section class="pair-panel"><h2>Join from this device</h2><p>Scan or paste an invitation from a device you want to pair. Joining requires a confirmed exchange with the inviting device.</p>${scanAvailable?button(scanning?'Scanning…':'Scan invitation QR','scan',{},'small',scanning||pairing.type==='joining'):''}${scanning?button('Cancel scan','cancel-scan',{},'small'):''}${scanMessage?`<p class="scan-message">${escape(scanMessage)}</p>`:''}<form id="join-form"><label for="join-ticket">Invitation to join</label><textarea id="join-ticket" name="ticket" required spellcheck="false" autocomplete="off" autocapitalize="none" placeholder="Paste a pairing ticket">${escape(joinTicket)}</textarea><button class="primary" type="submit" ${pairing.type==='joining'||pairing.type==='creating'?'disabled':''}>${pairing.type==='joining'?'Joining…':'Join selected workspaces'}</button></form></section></div><p class="local-note">Each device keeps its own work on disk. An exchange acknowledges that peer only; an offline device may have newer material. Pairing tickets are not written to logs.</p></section>`;
+    const pairing = session.state.pairing;
+    const joining = pairing.type === 'joining';
+    const stage = pairing.type === 'joining' ? pairing.stage : null;
+    const progress = joinStageCopy(stage);
+    const incoming = Boolean(joinTicket.trim());
+    const joinFailed = pairing.type === 'failed' && pairing.action === 'join';
+    const expired = pairing.type === 'invite' && Date.now() >= pairing.invite.expires_at_ms;
+    const network = snapshot.network.type === 'active' ? 'Networking is enabled.'
+      : snapshot.network.type === 'unavailable' ? 'Peer connections are unavailable. Local work remains here.'
+      : snapshot.network.type === 'paused' ? 'Connections are paused while this page is in the background.' : 'Connections are closed.';
+    if (pairing.type === 'invite' && inviteQr?.ticket !== pairing.invite.ticket) {
+      let svg: string | null = null;
+      try {
+        const qr = qrcode(0, 'M');
+        qr.addData(options.invitationUrl?.(pairing.invite.ticket) ?? pairing.invite.ticket);
+        qr.make();
+        svg = qr.createSvgTag({ cellSize: 6, margin: 24, scalable: true });
+      } catch { /* The copy/paste invitation remains usable if QR capacity is exceeded. */ }
+      inviteQr = { ticket: pairing.invite.ticket, svg };
+    }
+    const disclosure = (key: string): string => disclosures.has(key) ? 'open' : '';
+    const selectedNames = pairing.type === 'invite' ? pairing.workspaceIds.map(id => snapshot.workspaces.find(w => w.id === id)?.title ?? 'Original workspace') : [];
+    const outgoing = `<section class="pair-panel invite-panel" aria-label="Share workspaces">
+      ${pairing.type === 'invite' ? `<span class="eyebrow">Invitation ready</span><h2>${expired ? 'Create a fresh invitation' : 'Open this on the other device'}</h2>
+        <div class="access-scope"><span>Access included</span><div class="row">${selectedNames.map(name => `<span class="pill">${escape(name)}</span>`).join('')}</div></div>
+        <p>Only these workspaces are shared. Your other workspaces stay private to their current members.</p>
+        ${expired ? '<div class="notice">This invitation has expired. Choose Create invitation again to continue.</div>' : inviteQr?.svg ? `<div class="qr" role="img" aria-label="Pairing invitation QR code">${inviteQr.svg}</div>` : '<p>This invitation is too large for a QR code. Share or copy the link instead.</p>'}
+        <p class="pair-instruction">${options.invitationUrl ? 'Use the camera on the other device, then choose Join.' : 'Scan with the native app on the other device, then choose Join.'} Keep this page open and the screen awake.</p>
+        <div class="row invitation-actions">${options.shareInvitation && options.invitationUrl ? button(sharingInvitation ? 'Opening share…' : 'Share invitation','share-invitation',{},'primary',expired || sharingInvitation) : ''}${options.invitationUrl ? button('Copy invitation link','copy-link',{},options.shareInvitation ? 'small' : 'primary',expired) : button('Copy ticket','copy-ticket',{},'primary',expired)}</div>
+        <p class="invite-expiry">${expired ? 'Expired' : 'Available until '+escape(time(pairing.invite.expires_at_ms))}</p>
+        <details data-disclosure="outgoing" ${disclosure('outgoing')}><summary>Show invitation for copy and paste</summary><label for="invite-ticket">Pairing ticket</label><textarea id="invite-ticket" class="ticket" readonly spellcheck="false" autocomplete="off">${escape(pairing.invite.ticket)}</textarea>${button('Copy ticket','copy-ticket',{},'small',expired)}</details>
+        <div class="row">${button('Change selected workspaces','hide-ticket',{},'quiet small')}</div>` : `<span class="eyebrow">Another device</span><h2>Choose what to share</h2><p>Your phone can share several workspaces; a guest can receive just one. Choose what this invitation includes.</p>`}
+      <form id="invite-form" ${pairing.type === 'invite' && !expired ? 'hidden' : ''}>
+        ${snapshot.workspaces.map(w => `<label class="workspace-check"><input type="checkbox" name="workspace" value="${escape(w.id)}" ${selectedSpaces.has(w.id) ? 'checked' : ''}>${escape(w.title)}</label>`).join('')}
+        ${!snapshot.workspaces.length ? '<p>Create a workspace before making an invitation.</p>' : '<p class="scope-hint">Connecting a device does not give it access to every workspace. New workspaces are not added automatically.</p>'}
+        ${pairing.type === 'failed' && pairing.action === 'invite' ? `<div class="notice">${escape(pairing.message)}</div>` : ''}
+        <button id="create-invite" class="primary" type="submit" ${!selectedSpaces.size || pairing.type === 'creating' || joining ? 'disabled' : ''}>${pairing.type === 'creating' ? 'Creating invitation…' : 'Create invitation'}</button>
+      </form>
+    </section>`;
+    const joinPanel = `<section class="pair-panel join-panel ${incoming ? 'incoming' : ''}" aria-label="Join workspaces">
+      <span class="eyebrow">${incoming ? 'Invitation received' : 'This device'}</span>
+      <h2>${joining ? 'Joining selected workspaces…' : joinFailed ? 'Connection not confirmed' : incoming ? 'Bring this work to your device' : 'Join from another device'}</h2>
+      <p>${incoming ? 'Join only the workspaces selected by the inviting device. Your existing work here stays available.' : 'Open an invitation with your camera, or paste a link from the device that has your work.'}</p>
+      ${joining ? `<div class="join-progress" role="status"><span class="status-dot" aria-hidden="true"></span><div><strong>${escape(progress.title)}</strong><p>${escape(progress.detail)}</p></div></div>${stage ? `<ol class="join-steps" aria-label="Joining progress">${joinStages.map(item => `<li ${item === stage ? 'aria-current="step"' : ''}>${escape(joinStageCopy(item).title)}</li>`).join('')}</ol>` : ''}` : ''}
+      ${joinFailed ? `<div class="notice" role="alert"><p>${escape(pairing.message)}</p>${pairing.type === 'failed' && pairing.action === 'join' && (pairing.stage === null || pairing.stage === 'contacting_device' || pairing.stage === 'saving_workspace') ? '<p>The other device may have accepted the request already. Retrying the same invitation can recover its confirmation.</p>' : ''}</div>` : ''}
+      ${scanAvailable ? `<div class="row">${button(scanning ? 'Scanning…' : 'Scan invitation QR','scan',{},'small',scanning || joining)}${scanning ? button('Cancel scan','cancel-scan',{},'small') : ''}</div>` : ''}
+      ${scanMessage && !joining ? `<p class="scan-message">${escape(scanMessage)}</p>` : ''}
+      <form id="join-form">
+        <details data-disclosure="incoming" ${disclosure('incoming')}><summary>${incoming ? 'View or replace invitation' : 'Paste an invitation'}</summary><label for="join-ticket">Invitation to join</label><textarea id="join-ticket" name="ticket" required ${joining ? 'readonly' : ''} spellcheck="false" autocomplete="off" autocapitalize="none" placeholder="Paste an invitation link or ticket">${escape(joinTicket)}</textarea></details>
+        <button id="join-submit" class="primary" type="submit" ${!incoming || joining || pairing.type === 'creating' ? 'disabled' : ''}>${joining ? 'Joining…' : joinFailed ? 'Try joining again' : 'Join selected workspaces'}</button>
+      </form>
+      ${incoming && !joining ? '<p class="scope-hint">An invitation connects devices for its selected workspaces. It does not combine all their data.</p>' : ''}
+    </section>`;
+    const peers = snapshot.peers.map(p => `<article class="device-card"><div class="row between"><h2>${escape(p.name)}</h2><span class="resource-id">${escape(shortId(p.id))}</span></div>
+      <div class="access-scope"><span>Shared with this device</span><div class="row">${p.workspace_ids.map(id => `<span class="pill">${escape(snapshot.workspaces.find(w => w.id === id)?.title ?? 'Unavailable workspace')}</span>`).join('')}</div></div>
+      <p class="${p.state.type === 'unreachable' ? 'unreachable' : ''}">${p.state.type === 'never_synced' ? 'No completed exchange observed.' : p.state.type === 'syncing' ? 'Exchange in progress.' : p.state.type === 'synced' ? `Last exchange ${escape(time(p.state.at_ms))}.` : `Last exchange could not finish at ${escape(time(p.state.at_ms))}. Keep the other device open, then synchronize again.`}</p></article>`).join('');
+    return `<section class="devices"><header class="main-header"><div><h1>Your devices</h1><p>${escape(snapshot.device_name)} · ${escape(shortId(snapshot.device_id))}</p></div>${button(session.state.syncing ? 'Exchanging…' : 'Synchronize','sync',{},'small',session.state.syncing)}</header>
+      <p class="context-note">${escape(network)}</p>
+      <div class="pair-grid ${incoming ? 'has-incoming' : ''}">${incoming ? joinPanel+outgoing : outgoing+joinPanel}</div>
+      <h2 class="section-title">Connected devices</h2>${peers || '<p class="context-note">No devices connected yet. Choose which workspaces to share, or open an invitation.</p>'}
+      <p class="local-note">Each device retains its own copy of the workspaces it can access. A connection and workspace access are separate choices.</p>
+      ${renderCommand(snapshot)}
+    </section>`;
   }
 
   function render(): void {
@@ -109,6 +171,8 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
     }
   }
   const onClick=async(event:MouseEvent):Promise<void>=>{
+    const summary=(event.target as Element).closest('summary'),detail=summary?.parentElement;
+    if(detail instanceof HTMLDetailsElement&&detail.dataset.disclosure){if(detail.open)disclosures.delete(detail.dataset.disclosure);else disclosures.add(detail.dataset.disclosure);return}
     const target=(event.target as Element).closest<HTMLButtonElement>('button[data-action]');if(!target||target.disabled)return;
     const action=target.dataset.action,args:Record<string,unknown>=JSON.parse(target.dataset.args??'{}');localMessage='';
     switch(action){
@@ -129,16 +193,17 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
       case'refresh':await session.refresh();break;
       case'sync':await session.sync();break;
       case'share':selectedSpaces=new Set([String(args.workspaceId)]);await changeRoute({type:'devices'});break;
-      case'hide-ticket':inviteQr=null;session.clearInvite();break;
-      case'copy-link':{const pairing=session.state.pairing;if(pairing.type==='invite'&&options.invitationUrl){try{await navigator.clipboard.writeText(options.invitationUrl(pairing.invite.ticket));localMessage='Invitation link copied.'}catch{localMessage='Copy is unavailable. Select and copy the pairing ticket instead.'}render()}break}
-      case'copy-ticket':{const field=byId<HTMLTextAreaElement>('invite-ticket');if(field){try{await navigator.clipboard.writeText(field.value);localMessage='Invitation copied.'}catch{field.focus();field.select();localMessage='Select and copy the ticket from the field.'}render()}break}
+      case'hide-ticket':inviteQr=null;disclosures.delete('outgoing');session.clearInvite();break;
+      case'share-invitation':{const pairing=session.state.pairing;if(pairing.type==='invite'&&options.invitationUrl&&options.shareInvitation&&!sharingInvitation){sharingInvitation=true;render();try{const outcome=await options.shareInvitation(options.invitationUrl(pairing.invite.ticket));localMessage=outcome==='shared'?'Invitation shared. Join on the other device to connect.':''}catch{localMessage='Sharing could not open. Copy the invitation link instead.'}finally{sharingInvitation=false;render()}}break}
+      case'copy-link':{const pairing=session.state.pairing;if(pairing.type==='invite'&&options.invitationUrl){try{await navigator.clipboard.writeText(options.invitationUrl(pairing.invite.ticket));localMessage='Invitation link copied.'}catch{disclosures.add('outgoing');localMessage='Select and copy the invitation below.';render();const field=byId<HTMLTextAreaElement>('invite-ticket');field?.focus();field?.select();break}render()}break}
+      case'copy-ticket':{const field=byId<HTMLTextAreaElement>('invite-ticket');if(field){try{await navigator.clipboard.writeText(field.value);localMessage='Invitation copied.'}catch{disclosures.add('outgoing');localMessage='Select and copy the invitation below.';render();const current=byId<HTMLTextAreaElement>('invite-ticket');current?.focus();current?.select();break}render()}break}
       case'type-command':commandOpen=true;render();byId('command-text')?.focus();break;
       case'new-command':await voice.cancel();command=null;commandOpen=true;render();byId('command-text')?.focus();break;
       case'return-command':if(command)await changeRoute(command.address.workspaceId?{type:'workspace',id:command.address.workspaceId}:{type:command.address.workspaceTitle==='Devices'?'devices':'home'});break;
       case'speak':{const snapshot=availableSnapshot();if(!snapshot)break;commandOpen=true;if(!command)command={text:'',address:captureAddress(snapshot,session.state.route,session.view().focused),source:'typed'};render();byId('command-text')?.focus();await voice.start(command.address,capability);break}
       case'stop-voice':await voice.stop();break;
       case'cancel-voice':await voice.cancel();break;
-      case'scan':if(!scanning){const epoch=++scanEpoch;scanning=true;scanMessage='';render();try{const ticket=await options.scanner.scan();if(epoch===scanEpoch&&!disposed){joinTicket=ticket;scanMessage='Invitation read. Review it, then choose Join.'}}catch{if(epoch===scanEpoch)scanMessage='No invitation was accepted from the camera. You can paste a ticket instead.'}finally{if(epoch===scanEpoch){scanning=false;render()}}}break;
+      case'scan':if(!scanning){const epoch=++scanEpoch;scanning=true;scanMessage='';render();try{const ticket=await options.scanner.scan();if(epoch===scanEpoch&&!disposed){disclosures.delete('incoming');joinTicket=ticket;scanMessage='Invitation read. Review it, then choose Join.'}}catch{if(epoch===scanEpoch)scanMessage='No invitation was accepted from the camera. You can paste a ticket instead.'}finally{if(epoch===scanEpoch){scanning=false;render()}}}break;
       case'cancel-scan':{const epoch=++scanEpoch;scanning=false;try{await options.scanner.cancel();if(epoch===scanEpoch)scanMessage='Scan cancelled.'}catch{if(epoch===scanEpoch)scanMessage='Camera cancellation was not confirmed.'}render();break;}
     }
   };
@@ -147,7 +212,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
     if(field.id==='workspace-title')workspaceTitleDraft=field.value;
     if(field.id==='note-title')session.updateEditor('title',field.value);
     if(field.id==='note-body')session.updateEditor('body',field.value);
-    if(field.id==='join-ticket')joinTicket=field.value;
+    if(field.id==='join-ticket'){joinTicket=field.value;const submit=byId<HTMLButtonElement>('join-submit');if(submit)submit.disabled=!joinTicket.trim()||session.state.pairing.type==='joining'||session.state.pairing.type==='creating';}
     if(field.id==='command-text'){const snapshot=availableSnapshot();if(snapshot){command={text:field.value,address:command?.address??captureAddress(snapshot,session.state.route,session.view().focused),source:command?.source??'typed'};updateCommand()}}
     if(field instanceof HTMLInputElement&&field.name==='workspace'&&field.type==='checkbox'){if(field.checked)selectedSpaces.add(field.value);else selectedSpaces.delete(field.value);const create=byId<HTMLButtonElement>('create-invite');if(create)create.disabled=!selectedSpaces.size}
   };
@@ -155,8 +220,8 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
     event.preventDefault();const form=event.target;if(!(form instanceof HTMLFormElement))return;localMessage='';
     if(form.id==='workspace-form'){await session.createWorkspace(String(new FormData(form).get('title')??''));if(session.state.mutation.type==='idle')workspaceTitleDraft='';return}
     if(form.id==='editor-form'){await session.saveEditor();return}
-    if(form.id==='invite-form'){await session.createInvite([...selectedSpaces]);return}
-    if(form.id==='join-form'){await session.join(joinTicket);if(session.state.pairing.type==='idle'){joinTicket='';render()}return}
+    if(form.id==='invite-form'){disclosures.delete('outgoing');await session.createInvite([...selectedSpaces]);root.querySelector('.invite-panel')?.scrollIntoView({block:'start'});return}
+    if(form.id==='join-form'){disclosures.delete('incoming');await session.join(joinTicket);if(session.state.pairing.type==='idle'){joinTicket='';render()}else root.querySelector('.join-panel')?.scrollIntoView({block:'start'});return}
     if(form.dataset.form==='add-reference'){const destination=new FormData(form).get('destination');if(destination)await session.placement('add_placement',String(destination),form.dataset.resource!,form.dataset.source!);return}
     if(form.id==='command-form'){const snapshot=availableSnapshot();if(!snapshot||captureBusy()||writing())return;const plan=commandPlan(snapshot,session.state.route,command);if(plan.type==='ready'){await voice.cancel();await execute(plan.intent);if((plan.intent.type!=='capture'&&plan.intent.type!=='create_workspace')||session.state.mutation.type==='idle'){command=null;commandOpen=false}render()}}
   };
@@ -166,13 +231,14 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
     const focused=document.activeElement;
     if(change==='data'&&(composing||focused instanceof HTMLInputElement||focused instanceof HTMLTextAreaElement)){deferredRender=true;return}render();
   });
+  const onDisclosure=(event:Event):void=>{const detail=event.target;if(detail instanceof HTMLDetailsElement&&root.contains(detail)&&detail.dataset.disclosure){if(detail.open)disclosures.add(detail.dataset.disclosure);else disclosures.delete(detail.dataset.disclosure)}};
   const onFocusOut=():void=>{setTimeout(()=>{if(deferredRender&&!composing&&!(document.activeElement instanceof HTMLInputElement)&&!(document.activeElement instanceof HTMLTextAreaElement)){deferredRender=false;render()}},0)};
   const onCompositionStart=():void=>{composing=true},onCompositionEnd=():void=>{composing=false};
   const clickHandler=(e:MouseEvent):void=>{void onClick(e).catch(()=>{localMessage='The requested action did not complete.';render()})};
   const submitHandler=(e:SubmitEvent):void=>{void onSubmit(e).catch(()=>{localMessage='The requested action did not complete.';render()})};
-  root.addEventListener('click',clickHandler);root.addEventListener('input',onInput);root.addEventListener('submit',submitHandler);root.addEventListener('focusout',onFocusOut);root.addEventListener('compositionstart',onCompositionStart);root.addEventListener('compositionend',onCompositionEnd);
+  root.addEventListener('toggle',onDisclosure,true);root.addEventListener('click',clickHandler);root.addEventListener('input',onInput);root.addEventListener('submit',submitHandler);root.addEventListener('focusout',onFocusOut);root.addEventListener('compositionstart',onCompositionStart);root.addEventListener('compositionend',onCompositionEnd);
   const visibility=():void=>{if(document.hidden){void voice.cancel();if(scanning){scanEpoch++;scanning=false;void options.scanner.cancel().catch(()=>{})}}else void session.refresh()};document.addEventListener('visibilitychange',visibility);
   const poll=setInterval(()=>{if(!document.hidden&&session.state.mutation.type!=='sending'&&!session.state.syncing)void session.refresh()},options.pollMs??5000);
   render();void session.refresh();void options.voice.capability().then(value=>{capability=value;render()}).catch(()=>{});void options.scanner.available().then(value=>{scanAvailable=value;if(session.state.route.type==='devices')render()}).catch(()=>{});
-  return {session,dispose(){disposed=true;clearInterval(poll);unsubscribe();session.dispose();void voice.cancel();if(scanning){scanEpoch++;scanning=false;void options.scanner.cancel().catch(()=>{})};root.removeEventListener('click',clickHandler);root.removeEventListener('input',onInput);root.removeEventListener('submit',submitHandler);root.removeEventListener('focusout',onFocusOut);root.removeEventListener('compositionstart',onCompositionStart);root.removeEventListener('compositionend',onCompositionEnd);document.removeEventListener('visibilitychange',visibility)}};
+  return {session,dispose(){disposed=true;clearInterval(poll);unsubscribe();session.dispose();void voice.cancel();if(scanning){scanEpoch++;scanning=false;void options.scanner.cancel().catch(()=>{})};root.removeEventListener('toggle',onDisclosure,true);root.removeEventListener('click',clickHandler);root.removeEventListener('input',onInput);root.removeEventListener('submit',submitHandler);root.removeEventListener('focusout',onFocusOut);root.removeEventListener('compositionstart',onCompositionStart);root.removeEventListener('compositionend',onCompositionEnd);document.removeEventListener('visibilitychange',visibility)}};
 }

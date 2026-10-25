@@ -3,9 +3,9 @@ import '../src/style.css';
 import { mountApp } from '../src/app.ts';
 import { sameHeads } from '../src/session.ts';
 import type { Host } from '../src/host.ts';
-import type { Command, Invite, Receipt, Snapshot, SyncReport, Resource } from '../src/protocol.ts';
+import type { Command, Invite, Receipt, Snapshot, SyncReport, Resource, JoinStage } from '../src/protocol.ts';
 class ContractFixture implements Host {
-  available=true; commands:Command[]=[]; joins=0; scanCalls=0; loseNextReceipt=false;rejectNext=false;
+  available=true; commands:Command[]=[]; inviteSelections:string[][]=[];joinTickets:string[]=[];failJoin=false;delayJoin=false;pendingJoin:{progress:((stage:JoinStage)=>void)|undefined;resolve:(value:Snapshot)=>void;reject:(error:Error)=>void}|null=null; joins=0; scanCalls=0; loseNextReceipt=false;rejectNext=false;
   value:Snapshot={device_id:'fixture-device',device_name:'UI contract fixture',workspaces:[],resources:[],operation_count:0,network:{type:'active'},peers:[]};
   receipts=new Map<string,Receipt>();
   async snapshot(){return structuredClone(this.value)}
@@ -23,12 +23,12 @@ class ContractFixture implements Host {
     if(this.loseNextReceipt){this.loseNextReceipt=false;throw new Error('Fixture lost the response after commit')}
     return receipt;
   }
-  async invite():Promise<Invite>{return{ticket:'workspace1:ui-contract-fixture-only',expires_at_ms:Date.now()+900000}}
-  async join():Promise<Snapshot>{this.joins++;return this.value}
+  async invite(selection:readonly string[]):Promise<Invite>{this.inviteSelections.push([...selection]);return{ticket:'workspace1:ui-contract-fixture-only',expires_at_ms:Date.now()+900000}}
+  async join(ticket:string,progress?:(stage:JoinStage)=>void):Promise<Snapshot>{this.joins++;this.joinTickets.push(ticket);if(this.failJoin){this.failJoin=false;throw new Error('The peer could not be reached')}if(this.delayJoin){this.delayJoin=false;return new Promise((resolve,reject)=>{this.pendingJoin={progress,resolve,reject}})}return this.value}
   async sync():Promise<SyncReport>{return{peers:[]}}
   remoteEdit(resourceId:string):void{this.value={...this.value,resources:this.value.resources.map(r=>{if(r.id!==resourceId)return r;const h={id:'remote-head',author:'remote-fixture',title:'Remote revision',body:'Writing from another device',parents:r.heads.map(h=>h.id)};return{...r,heads:[h],history:[...r.history,h]}})}}
 }
 const host=new ContractFixture();
 const app=mountApp(document.getElementById('app')!,{host,voice:{async capability(){return{type:'unavailable',reason:'Voice is not exercised by this browser fixture.'}},async start(){throw new Error('Not a native speech test')},async stop(){},async cancel(){}},scanner:{async available(){return true},async scan(){host.scanCalls++;return'workspace1:ui-contract-fixture-only'},async cancel(){}},pollMs:60000});
-declare global {interface Window{fixture:{commands:()=>Command[];resources:()=>readonly Resource[];loseReceipt:()=>void;rejectNext:()=>void;remoteEdit:()=>Promise<void>;joins:()=>number;scanCalls:()=>number}}}
-window.fixture={commands:()=>host.commands,resources:()=>host.value.resources,loseReceipt:()=>{host.loseNextReceipt=true},rejectNext:()=>{host.rejectNext=true},remoteEdit:async()=>{const id=host.value.resources[0]?.id;if(id){host.remoteEdit(id);await app.session.refresh()}},joins:()=>host.joins,scanCalls:()=>host.scanCalls};
+declare global {interface Window{fixture:{commands:()=>Command[];resources:()=>readonly Resource[];loseReceipt:()=>void;rejectNext:()=>void;remoteEdit:()=>Promise<void>;joins:()=>number;scanCalls:()=>number;inviteSelections:()=>readonly string[][];joinTickets:()=>readonly string[];failNextJoin:()=>void;refresh:()=>Promise<void>;holdNextJoin:()=>void;joinStage:(stage:JoinStage)=>void;finishJoin:()=>void;failHeldJoin:()=>void}}}
+window.fixture={commands:()=>host.commands,resources:()=>host.value.resources,loseReceipt:()=>{host.loseNextReceipt=true},rejectNext:()=>{host.rejectNext=true},remoteEdit:async()=>{const id=host.value.resources[0]?.id;if(id){host.remoteEdit(id);await app.session.refresh()}},joins:()=>host.joins,scanCalls:()=>host.scanCalls,inviteSelections:()=>host.inviteSelections,joinTickets:()=>host.joinTickets,failNextJoin:()=>{host.failJoin=true},refresh:()=>app.session.refresh(),holdNextJoin:()=>{host.delayJoin=true},joinStage:stage=>host.pendingJoin?.progress?.(stage),finishJoin:()=>{host.pendingJoin?.resolve(host.value);host.pendingJoin=null},failHeldJoin:()=>{host.pendingJoin?.reject(new Error('Untrusted remote details'));host.pendingJoin=null}};

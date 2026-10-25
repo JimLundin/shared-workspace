@@ -1,0 +1,262 @@
+{
+  "kind": "browser-pairing-diagnosis-v1",
+  "passed": true,
+  "mode": "measure",
+  "laptop_state": "active",
+  "laptop_engine": "chromium",
+  "phone_engine": null,
+  "started_at": "2026-10-25T17:14:27.433Z",
+  "stages": [
+    {
+      "stage": "fixture.build",
+      "elapsed_ms": 17
+    },
+    {
+      "stage": "laptop.browser.launch",
+      "elapsed_ms": 407,
+      "engine": "chromium"
+    },
+    {
+      "stage": "laptop.browser.ready",
+      "elapsed_ms": 1082,
+      "capabilities": {
+        "secure_context": true,
+        "cross_origin_isolated": true,
+        "opfs": true,
+        "web_locks": true,
+        "visibility": "visible"
+      }
+    },
+    {
+      "stage": "laptop.open.begin",
+      "elapsed_ms": 1082,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.open.completed",
+      "elapsed_ms": 1447,
+      "duration_ms": 365,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.host.ready",
+      "elapsed_ms": 1448,
+      "network": "active",
+      "workspaces": 0
+    },
+    {
+      "stage": "laptop.command.begin",
+      "elapsed_ms": 1448,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.command.completed",
+      "elapsed_ms": 1463,
+      "duration_ms": 15,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.command.begin",
+      "elapsed_ms": 1463,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.command.completed",
+      "elapsed_ms": 1473,
+      "duration_ms": 10,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.invite.begin",
+      "elapsed_ms": 1473,
+      "traffic": {
+        "sockets": 0,
+        "sent_frames": 0,
+        "sent_bytes": 0,
+        "received_frames": 0,
+        "received_bytes": 0,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "laptop.invite.completed",
+      "elapsed_ms": 2629,
+      "duration_ms": 1156,
+      "traffic": {
+        "sockets": 1,
+        "sent_frames": 2,
+        "sent_bytes": 107,
+        "received_frames": 2,
+        "received_bytes": 18,
+        "socket_errors": 0,
+        "socket_closes": 0,
+        "page_errors": 0
+      }
+    },
+    {
+      "stage": "invitation.measured",
+      "elapsed_ms": 2654,
+      "url_bytes": 541,
+      "url_characters": 541,
+      "encoded_ticket_bytes": 488,
+      "qr_error_correction": "M",
+      "qr_modules": 89,
+      "qr_version": 18,
+      "workspace_count": 1,
+      "workspace_id_format": "UUID",
+      "device_name": "Web browser"
+    }
+  ],
+  "assertions": [],
+  "engines": [
+    {
+      "role": "laptop",
+      "engine": "chromium",
+      "browser_version": "156.0.8078.4",
+      "capabilities": {
+        "secure_context": true,
+        "cross_origin_isolated": true,
+        "opfs": true,
+        "web_locks": true,
+        "visibility": "visible"
+      }
+    }
+  ],
+  "relay_observations": [
+    {
+      "role": "laptop",
+      "origin": "wss://euc1-1.relay.n0.iroh.link."
+    }
+  ],
+  "limits": [
+    "Desktop WebKit is not physical iPhone Safari evidence.",
+    "This isolates the real BrowserHost facade; the deployed PWA and camera scan are separate paths.",
+    "An explicitly paused host is a control, not proof that the reported visible laptop was backgrounded.",
+    "No invitation text, QR image, seed, raw payload, database or browser profile is exported."
+  ],
+  "source_hashes": {
+    "browser/app/src/invitation.ts": "cf143f7d1240ef06af71ed8260ba08bc6de378adaaff5cd91b0f72d1b2b3f5e5",
+    "browser/checks/index.html": "a1549648b7fcd7b246ae9b5194f2564de6316611086132cf80b2337e018d371d",
+    "browser/checks/package-lock.json": "4e1f24d0646f5dfaca3be2ee28be413058ccdf8bfacc9017d72aee75634d798c",
+    "browser/checks/page.ts": "6d8f3838b3c9d58cb478e177448bfa26337850d349973a1a501cc05563fc323c",
+    "browser/checks/pairing-diagnose.mjs": "acab190c51e0021c2d63caef059c8d73fe286ea5b0cdfd2e7dd7a130c225e00b",
+    "browser/host-wasm/Cargo.lock": "d42756c79012e7b6e82e0b280947ebf616dcbfc55f6fddc30f58c27dc6c90048",
+    "browser/host-wasm/pkg/browser_workspace_host.d.ts": "3eff7c840e2a7f5cdc6e8dec6eefa2085d327ae90abdd9100d40cf7404c006f5",
+    "browser/host-wasm/pkg/browser_workspace_host.js": "5aa5a13678b0fccc1ba13db4ba2c28230f1203ecdd0f3b6bc6846735ea748ac0",
+    "browser/host-wasm/pkg/browser_workspace_host_bg.wasm": "dfaaa3616cb9a49ffe4f9149e23a60450bc1f62285f506c40eb55ddfeb94d1dc",
+    "browser/host-wasm/pkg/browser_workspace_host_bg.wasm.d.ts": "25ff50e9173f8b140f2c3bb11f5bc558f912bbb5d36edd8351dfbe0c774a511d",
+    "browser/host-wasm/src/domain.rs": "0d51b56de0e39b9124bd4fd41d1b5b629e731d3f48a214454a637932a003d876",
+    "browser/host-wasm/src/lib.rs": "de9720b9c3d7d03de082e6bac6718468154057f738eb61f2013fb2e6a47e2e2b",
+    "browser/host-wasm/src/transport.rs": "99e6bdd701c77dd9155dc60c321ebdfcdb9573a2141583bf169fbdf208f1b93f",
+    "browser/host/package-lock.json": "bd39995299cbb1b4c55cddb78ff355af99be439c30611067e0c8a7e48cf17b8a",
+    "browser/host/src/host.ts": "8d2011607011595a7b0b1c008d0c7ef7c68e6bf503d250871d65b71eb927ea81",
+    "browser/host/src/owner.ts": "74caa38ad71eeb2f4cdad31378abbcf28decaa17790a83cec5e4a5250d36afae",
+    "browser/host/src/store.ts": "834097d1cc8d995bb152a89693661cffe14d24de40ece3804e1ebf354d47b9ce",
+    "browser/host/src/types.ts": "6c9e0e58539e195744ac67a672e4357b6d9bfcb398e5ad2ba3806044d387cd58",
+    "browser/host/src/worker.ts": "00bf0065e568ce5b1847f75e1418a1c534f5f6325186708733262249e061f7d6",
+    "native/core/src/model.rs": "7510d0523a7d95ff97e1b48b7e22a08c6507e74af78f86cbc4ccb85f1575b959",
+    "native/ui/src/app.ts": "84495fd374c89463344ee636986a46c24399b1cf1f151528fcd92c461ff7c561",
+    "native/ui/src/protocol.ts": "ad6c5808c81a2d9cef3b1f61c49500ac8a84f9a34b54c360d928fcb2e200989f"
+  },
+  "assets": {
+    "assets/browser_workspace_host_bg-BgDWhSsc.wasm": "dfaaa3616cb9a49ffe4f9149e23a60450bc1f62285f506c40eb55ddfeb94d1dc",
+    "assets/index-jFSYeCL0.js": "38697b32a2907d72a0ebe70f87b850621e50ab5d48ce96a4e992a2be19a73f15",
+    "assets/owner-Ckouxpwz.js": "8577951c2999ec65a673289681a15cb046177b46800fbcaa6d021520e2cbdff8",
+    "assets/turso.wasm32-wasi-KrOvB4jh.wasm": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9",
+    "assets/types-jLirL5JP.js": "7c874d992b97d270c6bbeb011238acfbd51f324b6d128bf5ad3a1ded9078e309",
+    "assets/worker-C3Ftajuj.js": "f05a971994e5bf0fd25ef55f621f171c29f7e9cb2df1ccce0381376552f5bceb",
+    "assets/worker-Kdae83Tp.js": "7f994996a4865791e818d8f4a1f467e58c3ef79afd165a29a3097ca631a95524",
+    "index.html": "9a6da091ffdc08f572ff5568ad52012d19a76b059a114329899f907ec628cde8"
+  },
+  "invitation": {
+    "url_bytes": 541,
+    "url_characters": 541,
+    "encoded_ticket_bytes": 488,
+    "qr_error_correction": "M",
+    "qr_modules": 89,
+    "qr_version": 18,
+    "workspace_count": 1,
+    "workspace_id_format": "UUID",
+    "device_name": "Web browser"
+  },
+  "final_traffic": [
+    {
+      "role": "laptop",
+      "sockets": 1,
+      "sent_frames": 2,
+      "sent_bytes": 107,
+      "received_frames": 2,
+      "received_bytes": 18,
+      "socket_errors": 0,
+      "socket_closes": 0,
+      "page_errors": 0
+    }
+  ],
+  "browser_cleanup": [
+    {
+      "role": "laptop",
+      "closed": true
+    }
+  ],
+  "static_server_closed": true,
+  "profiles_removed": true,
+  "source_unchanged": true,
+  "finished_at": "2026-10-25T17:14:30.133Z",
+  "duration_ms": 2700
+}

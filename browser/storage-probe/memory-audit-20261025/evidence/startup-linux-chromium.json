@@ -1,0 +1,2309 @@
+{
+  "kind": "database-wasm-memory-audit-20261025",
+  "started_at": "2026-10-25T17:20:30.763Z",
+  "platform": {
+    "platform": "linux",
+    "release": "6.18.54.1-microsoft-standard-WSL2",
+    "architecture": "x64",
+    "node": "v24.16.0"
+  },
+  "versions": {
+    "turso": "0.8.3",
+    "sqlite_wasm": "3.54.1-build1"
+  },
+  "source_wrapper_sha256": "b0ca552513511aa21c28b672a44f2e8f452bf8731fa030259420b32a4447dc00",
+  "repetitions": 5,
+  "startup_only": true,
+  "harness_sources": {
+    "run.mjs": "eb3d6a9573d8ac1459bae84f3fc36ac2db11c0d659da01f13f2ec73676547b72",
+    "worker.js": "5ecb42c996baedd40f46ac01bcc952f73ad5c8019f26014ab74ec0b7de8cd66f",
+    "page.js": "89377d03e66e4b6e4a792f29ff28b317b571c04eecd1221b1fffdb3fc2fa59a2",
+    "package.json": "018ed2586fa98739ad09f855ece6047bc721e5e97622645d84a974ed15f182b3",
+    "package-lock.json": "7252de0f7059190fb180491d5e7ffdfc462cd3a5683647467395f35728c9853c"
+  },
+  "units": "Memory figures are bytes unless field name says otherwise.",
+  "interpretation": "Logical WASM memory and process residency are distinct. Process-family RSS sums shared pages repeatedly; PSS apportions them. These are Linux Chromium measurements, not iPhone results.",
+  "workload": {
+    "notes": 128,
+    "note_bytes": 8192,
+    "blob_bytes": [
+      1048576,
+      8388608,
+      33554432
+    ],
+    "journal_requested": "WAL",
+    "synchronous_requested": "FULL",
+    "locking_requested": "EXCLUSIVE",
+    "page_size_requested": 4096,
+    "cache_size_requested": -2000,
+    "gc_forced": false
+  },
+  "builds": {
+    "empty": {
+      "wrapper_transform_applications": 0,
+      "patch": null,
+      "assets": [
+        {
+          "file": "dist-CaRLlRJh.js",
+          "bytes": 217804,
+          "gzip_bytes": 64769,
+          "sha256": "f3ac73c87ccbcb7d75a56931c69be9a04672f1d714772d86f68099c787a89644"
+        },
+        {
+          "file": "index-Dv-CKopc.js",
+          "bytes": 1358,
+          "gzip_bytes": 716,
+          "sha256": "c0c38b92bf641965d2d07dd48e2ef368a9153759734f96c725dd05d9468ac69a"
+        },
+        {
+          "file": "promise-default-CFTrf3ko.js",
+          "bytes": 205256,
+          "gzip_bytes": 46582,
+          "sha256": "56bacb581936e6026a4c437227abc856fcad03a80a888596d07b0dbbde63117d"
+        },
+        {
+          "file": "sqlite3-k2cTanUO.wasm",
+          "bytes": 879084,
+          "gzip_bytes": 407455,
+          "sha256": "b8a92a19f441a90ff2339fe988fbe317c4adf3ed844096f12aee04aa72d58257"
+        },
+        {
+          "file": "sqlite3-opfs-async-proxy-DeAec6oc.js",
+          "bytes": 32462,
+          "gzip_bytes": 10524,
+          "sha256": "02c38ed7f2d41d2b57ee02241d7f8a09059e1ded16749013f2412137614aa459"
+        },
+        {
+          "file": "sqlite3-worker1--76YIBzr.js",
+          "bytes": 215883,
+          "gzip_bytes": 64176,
+          "sha256": "91ec2519181a0ee8abd82840056c9b5d6f9760848d802f843ecf982197f17033"
+        },
+        {
+          "file": "turso.wasm32-wasi-KrOvB4jh.wasm",
+          "bytes": 11613778,
+          "gzip_bytes": 3963233,
+          "sha256": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9"
+        },
+        {
+          "file": "worker-C3Ftajuj.js",
+          "bytes": 170918,
+          "gzip_bytes": 37625,
+          "sha256": "f05a971994e5bf0fd25ef55f621f171c29f7e9cb2df1ccce0381376552f5bceb"
+        },
+        {
+          "file": "worker-C5ZCmJtf.js",
+          "bytes": 4002,
+          "gzip_bytes": 1778,
+          "sha256": "a8fc137c15ffc44508487875f3f0dac6a21c5d8352001684eaa8cc494b30b673"
+        }
+      ]
+    },
+    "turso-default": {
+      "wrapper_transform_applications": 0,
+      "patch": null,
+      "assets": [
+        {
+          "file": "dist-CaRLlRJh.js",
+          "bytes": 217804,
+          "gzip_bytes": 64769,
+          "sha256": "f3ac73c87ccbcb7d75a56931c69be9a04672f1d714772d86f68099c787a89644"
+        },
+        {
+          "file": "index-Dv-CKopc.js",
+          "bytes": 1358,
+          "gzip_bytes": 716,
+          "sha256": "c0c38b92bf641965d2d07dd48e2ef368a9153759734f96c725dd05d9468ac69a"
+        },
+        {
+          "file": "promise-default-CFTrf3ko.js",
+          "bytes": 205256,
+          "gzip_bytes": 46582,
+          "sha256": "56bacb581936e6026a4c437227abc856fcad03a80a888596d07b0dbbde63117d"
+        },
+        {
+          "file": "sqlite3-k2cTanUO.wasm",
+          "bytes": 879084,
+          "gzip_bytes": 407455,
+          "sha256": "b8a92a19f441a90ff2339fe988fbe317c4adf3ed844096f12aee04aa72d58257"
+        },
+        {
+          "file": "sqlite3-opfs-async-proxy-DeAec6oc.js",
+          "bytes": 32462,
+          "gzip_bytes": 10524,
+          "sha256": "02c38ed7f2d41d2b57ee02241d7f8a09059e1ded16749013f2412137614aa459"
+        },
+        {
+          "file": "sqlite3-worker1--76YIBzr.js",
+          "bytes": 215883,
+          "gzip_bytes": 64176,
+          "sha256": "91ec2519181a0ee8abd82840056c9b5d6f9760848d802f843ecf982197f17033"
+        },
+        {
+          "file": "turso.wasm32-wasi-KrOvB4jh.wasm",
+          "bytes": 11613778,
+          "gzip_bytes": 3963233,
+          "sha256": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9"
+        },
+        {
+          "file": "worker-C3Ftajuj.js",
+          "bytes": 170918,
+          "gzip_bytes": 37625,
+          "sha256": "f05a971994e5bf0fd25ef55f621f171c29f7e9cb2df1ccce0381376552f5bceb"
+        },
+        {
+          "file": "worker-C5ZCmJtf.js",
+          "bytes": 4002,
+          "gzip_bytes": 1778,
+          "sha256": "a8fc137c15ffc44508487875f3f0dac6a21c5d8352001684eaa8cc494b30b673"
+        }
+      ]
+    },
+    "turso-minimum": {
+      "wrapper_transform_applications": 2,
+      "patch": "Disposable build transform only: wrapper initial:4000 -> initial:1009. Maximum65536/shared:true and engine WASM unchanged.",
+      "assets": [
+        {
+          "file": "dist-CaRLlRJh.js",
+          "bytes": 217804,
+          "gzip_bytes": 64769,
+          "sha256": "f3ac73c87ccbcb7d75a56931c69be9a04672f1d714772d86f68099c787a89644"
+        },
+        {
+          "file": "index-Ch7S11C9.js",
+          "bytes": 1358,
+          "gzip_bytes": 716,
+          "sha256": "bee6d5701367f1852a9364a5f91fea78cd374f5478acd5e662ef41d80bd3f134"
+        },
+        {
+          "file": "promise-default-BbQgrCEM.js",
+          "bytes": 205257,
+          "gzip_bytes": 46584,
+          "sha256": "69b8e45e8fb1a1d0338f2284d725b159a24f30ed2f252888d9e06b7b4976e618"
+        },
+        {
+          "file": "sqlite3-k2cTanUO.wasm",
+          "bytes": 879084,
+          "gzip_bytes": 407455,
+          "sha256": "b8a92a19f441a90ff2339fe988fbe317c4adf3ed844096f12aee04aa72d58257"
+        },
+        {
+          "file": "sqlite3-opfs-async-proxy-DeAec6oc.js",
+          "bytes": 32462,
+          "gzip_bytes": 10524,
+          "sha256": "02c38ed7f2d41d2b57ee02241d7f8a09059e1ded16749013f2412137614aa459"
+        },
+        {
+          "file": "sqlite3-worker1--76YIBzr.js",
+          "bytes": 215883,
+          "gzip_bytes": 64176,
+          "sha256": "91ec2519181a0ee8abd82840056c9b5d6f9760848d802f843ecf982197f17033"
+        },
+        {
+          "file": "turso.wasm32-wasi-KrOvB4jh.wasm",
+          "bytes": 11613778,
+          "gzip_bytes": 3963233,
+          "sha256": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9"
+        },
+        {
+          "file": "worker-C3Ftajuj.js",
+          "bytes": 170918,
+          "gzip_bytes": 37625,
+          "sha256": "f05a971994e5bf0fd25ef55f621f171c29f7e9cb2df1ccce0381376552f5bceb"
+        },
+        {
+          "file": "worker-Cm3YY-Iw.js",
+          "bytes": 4002,
+          "gzip_bytes": 1778,
+          "sha256": "633316e0e413fb136170cfaff132014a75740541531ac79e4f5992d088a8fcbd"
+        }
+      ]
+    },
+    "sqlite": {
+      "wrapper_transform_applications": 0,
+      "patch": null,
+      "assets": [
+        {
+          "file": "dist-CaRLlRJh.js",
+          "bytes": 217804,
+          "gzip_bytes": 64769,
+          "sha256": "f3ac73c87ccbcb7d75a56931c69be9a04672f1d714772d86f68099c787a89644"
+        },
+        {
+          "file": "index-Dv-CKopc.js",
+          "bytes": 1358,
+          "gzip_bytes": 716,
+          "sha256": "c0c38b92bf641965d2d07dd48e2ef368a9153759734f96c725dd05d9468ac69a"
+        },
+        {
+          "file": "promise-default-CFTrf3ko.js",
+          "bytes": 205256,
+          "gzip_bytes": 46582,
+          "sha256": "56bacb581936e6026a4c437227abc856fcad03a80a888596d07b0dbbde63117d"
+        },
+        {
+          "file": "sqlite3-k2cTanUO.wasm",
+          "bytes": 879084,
+          "gzip_bytes": 407455,
+          "sha256": "b8a92a19f441a90ff2339fe988fbe317c4adf3ed844096f12aee04aa72d58257"
+        },
+        {
+          "file": "sqlite3-opfs-async-proxy-DeAec6oc.js",
+          "bytes": 32462,
+          "gzip_bytes": 10524,
+          "sha256": "02c38ed7f2d41d2b57ee02241d7f8a09059e1ded16749013f2412137614aa459"
+        },
+        {
+          "file": "sqlite3-worker1--76YIBzr.js",
+          "bytes": 215883,
+          "gzip_bytes": 64176,
+          "sha256": "91ec2519181a0ee8abd82840056c9b5d6f9760848d802f843ecf982197f17033"
+        },
+        {
+          "file": "turso.wasm32-wasi-KrOvB4jh.wasm",
+          "bytes": 11613778,
+          "gzip_bytes": 3963233,
+          "sha256": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9"
+        },
+        {
+          "file": "worker-C3Ftajuj.js",
+          "bytes": 170918,
+          "gzip_bytes": 37625,
+          "sha256": "f05a971994e5bf0fd25ef55f621f171c29f7e9cb2df1ccce0381376552f5bceb"
+        },
+        {
+          "file": "worker-C5ZCmJtf.js",
+          "bytes": 4002,
+          "gzip_bytes": 1778,
+          "sha256": "a8fc137c15ffc44508487875f3f0dac6a21c5d8352001684eaa8cc494b30b673"
+        }
+      ]
+    }
+  },
+  "trials": [
+    {
+      "variant": "empty",
+      "repetition": 1,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "empty",
+            "sqlite_version": null,
+            "open_ms": 0,
+            "memories": []
+          },
+          "process_family": {
+            "rss_bytes": 443138048,
+            "pss_bytes": 188293120,
+            "private_bytes": 90165248,
+            "virtual_bytes": 1837554876416,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 101908480,
+                "pss_bytes": 45255680,
+                "private_bytes": 23216128,
+                "virtual_bytes": 56306413568
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46542848,
+                "pss_bytes": 12380160,
+                "private_bytes": 569344,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47083520,
+                "pss_bytes": 12836864,
+                "private_bytes": 897024,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67620864,
+                "pss_bytes": 29981696,
+                "private_bytes": 14516224,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 77856768,
+                "pss_bytes": 29252608,
+                "private_bytes": 12713984,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 102125568,
+                "pss_bytes": 58586112,
+                "private_bytes": 38252544,
+                "virtual_bytes": 1556627165184
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "turso-default",
+      "repetition": 1,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "turso",
+            "sqlite_version": null,
+            "open_ms": 266,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 4000,
+                  "maximum": 65536,
+                  "shared": true
+                },
+                "initial_buffer_bytes": 262144000,
+                "current_buffer_bytes": 276955136,
+                "shared": true
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "66cf8382a2f8287b39c8ba492bb84b4a4fbb885e28c3c8bce170bb0b00ece962",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 530898944,
+            "pss_bytes": 271144960,
+            "private_bytes": 172392448,
+            "virtual_bytes": 1839620583424,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 104103936,
+                "pss_bytes": 46617600,
+                "private_bytes": 24440832,
+                "virtual_bytes": 56298061824
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47017984,
+                "pss_bytes": 12347392,
+                "private_bytes": 569344,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47087616,
+                "pss_bytes": 12485632,
+                "private_bytes": 737280,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67588096,
+                "pss_bytes": 29484032,
+                "private_bytes": 14053376,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 77856768,
+                "pss_bytes": 28657664,
+                "private_bytes": 12476416,
+                "virtual_bytes": 56187011072
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 187244544,
+                "pss_bytes": 141552640,
+                "private_bytes": 120115200,
+                "virtual_bytes": 1558692831232
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "turso-minimum",
+      "repetition": 1,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "turso",
+            "sqlite_version": null,
+            "open_ms": 294,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 1009,
+                  "maximum": 65536,
+                  "shared": true
+                },
+                "initial_buffer_bytes": 66125824,
+                "current_buffer_bytes": 80936960,
+                "shared": true
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "dbafad6799e9fa268464989aa05a2fc4267364616288d25fc52fabfb04f674d4",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 518819840,
+            "pss_bytes": 260788224,
+            "private_bytes": 161435648,
+            "virtual_bytes": 1839628914688,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 105132032,
+                "pss_bytes": 47218688,
+                "private_bytes": 24371200,
+                "virtual_bytes": 56314847232
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46227456,
+                "pss_bytes": 12309504,
+                "private_bytes": 577536,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46903296,
+                "pss_bytes": 12876800,
+                "private_bytes": 811008,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 66498560,
+                "pss_bytes": 29174784,
+                "private_bytes": 14020608,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78368768,
+                "pss_bytes": 28409856,
+                "private_bytes": 12001280,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 175689728,
+                "pss_bytes": 130798592,
+                "private_bytes": 109654016,
+                "virtual_bytes": 1558692765696
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "sqlite",
+      "repetition": 1,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "sqlite",
+            "sqlite_version": "3.54.1",
+            "open_ms": 206,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 128,
+                  "maximum": 32768
+                },
+                "initial_buffer_bytes": 8388608,
+                "current_buffer_bytes": 8388608,
+                "shared": false
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "6ac612d377e423f39b83b843a810912223e7f8575980d1401356b45d31073290",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 475652096,
+            "pss_bytes": 217478144,
+            "private_bytes": 117145600,
+            "virtual_bytes": 1841625993216,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 105406464,
+                "pss_bytes": 48866304,
+                "private_bytes": 26177536,
+                "virtual_bytes": 56314912768
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47112192,
+                "pss_bytes": 12378112,
+                "private_bytes": 544768,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47071232,
+                "pss_bytes": 12487680,
+                "private_bytes": 724992,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 66740224,
+                "pss_bytes": 29289472,
+                "private_bytes": 13881344,
+                "virtual_bytes": 56254496768
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78139392,
+                "pss_bytes": 29277184,
+                "private_bytes": 12898304,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 131182592,
+                "pss_bytes": 85179392,
+                "private_bytes": 62918656,
+                "virtual_bytes": 1560689774592
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "turso-default",
+      "repetition": 2,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "turso",
+            "sqlite_version": null,
+            "open_ms": 337,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 4000,
+                  "maximum": 65536,
+                  "shared": true
+                },
+                "initial_buffer_bytes": 262144000,
+                "current_buffer_bytes": 276955136,
+                "shared": true
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "1aa0ecdf1c70c13d6a4853438249ff88573dbd3cd5c1b9d57813142cca8e4658",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 530604032,
+            "pss_bytes": 272600064,
+            "private_bytes": 172236800,
+            "virtual_bytes": 1839620657152,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 105713664,
+                "pss_bytes": 47902720,
+                "private_bytes": 25108480,
+                "virtual_bytes": 56306520064
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46915584,
+                "pss_bytes": 12596224,
+                "private_bytes": 671744,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46473216,
+                "pss_bytes": 12523520,
+                "private_bytes": 757760,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67321856,
+                "pss_bytes": 30109696,
+                "private_bytes": 14426112,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78479360,
+                "pss_bytes": 29022208,
+                "private_bytes": 12308480,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 185700352,
+                "pss_bytes": 140445696,
+                "private_bytes": 118964224,
+                "virtual_bytes": 1558692831232
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "turso-minimum",
+      "repetition": 2,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "turso",
+            "sqlite_version": null,
+            "open_ms": 349,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 1009,
+                  "maximum": 65536,
+                  "shared": true
+                },
+                "initial_buffer_bytes": 66125824,
+                "current_buffer_bytes": 80936960,
+                "shared": true
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "5e519da0bd3a717556dfb9cb98e55246538f49c95b58971f66e0138dab713ff4",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 519741440,
+            "pss_bytes": 261969920,
+            "private_bytes": 161931264,
+            "virtual_bytes": 1839628914688,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 104853504,
+                "pss_bytes": 47805440,
+                "private_bytes": 25395200,
+                "virtual_bytes": 56314847232
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47087616,
+                "pss_bytes": 12583936,
+                "private_bytes": 622592,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47202304,
+                "pss_bytes": 12782592,
+                "private_bytes": 770048,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67305472,
+                "pss_bytes": 29704192,
+                "private_bytes": 14200832,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 77852672,
+                "pss_bytes": 29157376,
+                "private_bytes": 12718080,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 175439872,
+                "pss_bytes": 129936384,
+                "private_bytes": 108224512,
+                "virtual_bytes": 1558692765696
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "sqlite",
+      "repetition": 2,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "sqlite",
+            "sqlite_version": "3.54.1",
+            "open_ms": 198,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 128,
+                  "maximum": 32768
+                },
+                "initial_buffer_bytes": 8388608,
+                "current_buffer_bytes": 8388608,
+                "shared": false
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "713d3c869a79ec42c38575cc860432b295772819cfc73f1c0a869fd7093442e7",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 475754496,
+            "pss_bytes": 217823232,
+            "private_bytes": 117936128,
+            "virtual_bytes": 1841609064448,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 105324544,
+                "pss_bytes": 47773696,
+                "private_bytes": 24985600,
+                "virtual_bytes": 56298061824
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47091712,
+                "pss_bytes": 12409856,
+                "private_bytes": 569344,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47046656,
+                "pss_bytes": 12551168,
+                "private_bytes": 774144,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67334144,
+                "pss_bytes": 29632512,
+                "private_bytes": 14118912,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 77328384,
+                "pss_bytes": 29744128,
+                "private_bytes": 13725696,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 131629056,
+                "pss_bytes": 85711872,
+                "private_bytes": 63762432,
+                "virtual_bytes": 1560689704960
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "empty",
+      "repetition": 2,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "empty",
+            "sqlite_version": null,
+            "open_ms": 0,
+            "memories": []
+          },
+          "process_family": {
+            "rss_bytes": 445427712,
+            "pss_bytes": 188028928,
+            "private_bytes": 88858624,
+            "virtual_bytes": 1837563273216,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 103018496,
+                "pss_bytes": 45971456,
+                "private_bytes": 23556096,
+                "virtual_bytes": 56314806272
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47198208,
+                "pss_bytes": 12736512,
+                "private_bytes": 667648,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47140864,
+                "pss_bytes": 12656640,
+                "private_bytes": 753664,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67432448,
+                "pss_bytes": 30347264,
+                "private_bytes": 14979072,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78209024,
+                "pss_bytes": 28633088,
+                "private_bytes": 12181504,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 102428672,
+                "pss_bytes": 57683968,
+                "private_bytes": 36720640,
+                "virtual_bytes": 1556627169280
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "turso-minimum",
+      "repetition": 3,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "turso",
+            "sqlite_version": null,
+            "open_ms": 295,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 1009,
+                  "maximum": 65536,
+                  "shared": true
+                },
+                "initial_buffer_bytes": 66125824,
+                "current_buffer_bytes": 80936960,
+                "shared": true
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "248132763a9d38f1ac24d5e5b3083787a4b7da9a1ad6d29ace29c5637dc21eaf",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 519897088,
+            "pss_bytes": 260208640,
+            "private_bytes": 160808960,
+            "virtual_bytes": 1839612252160,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 104271872,
+                "pss_bytes": 46808064,
+                "private_bytes": 24346624,
+                "virtual_bytes": 56298127360
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46903296,
+                "pss_bytes": 12299264,
+                "private_bytes": 552960,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46915584,
+                "pss_bytes": 12462080,
+                "private_bytes": 778240,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67432448,
+                "pss_bytes": 29509632,
+                "private_bytes": 14020608,
+                "virtual_bytes": 56254488576
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78258176,
+                "pss_bytes": 28856320,
+                "private_bytes": 12529664,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 176115712,
+                "pss_bytes": 130273280,
+                "private_bytes": 108580864,
+                "virtual_bytes": 1558692831232
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "sqlite",
+      "repetition": 3,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "sqlite",
+            "sqlite_version": "3.54.1",
+            "open_ms": 189,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 128,
+                  "maximum": 32768
+                },
+                "initial_buffer_bytes": 8388608,
+                "current_buffer_bytes": 8388608,
+                "shared": false
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "9377e37a01da81279abc44935e88d106a1632180779d385684c054afc2102ae2",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 476819456,
+            "pss_bytes": 217600000,
+            "private_bytes": 116965376,
+            "virtual_bytes": 1841609080832,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 105205760,
+                "pss_bytes": 48776192,
+                "private_bytes": 26128384,
+                "virtual_bytes": 56298061824
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46972928,
+                "pss_bytes": 12441600,
+                "private_bytes": 585728,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47120384,
+                "pss_bytes": 12622848,
+                "private_bytes": 765952,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67612672,
+                "pss_bytes": 29723648,
+                "private_bytes": 14094336,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78024704,
+                "pss_bytes": 28466176,
+                "private_bytes": 12279808,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 131883008,
+                "pss_bytes": 85569536,
+                "private_bytes": 63111168,
+                "virtual_bytes": 1560689713152
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "empty",
+      "repetition": 3,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "empty",
+            "sqlite_version": null,
+            "open_ms": 0,
+            "memories": []
+          },
+          "process_family": {
+            "rss_bytes": 443723776,
+            "pss_bytes": 186807296,
+            "private_bytes": 88551424,
+            "virtual_bytes": 1837554950144,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 102531072,
+                "pss_bytes": 45420544,
+                "private_bytes": 23207936,
+                "virtual_bytes": 56306413568
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46612480,
+                "pss_bytes": 12490752,
+                "private_bytes": 622592,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46837760,
+                "pss_bytes": 12461056,
+                "private_bytes": 716800,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67264512,
+                "pss_bytes": 29940736,
+                "private_bytes": 14536704,
+                "virtual_bytes": 56254558208
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78360576,
+                "pss_bytes": 28587008,
+                "private_bytes": 11972608,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 102117376,
+                "pss_bytes": 57907200,
+                "private_bytes": 37494784,
+                "virtual_bytes": 1556627169280
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "turso-default",
+      "repetition": 3,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "turso",
+            "sqlite_version": null,
+            "open_ms": 256,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 4000,
+                  "maximum": 65536,
+                  "shared": true
+                },
+                "initial_buffer_bytes": 262144000,
+                "current_buffer_bytes": 276955136,
+                "shared": true
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "1ce3e8ea9e11bea76e08728d558837cf58f889d4f857e200be88885d70886ab6",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 532992000,
+            "pss_bytes": 273607680,
+            "private_bytes": 172851200,
+            "virtual_bytes": 1839628906496,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 105844736,
+                "pss_bytes": 48146432,
+                "private_bytes": 25403392,
+                "virtual_bytes": 56314847232
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47226880,
+                "pss_bytes": 12511232,
+                "private_bytes": 569344,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47120384,
+                "pss_bytes": 12762112,
+                "private_bytes": 856064,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67031040,
+                "pss_bytes": 29377536,
+                "private_bytes": 13803520,
+                "virtual_bytes": 56254488576
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78303232,
+                "pss_bytes": 29436928,
+                "private_bytes": 12840960,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 187465728,
+                "pss_bytes": 141373440,
+                "private_bytes": 119377920,
+                "virtual_bytes": 1558692765696
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "sqlite",
+      "repetition": 4,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "sqlite",
+            "sqlite_version": "3.54.1",
+            "open_ms": 206,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 128,
+                  "maximum": 32768
+                },
+                "initial_buffer_bytes": 8388608,
+                "current_buffer_bytes": 8388608,
+                "shared": false
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "ecf759226de912ec2b3d14ea900c8c6a7b619b58631bd21d41745a35535edc39",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 476737536,
+            "pss_bytes": 218805248,
+            "private_bytes": 117907456,
+            "virtual_bytes": 1841625923584,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 104550400,
+                "pss_bytes": 47560704,
+                "private_bytes": 25182208,
+                "virtual_bytes": 56314847232
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47022080,
+                "pss_bytes": 12588032,
+                "private_bytes": 573440,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46583808,
+                "pss_bytes": 12720128,
+                "private_bytes": 802816,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 68157440,
+                "pss_bytes": 30195712,
+                "private_bytes": 14274560,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78004224,
+                "pss_bytes": 29253632,
+                "private_bytes": 12664832,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 132419584,
+                "pss_bytes": 86487040,
+                "private_bytes": 64409600,
+                "virtual_bytes": 1560689774592
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "empty",
+      "repetition": 4,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "empty",
+            "sqlite_version": null,
+            "open_ms": 0,
+            "memories": []
+          },
+          "process_family": {
+            "rss_bytes": 445652992,
+            "pss_bytes": 189363200,
+            "private_bytes": 90234880,
+            "virtual_bytes": 1837563346944,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 102506496,
+                "pss_bytes": 46539776,
+                "private_bytes": 24645632,
+                "virtual_bytes": 56306413568
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46632960,
+                "pss_bytes": 12516352,
+                "private_bytes": 618496,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47251456,
+                "pss_bytes": 12825600,
+                "private_bytes": 831488,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67829760,
+                "pss_bytes": 30181376,
+                "private_bytes": 14512128,
+                "virtual_bytes": 56254496768
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78254080,
+                "pss_bytes": 28718080,
+                "private_bytes": 12177408,
+                "virtual_bytes": 56187011072
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 103178240,
+                "pss_bytes": 58582016,
+                "private_bytes": 37449728,
+                "virtual_bytes": 1556627234816
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "turso-default",
+      "repetition": 4,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "turso",
+            "sqlite_version": null,
+            "open_ms": 254,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 4000,
+                  "maximum": 65536,
+                  "shared": true
+                },
+                "initial_buffer_bytes": 262144000,
+                "current_buffer_bytes": 276955136,
+                "shared": true
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "d637d114a705d2c76d452d4fbfa5b5795449517ec1b07477d9859d34f1aa1d1f",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 530550784,
+            "pss_bytes": 272864256,
+            "private_bytes": 172163072,
+            "virtual_bytes": 1839620452352,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 104910848,
+                "pss_bytes": 47925248,
+                "private_bytes": 25198592,
+                "virtual_bytes": 56306454528
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47345664,
+                "pss_bytes": 12705792,
+                "private_bytes": 663552,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46694400,
+                "pss_bytes": 12585984,
+                "private_bytes": 729088,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 66781184,
+                "pss_bytes": 29548544,
+                "private_bytes": 13959168,
+                "virtual_bytes": 56254488576
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 77574144,
+                "pss_bytes": 28682240,
+                "private_bytes": 12251136,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 187244544,
+                "pss_bytes": 141416448,
+                "private_bytes": 119361536,
+                "virtual_bytes": 1558692700160
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "turso-minimum",
+      "repetition": 4,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "turso",
+            "sqlite_version": null,
+            "open_ms": 289,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 1009,
+                  "maximum": 65536,
+                  "shared": true
+                },
+                "initial_buffer_bytes": 66125824,
+                "current_buffer_bytes": 80936960,
+                "shared": true
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "3dbb0127bfe614777572ce86322d84f66dbe21c2ec6672f8aaa133ad572bf97f",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 517455872,
+            "pss_bytes": 261076992,
+            "private_bytes": 160690176,
+            "virtual_bytes": 1839628976128,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 104136704,
+                "pss_bytes": 47748096,
+                "private_bytes": 25247744,
+                "virtual_bytes": 56314847232
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46919680,
+                "pss_bytes": 12464128,
+                "private_bytes": 602112,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46997504,
+                "pss_bytes": 12620800,
+                "private_bytes": 774144,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67129344,
+                "pss_bytes": 29825024,
+                "private_bytes": 14073856,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 77905920,
+                "pss_bytes": 29472768,
+                "private_bytes": 12980224,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 174366720,
+                "pss_bytes": 128946176,
+                "private_bytes": 107012096,
+                "virtual_bytes": 1558692827136
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "empty",
+      "repetition": 5,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "empty",
+            "sqlite_version": null,
+            "open_ms": 0,
+            "memories": []
+          },
+          "process_family": {
+            "rss_bytes": 444035072,
+            "pss_bytes": 188914688,
+            "private_bytes": 90652672,
+            "virtual_bytes": 1837563281408,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 102174720,
+                "pss_bytes": 46977024,
+                "private_bytes": 25456640,
+                "virtual_bytes": 56314806272
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46751744,
+                "pss_bytes": 12394496,
+                "private_bytes": 589824,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47153152,
+                "pss_bytes": 12610560,
+                "private_bytes": 770048,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67293184,
+                "pss_bytes": 30000128,
+                "private_bytes": 14454784,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 77926400,
+                "pss_bytes": 28567552,
+                "private_bytes": 12062720,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 102735872,
+                "pss_bytes": 58364928,
+                "private_bytes": 37318656,
+                "virtual_bytes": 1556627169280
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "turso-default",
+      "repetition": 5,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "turso",
+            "sqlite_version": null,
+            "open_ms": 273,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 4000,
+                  "maximum": 65536,
+                  "shared": true
+                },
+                "initial_buffer_bytes": 262144000,
+                "current_buffer_bytes": 276955136,
+                "shared": true
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "56742e589b684bc5133e9bd49498ac63cedffbab85e14af6273f551a6097c749",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 532054016,
+            "pss_bytes": 273374208,
+            "private_bytes": 172462080,
+            "virtual_bytes": 1839620653056,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 105414656,
+                "pss_bytes": 48502784,
+                "private_bytes": 25899008,
+                "virtual_bytes": 56306520064
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47067136,
+                "pss_bytes": 12614656,
+                "private_bytes": 618496,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47058944,
+                "pss_bytes": 12772352,
+                "private_bytes": 811008,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67575808,
+                "pss_bytes": 30058496,
+                "private_bytes": 14458880,
+                "virtual_bytes": 56254496768
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78573568,
+                "pss_bytes": 29020160,
+                "private_bytes": 12353536,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 186363904,
+                "pss_bytes": 140405760,
+                "private_bytes": 118321152,
+                "virtual_bytes": 1558692827136
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "turso-minimum",
+      "repetition": 5,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "turso",
+            "sqlite_version": null,
+            "open_ms": 245,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 1009,
+                  "maximum": 65536,
+                  "shared": true
+                },
+                "initial_buffer_bytes": 66125824,
+                "current_buffer_bytes": 80936960,
+                "shared": true
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "05d94145f5196a097ecc6b920e04696086eb1ecb5c67c69b2043388bca71b46a",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 519143424,
+            "pss_bytes": 260848640,
+            "private_bytes": 161423360,
+            "virtual_bytes": 1839628918784,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 105115648,
+                "pss_bytes": 48502784,
+                "private_bytes": 26144768,
+                "virtual_bytes": 56298061824
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46886912,
+                "pss_bytes": 12388352,
+                "private_bytes": 569344,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47284224,
+                "pss_bytes": 12696576,
+                "private_bytes": 827392,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 66838528,
+                "pss_bytes": 29385728,
+                "private_bytes": 14041088,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78139392,
+                "pss_bytes": 28553216,
+                "private_bytes": 12242944,
+                "virtual_bytes": 56195403776
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 174878720,
+                "pss_bytes": 129321984,
+                "private_bytes": 107597824,
+                "virtual_bytes": 1558692765696
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "variant": "sqlite",
+      "repetition": 5,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "sqlite",
+            "sqlite_version": "3.54.1",
+            "open_ms": 234,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 128,
+                  "maximum": 32768
+                },
+                "initial_buffer_bytes": 8388608,
+                "current_buffer_bytes": 8388608,
+                "shared": false
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "3126fb6ea04b98ed042d12845170b6975e401a1c6a7fc3fc4ea759c7f5071115",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 477708288,
+            "pss_bytes": 218340352,
+            "private_bytes": 116793344,
+            "virtual_bytes": 1841634320384,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 105652224,
+                "pss_bytes": 48197632,
+                "private_bytes": 25214976,
+                "virtual_bytes": 56314912768
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46870528,
+                "pss_bytes": 12569600,
+                "private_bytes": 622592,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47206400,
+                "pss_bytes": 12809216,
+                "private_bytes": 761856,
+                "virtual_bytes": 56094093312
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67756032,
+                "pss_bytes": 30099456,
+                "private_bytes": 14524416,
+                "virtual_bytes": 56254496768
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 78176256,
+                "pss_bytes": 28944384,
+                "private_bytes": 12484608,
+                "virtual_bytes": 56187011072
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 132046848,
+                "pss_bytes": 85720064,
+                "private_bytes": 63184896,
+                "virtual_bytes": 1560689709056
+              }
+            ]
+          }
+        }
+      ],
+      "passed": true
+    }
+  ],
+  "browser": "156.0.8078.4",
+  "source_wrapper_unchanged": true,
+  "passed": true,
+  "finished_at": "2026-10-25T17:21:23.025Z"
+}

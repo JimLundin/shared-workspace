@@ -5,7 +5,7 @@ const root=resolve(import.meta.dirname,'..');
 const cases=[
  {name:'stale editor adopts unseen heads',file:'session.ts',test:'session.test.ts',pattern:'stale editor preserves',from:'expected_heads: [...(reviewedHeads ?? e.baseHeads)]',to:'expected_heads: [...(reviewedHeads ?? (this.snapshot()?.resources.find(r => r.id === e.resourceId)?.heads.map(h => h.id) ?? e.baseHeads))]'},
  {name:'retry substitutes a new operation',file:'session.ts',test:'session.test.ts',pattern:'retry an unconfirmed save',from:'await this.submit(pending.command);',to:'await this.submit({ ...pending.command, operation_id: this.id() });'},
- {name:'late voice session loses its epoch fence',file:'voice.ts',test:'voice.test.ts',pattern:'late recognition cannot alter',from:'if (this.epoch !== epoch || event.session_id !== sessionId) return;',to:'if (event.session_id !== sessionId) return;'},
+ {name:'late voice session loses its epoch fence',file:'voice-session.ts',test:'voice.test.ts',pattern:'late recognition cannot alter',from:'if (this.epoch !== epoch || event.session_id !== sessionId) return;',to:'if (event.session_id !== sessionId) return;'},
 ];
 const results=[];
 for(const item of cases){const scratch=await mkdtemp(join(tmpdir(),'workspace-ui-mutation-'));try{

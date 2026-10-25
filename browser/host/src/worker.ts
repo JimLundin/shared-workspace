@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { object, string } from '../../../native/ui/src/protocol.ts';
+import { object, string, type JoinStage } from '../../../native/ui/src/protocol.ts';
 import { requireThat, safeError, type Command, type HostOptions } from './types.ts';
 import type { HostOwner } from './owner.ts';
 
@@ -28,7 +28,7 @@ async function open(options: HostOptions): Promise<void> {
   });
 }
 
-async function dispatch(method: string, value: unknown): Promise<unknown> {
+async function dispatch(method: string, value: unknown, progress: (stage: JoinStage) => void): Promise<unknown> {
   if (method === 'open') {
     const options = object(value);
     await open({
@@ -46,7 +46,7 @@ async function dispatch(method: string, value: unknown): Promise<unknown> {
     case 'invite':
       requireThat(Array.isArray(value), 'Invalid workspace selection.');
       return owner.invite(value.map(string));
-    case 'join': return owner.join(string(value));
+    case 'join': return owner.join(string(value), progress);
     case 'sync': return owner.sync();
     case 'foreground':
       requireThat(typeof value === 'boolean', 'Invalid foreground state.');
@@ -65,7 +65,7 @@ async function dispatch(method: string, value: unknown): Promise<unknown> {
 
 self.addEventListener('message', (event: MessageEvent<unknown>) => {
   const message = object(event.data), id = string(message.id), method = string(message.method);
-  void dispatch(method, message.value).then(
+  void dispatch(method, message.value, stage => self.postMessage({ id, type: 'join_progress', stage })).then(
     value => self.postMessage({ id, ok: true, value }),
     error => self.postMessage({ id, ok: false, error: safeError(error) }),
   );

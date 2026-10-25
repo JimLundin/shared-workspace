@@ -46,7 +46,7 @@ export function hex(value: unknown): string {
 }
 export function deviceName(value: unknown): string {
   const result = string(value);
-  requireThat(result.trim() && bytes(result) <= 120 && !/[\p{Cc}]/u.test(result), 'Invalid device name.');
+  requireThat(result.trim() && bytes(result) <= 120 && !/[\p{Cc}\uD800-\uDFFF]/u.test(result), 'Invalid device name.');
   return result;
 }
 export function scope(value: unknown): readonly string[] {

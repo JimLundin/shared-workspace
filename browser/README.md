@@ -63,9 +63,13 @@ remain available. Application embedding is subject to the target website's
 frame and login policies. Native document-hosting experiments do not establish
 that Office can be embedded in this public website.
 
-The pinned Turso package starts with **250 MiB of WASM linear memory**. That is
-not a measurement of resident memory. Safari, physical iPhone behavior, resource
-usage and managed-network compatibility require device testing.
+Turso 0.8.3 requests **250 MiB of initial WASM linear memory**, not 250 MiB of
+additional resident RAM. The [runtime audit](storage-probe/memory-audit-20261025/README.md)
+measured about 81 MiB of additional process-family PSS for a small database in
+Linux Chromium, relative to the same empty app; this is not a full-host or iPhone
+measurement. A smaller experimental wrapper worked, but the application retains
+the upstream package pending broader browser/device testing and a maintainable
+configuration path. Safari and managed-network compatibility still need testing.
 
 See [the architecture research](../docs/browser-host-direction.md), component
 evidence and each implementation directory for exact build and test commands.

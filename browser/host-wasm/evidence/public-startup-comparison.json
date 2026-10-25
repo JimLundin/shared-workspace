@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-25",
+  "target": "https://jimlundin.github.io/shared-workspace/",
+  "engine": "WebKit",
+  "version": "27.2",
+  "environment": "Official Playwright 1.64.1 noble Docker image; Linux automation, not physical iPhone Safari",
+  "comparison": "Same plain public URL, fresh storage, viewport, assets and service-worker isolation; only browser context persistence changed",
+  "ephemeral_context": {
+    "api": "browser.newContext",
+    "workspace_navigation_ready": false,
+    "handled_boot_failure_ms": 3194,
+    "page_and_worker_isolated": true,
+    "web_lock": "passed",
+    "opfs_root": "rejected",
+    "opfs_error_name": "UnknownError"
+  },
+  "fresh_persistent_context": {
+    "api": "launchPersistentContext",
+    "workspace_navigation_ready": true,
+    "navigation_observed_ms": 3843,
+    "page_and_worker_isolated": true,
+    "web_lock": "passed",
+    "opfs_root": "passed"
+  },
+  "finding": "The ephemeral WebKit context exposed OPFS but rejected getDirectory. The old navigation-only wait hid the early handled storage failure. The same public service-worker and COOP/COEP startup worked with a fresh persistent profile.",
+  "limits": [
+    "Does not establish physical iPhone or Safari Private Browsing behavior.",
+    "Separate from the independently reproduced Iroh Join relay failure.",
+    "Profiles existed only inside disposable containers and were not exported."
+  ]
+}

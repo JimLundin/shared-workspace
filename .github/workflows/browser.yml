@@ -75,18 +75,23 @@ jobs:
           npm --prefix browser/host ci --ignore-scripts
           npm --prefix browser/app ci --ignore-scripts
           npm --prefix browser/checks ci --ignore-scripts
-          npm --prefix browser/checks exec -- playwright install --with-deps chromium
+          npm --prefix browser/checks exec -- playwright install --with-deps chromium webkit
       - name: Check interfaces and presentation behavior
         run: |
           npm --prefix browser/host run check
+          npm --prefix browser/host test
           npm --prefix browser/checks run check
           npm --prefix native/ui run check
           npm --prefix native/ui test
           npm --prefix browser/app test
       - name: Exercise real persistent browser peers
         run: node browser/checks/check.mjs --evidence browser/checks/evidence/ci-acceptance
+      - name: Pair a visible Chromium inviter with WebKit
+        run: node browser/checks/pairing-diagnose.mjs --laptop-engine chromium --phone-engine webkit --legacy-retry --exercise-sync --require-compact --evidence browser/checks/evidence/ci-webkit
       - name: Detect acknowledged work that was rolled back
         run: node browser/checks/mutate.mjs --baseline-report browser/checks/evidence/ci-acceptance/report.json --evidence browser/checks/evidence/ci-mutation
+      - name: Detect invitation identity and scope corruption
+        run: node browser/host/tests/mutate-invitation.mjs --report browser/checks/evidence/ci-invitation-mutations.json
       - name: Build and exercise the static website
         run: |
           npm --prefix browser/app run build

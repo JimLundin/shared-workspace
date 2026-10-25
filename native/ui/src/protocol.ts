@@ -16,6 +16,14 @@ export type Command = Identified & (
 export type Receipt = Readonly<{ type: 'rejected'; operation_id: string; workspace_id: string; message: string }> | Readonly<{ type: 'applied'; operation_id: string; workspace_id: string; replayed: boolean }> | Readonly<{ type: 'conflict'; resource_id: string; expected_heads: readonly string[]; actual_heads: readonly string[] }>;
 export type Invite = Readonly<{ ticket: string; expires_at_ms: number }>;
 export type SyncReport = Readonly<{ peers: readonly Peer[] }>;
+export type JoinStage = 'checking_invitation' | 'connecting_relay' | 'contacting_device' | 'saving_workspace';
+
+export function decodeJoinStage(value: unknown): JoinStage {
+  switch (value) {
+    case 'checking_invitation': case 'connecting_relay': case 'contacting_device': case 'saving_workspace': return value;
+    default: throw new Error('The host returned an unknown joining stage.');
+  }
+}
 
 export function object(value: unknown): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error('The native host returned an invalid record.');

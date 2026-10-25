@@ -61,6 +61,17 @@ another device; the same authenticated device can retry after expiry to recover 
 lost acceptance response. The receiver verifies the invitation's exact scope and
 requires an explicitly selected bootstrap before accepting unfamiliar roots.
 
+New invitations use a bounded compact `w2.` encoding. It keeps all 32 bytes of
+the peer identity and nonce, exact workspace IDs, expiry and routing hints;
+legacy `workspace-browser-v1.` JSON invitations remain readable. The codec
+reduces QR density without a short-link service or reduced secret entropy.
+Its public-boundary tests and focused mutations are in [`tests`](tests/README.md).
+
+`join(ticket, onProgress?)` reports observed stages: `checking_invitation`,
+`connecting_relay`, `contacting_device`, and `saving_workspace`. Worker progress
+is associated with the request ID and cannot complete the call. Only the final
+returned snapshot confirms locally committed work; failures may follow any stage.
+
 With an HTTPS `baseUrl`, the returned ticket is a link containing the enrollment
 secret in its fragment. The fragment is never sent to the static server. The UI
 must call `takePairingTicketFromLocation` before displaying its explicit Join
@@ -112,10 +123,12 @@ step.
   identity backup or restoration flow yet.
 - The seed is unencrypted in OPFS and accessible to code at the same origin.
   There is no Keychain/DPAPI, OS credential vault, or device-bound key protection.
-- The pinned Turso wrapper initializes 250 MiB of shared linear memory, despite
-  the binary's smaller 63.0625 MiB import minimum. This is not a measured resident
-  memory figure or a claim of low phone resource use; see the storage probe's
-  reproducible footprint audit.
+- Turso's 250 MiB initial shared linear-memory setting is a wrapper default,
+  not a resident-RAM minimum. The [runtime audit](../storage-probe/memory-audit-20261025/README.md)
+  measured the database separately from this host and tested a smaller wrapper.
+  Its roughly 187 MiB reduction in logical capacity saved about 11.5 MiB of
+  startup PSS in Linux Chromium. The host retains the unmodified upstream
+  package pending broader device testing and a supported configuration path.
 - Relays provide routing, not authority. Availability outside the current
   browser session depends on browser lifecycle and connectivity. Native desktop
   controls, Office embedding, voice processing, and UI features are separate

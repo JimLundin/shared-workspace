@@ -63,3 +63,21 @@ payload's claimed identity to the callback. The real third browser then forges
 the selected identity, so the rejection assertion must fail after both positive
 exchanges succeeded. The live source and generated production assets remain
 unchanged. The result is retained in `evidence/transport-mutation.json`.
+
+`node tools/check-public-join.mjs --url https://jimlundin.github.io/shared-workspace/ --inviter chromium --joiner webkit --evidence /tmp/public-workspace-smoke`
+checks the served production UI, explicit invitation acceptance, and note edits
+in both directions over real Iroh. Run from `browser/host-wasm`, using the
+matching Playwright browsers; the official `mcr.microsoft.com/playwright:v1.64.1-noble`
+image supplies Linux WebKit 27.2. `--url` also accepts an existing permitted
+loopback static origin for checking a build before publication.
+
+Each participant uses a separate fresh temporary persistent profile, closed and
+removed before the report is written. The check handles the invitation's
+copy/paste disclosure and entry URL, and stops on either workspace navigation
+or a handled boot failure. It exports redacted stage/transport counts and verdicts,
+without screenshots, traces, invitations, keys, database files, or profiles.
+The [startup comparison](../evidence/public-startup-comparison.json) explains why:
+on the same public URL, WebKit's ephemeral context rejected OPFS `getDirectory()`
+while its fresh persistent context opened successfully. Page and worker isolation
+worked in both. This was a test-context failure, separate from the Iroh Join
+failure, and is not a physical iPhone or Safari Private Browsing result.

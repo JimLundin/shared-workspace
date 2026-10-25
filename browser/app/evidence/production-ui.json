@@ -1,10 +1,11 @@
 {
   "passed": true,
-  "started_at": "2026-10-25T15:07:20.830Z",
+  "started_at": "2026-10-25T17:32:50.986Z",
   "assertions": [
     "Fresh browser shows genuine empty host; service worker enables isolation without server headers.",
     "Workspace and note created through UI receive real durable host receipts.",
     "Phone fragment survives initial isolation reload, clears from URL, remains memory-only, and does not auto-join.",
+    "Observed host stages reach the production UI through the real worker before joining completes.",
     "Explicit phone Join completes an authenticated peer exchange and imports the real note.",
     "Notes edited from each production UI converge across isolated real browser hosts.",
     "Phone list/focus fits viewport and navigation preserves command address until explicit Run.",
@@ -20,6 +21,6 @@
     "Browser speech adapter tested separately; no microphone recognition claim.",
     "No public deployment from this test."
   ],
-  "asset_hash": "303cbfed10e1253cbb205089a2ba9be6f862102214f762e5274deb8b0dbcd1b2",
-  "finished_at": "2026-10-25T15:08:21.091Z"
+  "asset_hash": "1e725d6a89d094b088fba1faaab970197f44cf0552a5a409e13d0fa1ac668ed0",
+  "finished_at": "2026-10-25T17:33:13.286Z"
 }

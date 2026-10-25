@@ -5,11 +5,23 @@ real `BrowserHost`. Opening the website creates/opens this browser's durable
 host. There are no sample workspaces or fallback stores. Desktop shows a canvas;
 phone widths show a work list with a focused note. View arrangement stays local.
 
-Create a workspace and note, then choose **Share this workspace**. Its QR and
-**Copy invitation link** open the website with a fragment invitation on another
-device. Startup clears the fragment and prefills Devices; only **Join selected
-workspaces** calls the host. The inviting peer must be reachable. The invitation
-grants its selected scope, not every workspace.
+Create a workspace and note, then choose **Share this workspace**. Select the
+workspaces to include: your phone can share several, while a guest can receive
+just one. The QR and **Copy invitation link** open the website on the other
+device; **Share invitation** uses the device's share sheet where supported. The
+full invitation stays collapsed under a copy/paste disclosure. The compact token
+is supplied by the host and stays opaque to the UI.
+
+Startup clears the invitation fragment and leads with explicit **Join selected
+workspaces**. Host events report checking the invitation, connecting this device,
+contacting the inviting device, and saving the workspace. Progress never means
+completion: the host must return the committed snapshot. Failure guidance uses
+the last observed stage and retains the invitation for an explicit retry. Native
+adapters without progress events show a generic waiting state.
+
+Connecting devices grants only the workspaces selected in that invitation.
+It does not automatically share other or newly created workspaces. The inviting
+peer must be reachable.
 
 Speech is optional and starts explicitly. The browser's provider may process
 audio online. The transcript remains editable and requires **Run command**.
@@ -57,7 +69,8 @@ immediately previous asset cache remains available for older open clients.
 `test:built` serves the built application under `/shared-workspace/` on an
 ephemeral loopback port **without isolation headers**. It uses separate real
 persistent Chromium profiles, actual Turso OPFS and Iroh peers. It covers empty
-startup, UI saves, explicit fragment joining, two-way edits, addressed phone
+startup, UI saves, explicit fragment joining, observed Host progress through the
+real worker into the UI, two-way edits, addressed phone
 input, preservation/reconciliation of a stale editor, offline process restart
 and editing, reconnect delivery, asset-only caches, and absence of native calls.
 A second test changes the served build and checks waiting updates, preservation

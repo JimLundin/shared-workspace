@@ -10,7 +10,7 @@ const directory = new URL('../', import.meta.url).pathname;
 const server = await startStaticServer(join(directory, 'dist'));
 const profiles = await mkdtemp(join(tmpdir(), 'workspace-ui-'));
 const contexts = new Set(); const assertions = []; const diagnostics = []; const secrets = new Set();
-function scrub(value) { let result = String(value); for (const secret of secrets) result = result.replaceAll(secret, '[invitation redacted]'); return result.replace(/workspace-browser-v1\.[A-Za-z0-9_-]+/g, '[invitation redacted]'); }
+function scrub(value) { let result = String(value); for (const secret of secrets) result = result.replaceAll(secret, '[invitation redacted]'); return result.replace(/(?:workspace-browser-v1|w2)\.[A-Za-z0-9_-]+/g, '[invitation redacted]'); }
 const report = { passed: false, started_at: new Date().toISOString(), assertions,
   scope: 'Built production UI with real BrowserHost, Turso OPFS and Iroh peers; headers-free static /shared-workspace/ origin.',
   limits: ['Desktop Chromium with phone viewport; no physical iPhone result.', 'Browser speech adapter tested separately; no microphone recognition claim.', 'No public deployment from this test.'] };
@@ -67,7 +67,8 @@ try {
   step('pairing');
   await desktop.page.getByRole('button', { name: 'Share this workspace' }).click();
   await desktop.page.getByRole('button', { name: 'Create invitation', exact: true }).click();
-  await desktop.page.getByLabel('Pairing ticket', { exact: true }).waitFor({ timeout: 60000 });
+  await desktop.page.getByLabel('Pairing ticket', { exact: true }).waitFor({ state: 'attached', timeout: 60000 });
+  assert.equal(await desktop.page.getByLabel('Pairing ticket', { exact: true }).isVisible(), false);
   const ticket = await desktop.page.getByLabel('Pairing ticket', { exact: true }).inputValue();
   secrets.add(ticket);
   const link = new URL(server.url); link.hash = new URLSearchParams({ invite: ticket });
@@ -79,8 +80,19 @@ try {
   const storage = await phone.page.evaluate(() => ({ local: JSON.stringify(localStorage), session: JSON.stringify(sessionStorage) }));
   assert.ok(!storage.local.includes(ticket) && !storage.session.includes(ticket));
   record('Phone fragment survives initial isolation reload, clears from URL, remains memory-only, and does not auto-join.');
+  await phone.page.evaluate(() => {
+    window.observedJoinLabels = [];
+    const observer = new MutationObserver(() => {
+      const label = document.querySelector('.join-progress strong')?.textContent;
+      if (label && !window.observedJoinLabels.includes(label)) window.observedJoinLabels.push(label);
+    });
+    observer.observe(document.getElementById('app'), { childList: true, subtree: true });
+  });
   await phone.page.getByRole('button', { name: 'Join selected workspaces', exact: true }).click();
   await phone.page.locator('nav').getByRole('button', { name: 'Launch work', exact: true }).waitFor({ timeout: 90000 });
+  const stages = await phone.page.evaluate(() => window.observedJoinLabels);
+  for (const label of ['Checking invitation', 'Connecting this device', 'Contacting the inviting device', 'Saving work on this device']) assert.ok(stages.includes(label));
+  record('Observed host stages reach the production UI through the real worker before joining completes.');
   await nav(phone.page, 'Launch work'); await focus(phone.page); await note(phone.page, 'The launch starts with three pilot teams.');
   record('Explicit phone Join completes an authenticated peer exchange and imports the real note.');
   step('two-way-edits');

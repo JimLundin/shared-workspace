@@ -108,18 +108,21 @@ Same-origin assets avoid unnecessary cross-origin resource-policy complications.
 Do not silently replace durable storage with in-memory state if isolation or
 OPFS is unavailable.
 
-The released package initializes **4,000 WASM pages = 250 MiB of linear memory**,
-with a maximum of 65,536 pages = 4 GiB. The maximum is an allowed linear-memory
-size, not a measured resident-memory allocation. The initial size also does not
-by itself establish physical memory use, battery impact, or iPhone stability.
-It is nevertheless a material constraint for the lightweight goal. Measure
-startup, resident memory and background/foreground recovery on devices before
-claiming a small footprint. Reducing this default requires a verified upstream
-configuration or a reproducible custom build; it is not a documented `connect`
-option. The [binary footprint audit](../browser/storage-probe/evidence/footprint.json)
-finds a lower imported-memory minimum of 1,009 pages = 63.0625 MiB in the WASM
-binary. That does not demonstrate that lowering the wrapper allocation would
-work. The tested engine remains unmodified. [2]
+The released wrapper requests **4,000 WASM pages = 250 MiB of initial linear
+memory**, with a 4 GiB growth limit. This is not an unavoidable resident-RAM
+minimum. The [runtime audit](../browser/storage-probe/memory-audit-20261025/README.md)
+measured actual linear size and process-family RSS/PSS against an empty app and
+official SQLite WASM. Five Linux Chromium startup trials found about 81 MiB
+additional PSS for a small Turso database. Those are database-probe results,
+not full-application or iPhone measurements. [2]
+
+A disposable wrapper patch to the binary's 1,009-page minimum (63.0625 MiB)
+passed write/reload/restart checks with the unchanged engine binary. It reduced
+startup PSS by about 11.5 MiB, despite reducing initial logical memory by about
+187 MiB. The public package has no supported consumer memory-size option in
+stable 0.8.3 or next 0.9.0-pre.1. Keep the application on unmodified upstream
+Turso while pursuing a supported setting and testing Safari/iPhone lifecycle
+and resource behavior. The experimental rewrite is not a production dependency.
 
 Isolation headers also affect cross-origin resources and popup relationships.
 Validate login and document integrations in the chosen hosting environment.

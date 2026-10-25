@@ -1,15 +1,14 @@
 import init, { BrowserEndpoint } from '../../host-wasm/pkg/browser_workspace_host.js';
-import { object, string, number } from '../../../native/ui/src/protocol.ts';
+import { object, string, number, type JoinStage } from '../../../native/ui/src/protocol.ts';
 import { BrowserStore } from './store.ts';
+import { encodeTicket, decodeTicket } from './invitation.ts';
 import {
-  MAX_MESSAGE_BYTES, MAX_SCOPE, MAX_TICKET_BYTES, bytes, fields, hashNonce, hex, json, parse,
+  MAX_MESSAGE_BYTES, MAX_SCOPE, bytes, fields, hashNonce, hex, json, parse,
   randomHex, requireThat, safeError, sameScope, scope, signedOperations,
   type Command, type Contact, type Envelope, type HostOptions, type Invite, type Peer,
   type PeerRecord, type PeerState, type Receipt, type ReplyBody, type RequestBody,
   type Snapshot, type SyncReport, type Ticket,
 } from './types.ts';
-
-const PREFIX = 'workspace-browser-v1.';
 
 function contactFromRecord(peer: PeerRecord): Contact {
   const address = object(parse(peer.address_json));
@@ -20,28 +19,6 @@ function contactFromRecord(peer: PeerRecord): Contact {
 async function retireEndpoint(endpoint: BrowserEndpoint): Promise<void> {
   await endpoint.close();
   endpoint.free();
-}
-
-function ticketText(ticket: Ticket, baseUrl?: string): string {
-  const text = PREFIX + btoa(String.fromCharCode(...new TextEncoder().encode(json(ticket)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-  requireThat(bytes(text) <= MAX_TICKET_BYTES, 'Invitation is too large.');
-  if (baseUrl) {
-    const url = new URL(baseUrl);
-    if (url.protocol === 'https:') {
-      url.hash = new URLSearchParams({ invite: text }).toString();
-      return url.href;
-    }
-  }
-  return text;
-}
-
-function decodeTicketText(value: string): unknown {
-  requireThat(bytes(value) <= MAX_TICKET_BYTES + 2048, 'Invitation is too large.');
-  if (value.startsWith('https://')) value = new URLSearchParams(new URL(value).hash.slice(1)).get('invite') ?? '';
-  requireThat(value.startsWith(PREFIX), 'Invalid browser invitation.');
-  const encoded = value.slice(PREFIX.length);
-  requireThat(/^[A-Za-z0-9_-]+$/.test(encoded), 'Invalid invitation encoding.');
-  return parse(new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(atob(encoded.replace(/-/g, '+').replace(/_/g, '/')), char => char.charCodeAt(0))));
 }
 
 /** Network effects are outside BrowserStore's queue. */
@@ -169,13 +146,15 @@ export class HostOwner {
     }
   }
 
-  async #exchange(peer: PeerRecord, body: RequestBody): Promise<Envelope<ReplyBody>> {
+  async #exchange(peer: PeerRecord, body: RequestBody, progress?: (stage: JoinStage) => void): Promise<Envelope<ReplyBody>> {
     const endpoint = this.#client();
     const id = randomHex();
+    progress?.('connecting_relay');
     const packet: Envelope<RequestBody> = { version: 1, id, contact: await this.#ownContact(endpoint), body };
     const outgoing = json(packet);
     requireThat(bytes(outgoing) <= MAX_MESSAGE_BYTES, 'Workspace transfer exceeds 8 MiB.');
     requireThat(this.#client() === endpoint, 'Networking changed before this exchange started.');
+    progress?.('contacting_device');
     const response = fields(parse(await endpoint.request(peer.address_json, outgoing)), ['peer_id', 'payload']);
     requireThat(response.peer_id === peer.id, 'Transport reply changed peer identity.');
     const reply = await this.#envelope(string(response.payload), peer.id);
@@ -248,22 +227,24 @@ export class HostOwner {
     const endpoint = this.#client(), selected = scope(workspaceIds);
     const nonce = randomHex(), expiry = Date.now() + 900_000;
     const ticket: Ticket = { version: 1, inviter: await this.#ownContact(endpoint), nonce, workspace_ids: selected, expires_at_ms: expiry };
-    const text = ticketText(ticket, this.#baseUrl);
+    const text = encodeTicket(ticket, this.#baseUrl);
     await this.#store.createInvite(await hashNonce(nonce), selected, expiry);
     return { ticket: text, expires_at_ms: expiry };
   }
 
-  async join(value: string): Promise<Snapshot> {
+  async join(value: string, progress?: (stage: JoinStage) => void): Promise<Snapshot> {
+    progress?.('checking_invitation');
     this.#client();
-    const decoded = fields(decodeTicketText(value), ['version', 'inviter', 'nonce', 'workspace_ids', 'expires_at_ms']);
+    const decoded = decodeTicket(value);
     requireThat(decoded.version === 1, 'Unsupported invitation version.');
     const inviter = await this.#store.contact(decoded.inviter), selected = scope(decoded.workspace_ids);
     const nonce = hex(decoded.nonce);
     number(decoded.expires_at_ms);
     requireThat(inviter.id !== this.#store.id, 'A host cannot join itself.');
-    const reply = await this.#exchange(inviter, { type: 'pair', nonce });
+    const reply = await this.#exchange(inviter, { type: 'pair', nonce }, progress);
     requireThat(reply.body.type === 'paired', 'Invitation could not be accepted; it may be expired or already used.');
     requireThat(sameScope(reply.body.workspace_ids, selected), 'Pairing reply changed the selected workspaces.');
+    progress?.('saving_workspace');
     await this.#store.bootstrap(await this.#store.contact(reply.contact), selected, reply.body.operations);
     await this.#retain(selected, reply.body.contacts);
     this.#wake();

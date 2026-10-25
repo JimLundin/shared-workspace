@@ -1,0 +1,72 @@
+{
+  "passed": false,
+  "timestamp": "2026-10-25T17:18:07.560Z",
+  "mode": "worker",
+  "stages": [
+    {
+      "stage": "chromium.ready",
+      "elapsed_ms": 673,
+      "version": "156.0.8078.4",
+      "mode": "worker"
+    },
+    {
+      "stage": "webkit.ready",
+      "elapsed_ms": 2299,
+      "version": "27.2",
+      "mode": "worker"
+    },
+    {
+      "stage": "chromium.open.begin",
+      "elapsed_ms": 2299
+    },
+    {
+      "stage": "chromium.open.completed",
+      "elapsed_ms": 2334,
+      "duration_ms": 35
+    },
+    {
+      "stage": "chromium.address.begin",
+      "elapsed_ms": 2334
+    },
+    {
+      "stage": "chromium.address.completed",
+      "elapsed_ms": 3511,
+      "duration_ms": 1177
+    },
+    {
+      "stage": "webkit.open.begin",
+      "elapsed_ms": 3511
+    },
+    {
+      "stage": "webkit.open.completed",
+      "elapsed_ms": 3524,
+      "duration_ms": 13
+    },
+    {
+      "stage": "webkit.address.begin",
+      "elapsed_ms": 3524
+    },
+    {
+      "stage": "chromium.close.begin",
+      "elapsed_ms": 33536
+    },
+    {
+      "stage": "webkit.close.begin",
+      "elapsed_ms": 33538
+    },
+    {
+      "stage": "webkit.close.completed",
+      "elapsed_ms": 33552,
+      "duration_ms": 14
+    },
+    {
+      "stage": "chromium.close.completed",
+      "elapsed_ms": 33555,
+      "duration_ms": 18
+    }
+  ],
+  "failure": {
+    "stage": "webkit.address.begin",
+    "message": "page.evaluate: Error: deadline has elapsed"
+  }
+}

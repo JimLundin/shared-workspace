@@ -1,11 +1,12 @@
 import type { Host } from './host.ts';
-import type { Command, Invite, Receipt, Resource, Snapshot } from './protocol.ts';
+import type { Command, Invite, Receipt, Resource, Snapshot, JoinStage } from './protocol.ts';
+import { advanceJoinStage, joinFailure } from './pairing.ts';
 export type Route = Readonly<{ type: 'home' }> | Readonly<{ type: 'devices' }> | Readonly<{ type: 'workspace'; id: string }>;
 export type View = Readonly<{ mode: 'canvas' | 'focus' | 'overview'; focused: string | null; closed: readonly string[]; order: readonly string[] }>;
 export type HostState = Readonly<{ type: 'loading' | 'unavailable' }> | Readonly<{ type: 'ready'; snapshot: Snapshot }> | Readonly<{ type: 'failed'; message: string; last: Snapshot | null }>;
 export type Editor = Readonly<{ type: 'new'; workspaceId: string; title: string; body: string }> | Readonly<{ type: 'existing'; workspaceId: string; resourceId: string; baseHeads: readonly string[]; title: string; body: string }>;
 export type Mutation = Readonly<{ type: 'idle' }> | Readonly<{ type: 'rejected'; command: Command; message: string }> | Readonly<{ type: 'sending'; command: Command }> | Readonly<{ type: 'uncertain'; command: Command; message: string }> | Readonly<{ type: 'conflict'; command: Command; receipt: Extract<Receipt, { type: 'conflict' }> }>;
-export type Pairing = Readonly<{ type: 'idle' | 'creating' | 'joining' }> | Readonly<{ type: 'invite'; invite: Invite; workspaceIds: readonly string[] }> | Readonly<{ type: 'failed'; message: string }>;
+export type Pairing = Readonly<{ type: 'idle' | 'creating' }> | Readonly<{ type: 'joining'; stage: JoinStage | null }> | Readonly<{ type: 'invite'; invite: Invite; workspaceIds: readonly string[] }> | Readonly<{ type: 'failed'; action: 'invite'; message: string }> | Readonly<{ type: 'failed'; action: 'join'; stage: JoinStage | null; message: string }>;
 export type State = Readonly<{ host: HostState; route: Route; views: Readonly<Record<string, View>>; editor: Editor | null; mutation: Mutation; pairing: Pairing; syncing: boolean; message: string }>;
 export type Change = 'data' | 'ui' | 'operation';
 export const emptyView = (): View => ({ mode: 'canvas', focused: null, closed: [], order: [] });
@@ -20,6 +21,7 @@ export class WorkspaceSession {
   private readonly id: () => string;
   private listeners = new Set<(state: State, change: Change) => void>();
   private refreshEpoch = 0;
+  private pairingEpoch = 0;
   private disposed = false;
   state: State;
   constructor(host: Host, id: () => string = () => crypto.randomUUID()) {
@@ -28,7 +30,7 @@ export class WorkspaceSession {
   }
   subscribe(listener: (state: State, change: Change) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   private update(patch: Partial<State>, change: Change = 'ui', notify = true): void { if (this.disposed) return; this.state = Object.freeze({ ...this.state, ...patch }); if (notify) for (const listener of this.listeners) listener(this.state, change); }
-  dispose(): void { this.disposed = true; this.refreshEpoch++; this.listeners.clear(); }
+  dispose(): void { this.disposed = true; this.refreshEpoch++; this.pairingEpoch++; this.listeners.clear(); }
   snapshot(): Snapshot | null { return snapshotOf(this.state); }
   view(): View { return this.state.route.type === 'workspace' ? this.state.views[this.state.route.id] ?? emptyView() : emptyView(); }
   restoreViews(views: Readonly<Record<string, View>>): void { this.update({ views }); }
@@ -102,15 +104,30 @@ export class WorkspaceSession {
   async placement(type: 'add_placement' | 'remove_placement', workspaceId: string, resourceId: string, sourceWorkspaceId: string): Promise<void> { await this.submit({ type, operation_id: this.id(), workspace_id: workspaceId, resource_id: resourceId, source_workspace_id: sourceWorkspaceId }); }
   async createInvite(workspaceIds: readonly string[]): Promise<void> {
     if (!workspaceIds.length || this.state.pairing.type === 'creating' || this.state.pairing.type === 'joining') return;
-    this.update({ pairing: { type: 'creating' } }, 'operation');
+    this.update({ pairing: { type: 'creating' }, message: '' }, 'operation');
     try { const capturedIds = [...workspaceIds]; const invite = await this.host.invite(capturedIds); this.update({ pairing: { type: 'invite', invite, workspaceIds: capturedIds } }, 'operation'); }
-    catch { this.update({ pairing: { type: 'failed', message: 'The invitation could not be created. Try again.' } }, 'operation'); }
+    catch { this.update({ pairing: { type: 'failed', action: 'invite', message: 'An invitation could not be created. Check the connection and try again.' } }, 'operation'); }
   }
-  clearInvite(): void { this.update({ pairing: { type: 'idle' } }); }
+  clearInvite(): void { if (this.state.pairing.type !== 'joining' && this.state.pairing.type !== 'creating') this.update({ pairing: { type: 'idle' } }); }
   async join(ticket: string): Promise<void> {
-    if (!ticket.trim() || this.state.pairing.type === 'joining' || this.state.pairing.type === 'creating') return; this.refreshEpoch++; this.update({ pairing: { type: 'joining' } }, 'operation');
-    try { const snapshot = await this.host.join(ticket.trim()); this.acceptSnapshot(snapshot); this.update({ pairing: { type: 'idle' }, message: 'Pairing was confirmed and the initial work committed on this device.' }, 'operation'); }
-    catch { this.update({ pairing: { type: 'failed', message: 'Pairing was not confirmed. Check the invitation and connection, then retry the same ticket.' } }, 'operation'); }
+    if (this.disposed || !ticket.trim() || this.state.pairing.type === 'joining' || this.state.pairing.type === 'creating') return;
+    const attempt = ++this.pairingEpoch; this.refreshEpoch++;
+    let observedStage: JoinStage | null = null;
+    this.update({ pairing: { type: 'joining', stage: null }, message: '' }, 'operation');
+    try {
+      const snapshot = await this.host.join(ticket.trim(), stage => {
+        if (this.disposed || attempt !== this.pairingEpoch || this.state.pairing.type !== 'joining') return;
+        observedStage = advanceJoinStage(observedStage, stage);
+        this.update({ pairing: { type: 'joining', stage: observedStage } }, 'operation');
+      });
+      if (this.disposed || attempt !== this.pairingEpoch) return;
+      this.refreshEpoch++;
+      this.acceptSnapshot(snapshot);
+      this.update({ pairing: { type: 'idle' }, message: 'Pairing was confirmed and the initial work committed on this device.' }, 'operation');
+    } catch {
+      if (this.disposed || attempt !== this.pairingEpoch) return;
+      this.update({ pairing: { type: 'failed', action: 'join', stage: observedStage, message: joinFailure(observedStage) } }, 'operation');
+    }
   }
   async sync(): Promise<void> {
     if (this.state.syncing) return; this.update({ syncing: true }, 'operation');

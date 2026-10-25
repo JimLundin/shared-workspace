@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+const root=fileURLToPath(new URL('..',import.meta.url));
+const repository=resolve(root,'../..');
+const source=await readFile(resolve(root,'src/browser_relay.rs'),'utf8');
+const marker="domain.strip_suffix('.')";assert.equal(source.split(marker).length,2);
+const baselineWasm=await readFile(resolve(root,'pkg/browser_workspace_host_bg.wasm'));
+const scratch=await mkdtemp(resolve(tmpdir(),'browser-relay-mutant-'));
+const crate=resolve(scratch,'browser/host-wasm');await mkdir(crate,{recursive:true});
+for(const path of ['Cargo.toml','Cargo.lock','build.sh','src'])await cp(resolve(root,path),resolve(crate,path),{recursive:true});
+await mkdir(resolve(scratch,'native/core/src'),{recursive:true});
+await cp(resolve(repository,'native/core/src/model.rs'),resolve(scratch,'native/core/src/model.rs'));
+await writeFile(resolve(crate,'src/browser_relay.rs'),source.replace(marker,"domain.strip_suffix('\\0')"));
+for(const path of ['Cargo.toml','Cargo.lock']){
+  const text=await readFile(resolve(crate,path),'utf8');
+  await writeFile(resolve(crate,path),text.replace('name = "browser-workspace-host"','name = "browser-relay-mutant"'));
+}
+const buildScript=await readFile(resolve(crate,'build.sh'),'utf8');
+await writeFile(resolve(crate,'build.sh'),buildScript.replace('release/browser_workspace_host.wasm','release/browser_relay_mutant.wasm'));
+const build=spawnSync('bash',['build.sh'],{cwd:crate,env:process.env,encoding:'utf8',timeout:300_000});
+assert.equal(build.status,0,`Mutant must compile: ${build.stderr}`);
+const reportDir=resolve(scratch,'evidence');await mkdir(reportDir);
+const command=['run','--rm','--mount',`type=bind,source=${repository},target=/work,readonly`,'--mount',`type=bind,source=${crate},target=/candidate,readonly`,'--mount',`type=bind,source=${reportDir},target=/evidence`,'--workdir','/work','mcr.microsoft.com/playwright:v1.64.1-noble','node','browser/host-wasm/tools/check-engine-stages.mjs','--mode','worker','--asset-root','/candidate','--evidence','/evidence'];
+const check=spawnSync('docker',command,{encoding:'utf8',timeout:90_000});
+const result=JSON.parse(await readFile(resolve(reportDir,'report.json')));
+assert.notEqual(check.status,0);assert.equal(result.passed,false);
+assert.equal(result.failure.stage,'webkit.address.begin');assert.match(result.failure.message,/deadline has elapsed/);
+assert(result.stages.some(stage=>stage.stage==='chromium.address.completed'));
+assert.equal(await readFile(resolve(root,'src/browser_relay.rs'),'utf8'),source);
+assert.deepEqual(await readFile(resolve(root,'pkg/browser_workspace_host_bg.wasm')),baselineWasm);
+const report={status:'killed',mutation:'Disable terminal DNS dot normalization',baseline_relay_source_sha256:createHash('sha256').update(source).digest('hex'),baseline_wasm_sha256:createHash('sha256').update(baselineWasm).digest('hex'),mutant_wasm_sha256:createHash('sha256').update(await readFile(resolve(crate,'pkg/browser_workspace_host_bg.wasm'))).digest('hex'),observed_failure:'Real WebKit endpoint online/address times out while Chromium completes with the same build',timestamp:new Date().toISOString()};
+await writeFile(resolve(root,'evidence/relay-mutation.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));

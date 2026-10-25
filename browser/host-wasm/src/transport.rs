@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use futures_util::future::{AbortHandle, Abortable};
 use iroh::endpoint::{Connection, Incoming, presets};
-use iroh::{Endpoint, EndpointAddr, EndpointId, SecretKey};
+use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, SecretKey};
 use js_sys::{Function, Promise};
 use n0_future::time::timeout;
 use serde::Serialize;
@@ -112,6 +112,11 @@ impl BrowserEndpoint {
         hex::decode_to_slice(seed_hex, &mut seed)
             .map_err(|_| JsError::new("device seed must be exactly 32 hexadecimal bytes"))?;
         let endpoint = Endpoint::builder(presets::N0)
+            // WebKit rejects secure WebSockets to the default FQDN spelling
+            // with a terminal DNS dot. Keep the same relays and TLS validation.
+            .relay_mode(RelayMode::Custom(
+                crate::browser_relay::default_relays().map_err(js_error)?,
+            ))
             .secret_key(SecretKey::from_bytes(&seed))
             .alpns(vec![ALPN.to_vec()])
             .bind()
@@ -292,7 +297,8 @@ fn parse_address(encoded: &str) -> Result<EndpointAddr, JsError> {
     if address.addrs.len() > 16 {
         return Err(JsError::new("peer address has too many locators"));
     }
-    Ok(address)
+    // Previously issued desktop invitations may still carry the FQDN form.
+    crate::browser_relay::peer_address(address).map_err(js_error)
 }
 
 fn validate_payload(payload: &str) -> Result<(), JsError> {

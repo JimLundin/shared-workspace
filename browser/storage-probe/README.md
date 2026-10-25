@@ -119,18 +119,21 @@ The production build on 2026-10-25 produced approximately 11.61 MB of WASM
 JavaScript. These are output asset sizes, not download measurements or resident
 memory measurements.
 
-The pinned Turso browser package constructs shared `WebAssembly.Memory` with
-`initial: 4000` and `maximum: 65536` pages. At 64 KiB per page, the initial linear
-memory is **250 MiB**, with a 4 GiB upper bound. These are engine configuration
-values, not measured process RSS. The WASM binary itself imports shared memory
-with minimum **1,009 pages = 63.0625 MiB**, measured by parsing the import section.
-`setupMainThread(wasmFile, factory)` has no public memory-size option; the 4,000-page
-initial allocation is hardcoded before any `connect` options are used. The smaller
-binary minimum does not demonstrate that a reduced wrapper allocation would work.
-`npm run audit:footprint` reproduces the binary limits and built asset sizes.
-A small browser host is feasible as a delivery
-model, but this published database build needs footprint investigation before
-claiming it is lightweight on a phone. The prototype does not patch the engine.
+The pinned wrapper requests 4,000 WASM pages = **250 MiB of initial shared linear
+memory**, with a 4 GiB growth limit. This does not establish a 250 MiB resident-RAM
+requirement. The [runtime audit](memory-audit-20261025/README.md) observes actual
+`Memory.buffer.byteLength`, process-family RSS/PSS, and official SQLite WASM under
+the same workload. Its five-run Linux Chromium startup comparison found about
+81 MiB additional PSS for Turso relative to the empty app.
+
+A separately named disposable build lowered the wrapper to the binary's minimum
+1,009 pages = 63.0625 MiB, preserving the exact engine binary. It passed durable
+write/reload/restart checks and grew normally; startup PSS fell by about 11.5 MiB,
+much less than the logical-size reduction. No supported Turso consumer memory
+option was found in stable 0.8.3 or next 0.9.0-pre.1. This original probe and the
+application remain unmodified; the audit patch is experimental and has not been
+validated on iPhone Safari. `npm run audit:footprint` still reproduces the original
+static binary limits and asset sizes.
 
 ## Primary sources
 

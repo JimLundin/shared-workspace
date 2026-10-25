@@ -40,6 +40,26 @@ A named working context containing resources and their arrangement. Showing a
 different workspace does not change the identity of its resources or tasks.
 _Avoid_: Conversation, source checkout
 
+**Host**:
+A participating instance that keeps its own identity and a local copy of the
+work it is permitted to access. One device can run more than one host.
+_Avoid_: Permanent coordinator, master device
+
+**Device connection**:
+A recognized relationship between hosts through which they can exchange
+authorized work. It does not grant access to every workspace.
+_Avoid_: Joining a device to exactly one workspace
+
+**Workspace access**:
+Authorization to participate in a specified workspace. A host can have access
+to several workspaces without making their contents visible to each other.
+_Avoid_: Device ownership, access to all work
+
+**Workspace invitation**:
+An offer to grant access to explicitly selected workspaces. Accepting it does
+not authorize access to unrelated workspaces.
+_Avoid_: Universal device access
+
 **Resource**:
 A document, application, note, source, or result that can be worked with and
 shown in more than one workspace.

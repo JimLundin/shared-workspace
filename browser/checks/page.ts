@@ -1,6 +1,9 @@
 import { BrowserHost } from '../host/src/host.ts';
+import type { JoinStage } from '../../native/ui/src/protocol.ts';
 
 let host: BrowserHost | undefined;
+const joinEvents: Array<Readonly<{ stage: JoinStage; at_ms: number }>> = [];
+let joinReceiptEvents: number | null = null;
 function current(): BrowserHost {
   if (!host) throw new Error('The test page has no open host.');
   return host;
@@ -22,7 +25,18 @@ const methods = {
   snapshot() { return current().snapshot(); },
   command(command: Parameters<BrowserHost['command']>[0]) { return current().command(command); },
   invite(workspaceIds: readonly string[]) { return current().invite(workspaceIds); },
-  join(ticket: string) { return current().join(ticket); },
+  async join(ticket: string) {
+    joinEvents.length = 0;
+    joinReceiptEvents = null;
+    const snapshot = await current().join(ticket, stage => {
+      if (joinEvents.length === 16) joinEvents.shift();
+      joinEvents.push({ stage, at_ms: Date.now() });
+    });
+    joinReceiptEvents = joinEvents.length;
+    return snapshot;
+  },
+  joinProgress() { return [...joinEvents]; },
+  joinReceiptStageCount() { return joinReceiptEvents; },
   sync() { return current().sync(); },
   setForeground(foreground: boolean) { return current().setForeground(foreground); },
   async close() {

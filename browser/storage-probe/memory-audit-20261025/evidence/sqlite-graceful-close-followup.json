@@ -1,0 +1,658 @@
+{
+  "kind": "database-wasm-memory-audit-20261025",
+  "started_at": "2026-10-25T17:26:13.726Z",
+  "platform": {
+    "platform": "linux",
+    "release": "6.18.54.1-microsoft-standard-WSL2",
+    "architecture": "x64",
+    "node": "v24.16.0"
+  },
+  "versions": {
+    "turso": "0.8.3",
+    "sqlite_wasm": "3.54.1-build1"
+  },
+  "source_wrapper_sha256": "b0ca552513511aa21c28b672a44f2e8f452bf8731fa030259420b32a4447dc00",
+  "repetitions": 1,
+  "startup_only": false,
+  "graceful_close": true,
+  "harness_sources": {
+    "run.mjs": "78770a79627f6019b0dab1804192c401e4cfa95fca49081c72c0c39fe76ef1b6",
+    "worker.js": "5ecb42c996baedd40f46ac01bcc952f73ad5c8019f26014ab74ec0b7de8cd66f",
+    "page.js": "89377d03e66e4b6e4a792f29ff28b317b571c04eecd1221b1fffdb3fc2fa59a2",
+    "package.json": "018ed2586fa98739ad09f855ece6047bc721e5e97622645d84a974ed15f182b3",
+    "package-lock.json": "7252de0f7059190fb180491d5e7ffdfc462cd3a5683647467395f35728c9853c"
+  },
+  "units": "Memory figures are bytes unless field name says otherwise.",
+  "interpretation": "Logical WASM memory and process residency are distinct. Process-family RSS sums shared pages repeatedly; PSS apportions them. These are Linux Chromium measurements, not iPhone results.",
+  "workload": {
+    "notes": 128,
+    "note_bytes": 8192,
+    "blob_bytes": [
+      1048576,
+      8388608,
+      33554432
+    ],
+    "journal_requested": "WAL",
+    "synchronous_requested": "FULL",
+    "locking_requested": "EXCLUSIVE",
+    "page_size_requested": 4096,
+    "cache_size_requested": -2000,
+    "gc_forced": false
+  },
+  "builds": {
+    "sqlite": {
+      "wrapper_transform_applications": 0,
+      "patch": null,
+      "assets": [
+        {
+          "file": "dist-CaRLlRJh.js",
+          "bytes": 217804,
+          "gzip_bytes": 64769,
+          "sha256": "f3ac73c87ccbcb7d75a56931c69be9a04672f1d714772d86f68099c787a89644"
+        },
+        {
+          "file": "index-Dv-CKopc.js",
+          "bytes": 1358,
+          "gzip_bytes": 716,
+          "sha256": "c0c38b92bf641965d2d07dd48e2ef368a9153759734f96c725dd05d9468ac69a"
+        },
+        {
+          "file": "promise-default-CFTrf3ko.js",
+          "bytes": 205256,
+          "gzip_bytes": 46582,
+          "sha256": "56bacb581936e6026a4c437227abc856fcad03a80a888596d07b0dbbde63117d"
+        },
+        {
+          "file": "sqlite3-k2cTanUO.wasm",
+          "bytes": 879084,
+          "gzip_bytes": 407455,
+          "sha256": "b8a92a19f441a90ff2339fe988fbe317c4adf3ed844096f12aee04aa72d58257"
+        },
+        {
+          "file": "sqlite3-opfs-async-proxy-DeAec6oc.js",
+          "bytes": 32462,
+          "gzip_bytes": 10524,
+          "sha256": "02c38ed7f2d41d2b57ee02241d7f8a09059e1ded16749013f2412137614aa459"
+        },
+        {
+          "file": "sqlite3-worker1--76YIBzr.js",
+          "bytes": 215883,
+          "gzip_bytes": 64176,
+          "sha256": "91ec2519181a0ee8abd82840056c9b5d6f9760848d802f843ecf982197f17033"
+        },
+        {
+          "file": "turso.wasm32-wasi-KrOvB4jh.wasm",
+          "bytes": 11613778,
+          "gzip_bytes": 3963233,
+          "sha256": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9"
+        },
+        {
+          "file": "worker-C3Ftajuj.js",
+          "bytes": 170918,
+          "gzip_bytes": 37625,
+          "sha256": "f05a971994e5bf0fd25ef55f621f171c29f7e9cb2df1ccce0381376552f5bceb"
+        },
+        {
+          "file": "worker-C5ZCmJtf.js",
+          "bytes": 4002,
+          "gzip_bytes": 1778,
+          "sha256": "a8fc137c15ffc44508487875f3f0dac6a21c5d8352001684eaa8cc494b30b673"
+        }
+      ]
+    }
+  },
+  "trials": [
+    {
+      "variant": "sqlite",
+      "repetition": 1,
+      "stages": [
+        {
+          "stage": "opened",
+          "state": {
+            "engine": "sqlite",
+            "sqlite_version": "3.54.1",
+            "open_ms": 347,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 128,
+                  "maximum": 32768
+                },
+                "initial_buffer_bytes": 8388608,
+                "current_buffer_bytes": 8388608,
+                "shared": false
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "c3fb54eb7538e5e2e4bdf99e7a90e6626e78edef5444c98183adbf30db312ffb",
+            "sample": {
+              "id": 1,
+              "body": "The same durable sample note.",
+              "revision": 1
+            },
+            "note_count": 1,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 476020736,
+            "pss_bytes": 106454016,
+            "private_bytes": 64823296,
+            "virtual_bytes": 1841625866240,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 105074688,
+                "pss_bytes": 21864448,
+                "private_bytes": 15421440,
+                "virtual_bytes": 56314847232
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46645248,
+                "pss_bytes": 6039552,
+                "private_bytes": 548864,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47169536,
+                "pss_bytes": 6154240,
+                "private_bytes": 643072,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67510272,
+                "pss_bytes": 15614976,
+                "private_bytes": 7917568,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 77520896,
+                "pss_bytes": 14233600,
+                "private_bytes": 10944512,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 132100096,
+                "pss_bytes": 42547200,
+                "private_bytes": 29347840,
+                "virtual_bytes": 1560689713152
+              }
+            ]
+          }
+        },
+        {
+          "stage": "128-notes-written",
+          "state": {
+            "engine": "sqlite",
+            "sqlite_version": "3.54.1",
+            "open_ms": 347,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 128,
+                  "maximum": 32768
+                },
+                "initial_buffer_bytes": 8388608,
+                "current_buffer_bytes": 8388608,
+                "shared": false
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "c3fb54eb7538e5e2e4bdf99e7a90e6626e78edef5444c98183adbf30db312ffb",
+            "sample": {
+              "id": 1,
+              "body": "Updated durable sample after multiple writes.",
+              "revision": 2
+            },
+            "note_count": 129,
+            "payload_sizes": [],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 487227392,
+            "pss_bytes": 117142528,
+            "private_bytes": 75386880,
+            "virtual_bytes": 1841625866240,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 106647552,
+                "pss_bytes": 23436288,
+                "private_bytes": 16994304,
+                "virtual_bytes": 56314847232
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46645248,
+                "pss_bytes": 6040576,
+                "private_bytes": 548864,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47169536,
+                "pss_bytes": 6155264,
+                "private_bytes": 643072,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67510272,
+                "pss_bytes": 15616000,
+                "private_bytes": 7917568,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 77520896,
+                "pss_bytes": 14234624,
+                "private_bytes": 10944512,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 141733888,
+                "pss_bytes": 51659776,
+                "private_bytes": 38338560,
+                "virtual_bytes": 1560689713152
+              }
+            ]
+          }
+        },
+        {
+          "stage": "blob-1048576-bytes-written",
+          "state": {
+            "engine": "sqlite",
+            "sqlite_version": "3.54.1",
+            "open_ms": 347,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 128,
+                  "maximum": 32768
+                },
+                "initial_buffer_bytes": 8388608,
+                "current_buffer_bytes": 8388608,
+                "shared": false
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "c3fb54eb7538e5e2e4bdf99e7a90e6626e78edef5444c98183adbf30db312ffb",
+            "sample": {
+              "id": 1,
+              "body": "Updated durable sample after multiple writes.",
+              "revision": 2
+            },
+            "note_count": 129,
+            "payload_sizes": [
+              {
+                "id": 1,
+                "bytes": 1048576
+              }
+            ],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 496730112,
+            "pss_bytes": 126645248,
+            "private_bytes": 84889600,
+            "virtual_bytes": 1841625866240,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 107520000,
+                "pss_bytes": 24308736,
+                "private_bytes": 17866752,
+                "virtual_bytes": 56314847232
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46645248,
+                "pss_bytes": 6040576,
+                "private_bytes": 548864,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 47169536,
+                "pss_bytes": 6155264,
+                "private_bytes": 643072,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 67510272,
+                "pss_bytes": 15616000,
+                "private_bytes": 7917568,
+                "virtual_bytes": 56254492672
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 77520896,
+                "pss_bytes": 14234624,
+                "private_bytes": 10944512,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 150364160,
+                "pss_bytes": 60290048,
+                "private_bytes": 46968832,
+                "virtual_bytes": 1560689713152
+              }
+            ]
+          }
+        },
+        {
+          "stage": "blob-8388608-bytes-written",
+          "state": {
+            "engine": "sqlite",
+            "sqlite_version": "3.54.1",
+            "open_ms": 347,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 128,
+                  "maximum": 32768
+                },
+                "initial_buffer_bytes": 8388608,
+                "current_buffer_bytes": 21889024,
+                "shared": false
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "c3fb54eb7538e5e2e4bdf99e7a90e6626e78edef5444c98183adbf30db312ffb",
+            "sample": {
+              "id": 1,
+              "body": "Updated durable sample after multiple writes.",
+              "revision": 2
+            },
+            "note_count": 129,
+            "payload_sizes": [
+              {
+                "id": 1,
+                "bytes": 8388608
+              }
+            ],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 582209536,
+            "pss_bytes": 217653248,
+            "private_bytes": 176234496,
+            "virtual_bytes": 1841624817664,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 113348608,
+                "pss_bytes": 31449088,
+                "private_bytes": 25055232,
+                "virtual_bytes": 56314847232
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 45727744,
+                "pss_bytes": 6007808,
+                "private_bytes": 548864,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46252032,
+                "pss_bytes": 6126592,
+                "private_bytes": 643072,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 66789376,
+                "pss_bytes": 15423488,
+                "private_bytes": 7933952,
+                "virtual_bytes": 56253968384
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 77197312,
+                "pss_bytes": 14319616,
+                "private_bytes": 10964992,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 232894464,
+                "pss_bytes": 144326656,
+                "private_bytes": 131088384,
+                "virtual_bytes": 1560689188864
+              }
+            ]
+          }
+        },
+        {
+          "stage": "blob-33554432-bytes-written",
+          "state": {
+            "engine": "sqlite",
+            "sqlite_version": "3.54.1",
+            "open_ms": 347,
+            "memories": [
+              {
+                "descriptor": {
+                  "initial": 128,
+                  "maximum": 32768
+                },
+                "initial_buffer_bytes": 8388608,
+                "current_buffer_bytes": 72220672,
+                "shared": false
+              }
+            ],
+            "created_identity": true,
+            "identity_fingerprint": "c3fb54eb7538e5e2e4bdf99e7a90e6626e78edef5444c98183adbf30db312ffb",
+            "sample": {
+              "id": 1,
+              "body": "Updated durable sample after multiple writes.",
+              "revision": 2
+            },
+            "note_count": 129,
+            "payload_sizes": [
+              {
+                "id": 1,
+                "bytes": 33554432
+              }
+            ],
+            "pragmas": {
+              "journal_mode": [
+                {
+                  "journal_mode": "wal"
+                }
+              ],
+              "synchronous": [
+                {
+                  "synchronous": 2
+                }
+              ],
+              "page_size": [
+                {
+                  "page_size": 4096
+                }
+              ],
+              "cache_size": [
+                {
+                  "cache_size": -2000
+                }
+              ],
+              "locking_mode": [
+                {
+                  "locking_mode": "exclusive"
+                }
+              ]
+            }
+          },
+          "process_family": {
+            "rss_bytes": 632598528,
+            "pss_bytes": 376882176,
+            "private_bytes": 277032960,
+            "virtual_bytes": 1841624883200,
+            "processes": [
+              {
+                "role": "browser",
+                "rss_bytes": 133705728,
+                "pss_bytes": 77305856,
+                "private_bytes": 54878208,
+                "virtual_bytes": 56314912768
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 45727744,
+                "pss_bytes": 12244992,
+                "private_bytes": 663552,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "zygote",
+                "rss_bytes": 46252032,
+                "pss_bytes": 12450816,
+                "private_bytes": 720896,
+                "virtual_bytes": 56094097408
+              },
+              {
+                "role": "gpu-process",
+                "rss_bytes": 66539520,
+                "pss_bytes": 29200384,
+                "private_bytes": 13840384,
+                "virtual_bytes": 56253968384
+              },
+              {
+                "role": "utility",
+                "rss_bytes": 77176832,
+                "pss_bytes": 28721152,
+                "private_bytes": 12427264,
+                "virtual_bytes": 56178618368
+              },
+              {
+                "role": "renderer",
+                "rss_bytes": 263196672,
+                "pss_bytes": 216958976,
+                "private_bytes": 194502656,
+                "virtual_bytes": 1560689188864
+              }
+            ]
+          }
+        }
+      ],
+      "passed": false,
+      "error": "Error: page.evaluate: Error: SQLite3Error: SQLITE_CANTOPEN: sqlite3 result code 14: unable to open database file\n    at e.onmessage (http://127.0.0.1:45373/assets/index-Dv-CKopc.js:1:877)"
+    }
+  ],
+  "browser": "156.0.8078.4",
+  "source_wrapper_unchanged": true,
+  "passed": false,
+  "finished_at": "2026-10-25T17:27:23.150Z"
+}

@@ -1,7 +1,7 @@
 {
   "kind": "browser-workspace-acceptance-v1",
   "passed": true,
-  "started_at": "2026-10-25T15:07:18.265Z",
+  "started_at": "2026-10-25T17:29:44.966Z",
   "case": "all",
   "assertions": [
     "local-note-has-acknowledged-content",
@@ -88,12 +88,12 @@
       "browser": "156.0.8078.4"
     },
     {
-      "peer": "Editing-laptop",
+      "peer": "Editing-phone",
       "launch": 1,
       "browser": "156.0.8078.4"
     },
     {
-      "peer": "Editing-phone",
+      "peer": "Editing-laptop",
       "launch": 1,
       "browser": "156.0.8078.4"
     },
@@ -143,12 +143,12 @@
       "launch": 1
     },
     {
-      "peer": "Third-browser",
-      "launch": 1
-    },
-    {
       "peer": "Editing-laptop",
       "launch": 2
+    },
+    {
+      "peer": "Third-browser",
+      "launch": 1
     },
     {
       "peer": "Editing-phone",
@@ -156,7 +156,7 @@
     }
   ],
   "relay_origins": [
-    "wss://euc1-1.relay.n0.iroh.link."
+    "wss://euc1-1.relay.n0.iroh.link"
   ],
   "scope": "Real BrowserHost public facade, Turso OPFS and Iroh WASM in separate persistent Chromium profiles.",
   "limits": [
@@ -170,65 +170,67 @@
     "browser/checks/index.html": "a1549648b7fcd7b246ae9b5194f2564de6316611086132cf80b2337e018d371d",
     "browser/checks/package-lock.json": "4e1f24d0646f5dfaca3be2ee28be413058ccdf8bfacc9017d72aee75634d798c",
     "browser/checks/package.json": "82b1928f130cbc856eaf8ca73f0222d02dabc6f65db3b17d55e660f9398f827b",
-    "browser/checks/page.ts": "6d8f3838b3c9d58cb478e177448bfa26337850d349973a1a501cc05563fc323c",
+    "browser/checks/page.ts": "6530ec09d44470b01a033de68a213107b6d0b787cfe3475cc2de6b53eb006f98",
     "browser/checks/tsconfig.json": "c7c5cac65bdbb49c6218fa56c8d8c1d1718a1a69568c6c84234a75ad3262f0cf",
     "browser/host-wasm/Cargo.lock": "d42756c79012e7b6e82e0b280947ebf616dcbfc55f6fddc30f58c27dc6c90048",
     "browser/host-wasm/Cargo.toml": "8179041b112c6fdd0bf66eaa21a62ec33bad5f9c0082a65f346c51034bc5ac26",
     "browser/host-wasm/build.sh": "a8c5f53f672826745ed18a399f2adc64a0bc8fbe0aa611d7f29840c8422a56e2",
     "browser/host-wasm/pkg/browser_workspace_host.d.ts": "3eff7c840e2a7f5cdc6e8dec6eefa2085d327ae90abdd9100d40cf7404c006f5",
-    "browser/host-wasm/pkg/browser_workspace_host.js": "5aa5a13678b0fccc1ba13db4ba2c28230f1203ecdd0f3b6bc6846735ea748ac0",
-    "browser/host-wasm/pkg/browser_workspace_host_bg.wasm": "dfaaa3616cb9a49ffe4f9149e23a60450bc1f62285f506c40eb55ddfeb94d1dc",
+    "browser/host-wasm/pkg/browser_workspace_host.js": "9f50afdedc5e80377d93364c2d44542fdae80d26bc3c317694f2172387e459e9",
+    "browser/host-wasm/pkg/browser_workspace_host_bg.wasm": "b1975d4f425df97231b25ccf98a8d34bf63bcb573c30ff2f08672a52ecfa374c",
     "browser/host-wasm/pkg/browser_workspace_host_bg.wasm.d.ts": "25ff50e9173f8b140f2c3bb11f5bc558f912bbb5d36edd8351dfbe0c774a511d",
+    "browser/host-wasm/src/browser_relay.rs": "a1836021c9a1df09e422b023beed5bf9377979e7958284a3b7e0646caccca705",
     "browser/host-wasm/src/domain.rs": "0d51b56de0e39b9124bd4fd41d1b5b629e731d3f48a214454a637932a003d876",
-    "browser/host-wasm/src/lib.rs": "de9720b9c3d7d03de082e6bac6718468154057f738eb61f2013fb2e6a47e2e2b",
-    "browser/host-wasm/src/transport.rs": "99e6bdd701c77dd9155dc60c321ebdfcdb9573a2141583bf169fbdf208f1b93f",
+    "browser/host-wasm/src/lib.rs": "afe57e32f876b3dee835760016a1df0e44fea19fdbad43981e55d1a82fda2dfa",
+    "browser/host-wasm/src/transport.rs": "e69da69c75eee6cf48b8cb2ec63bcd199298deba9da5a99a594d1234f6392b5e",
     "browser/host/package-lock.json": "bd39995299cbb1b4c55cddb78ff355af99be439c30611067e0c8a7e48cf17b8a",
-    "browser/host/package.json": "e9f7a50cbc5deccda6341ec04b39008f08ed240a5e907f90f83282a699efa1fe",
-    "browser/host/src/host.ts": "8d2011607011595a7b0b1c008d0c7ef7c68e6bf503d250871d65b71eb927ea81",
-    "browser/host/src/owner.ts": "74caa38ad71eeb2f4cdad31378abbcf28decaa17790a83cec5e4a5250d36afae",
+    "browser/host/package.json": "2e7b7d9d0f1e393e98abe6ea6027ac641ba1ffbe43c1a92c6bfcedd67b3e2be8",
+    "browser/host/src/host.ts": "1cf1eca4618d6384a7e3f891a4d0323d7948fa9994a63355c29ab97b405fa83e",
+    "browser/host/src/invitation.ts": "b393ef1039a284018fa5f9114685b0be08b2e4e076cf2fb1208c20dfa454bfbf",
+    "browser/host/src/owner.ts": "d505fea03a011459d700f44598eba54700ccba2b04f48faf60cb41e9947a5e21",
     "browser/host/src/store.ts": "834097d1cc8d995bb152a89693661cffe14d24de40ece3804e1ebf354d47b9ce",
-    "browser/host/src/types.ts": "6c9e0e58539e195744ac67a672e4357b6d9bfcb398e5ad2ba3806044d387cd58",
-    "browser/host/src/worker.ts": "00bf0065e568ce5b1847f75e1418a1c534f5f6325186708733262249e061f7d6",
+    "browser/host/src/types.ts": "3b5a3ff5da0c85e26bb2667fe3a5d965762cdbeba997e3e04e4dbba2ab8420c4",
+    "browser/host/src/worker.ts": "5c5691a6efc1a65326457a56901857db7ca827932ff6dbdc85dc6b685761b818",
     "native/core/src/model.rs": "7510d0523a7d95ff97e1b48b7e22a08c6507e74af78f86cbc4ccb85f1575b959",
-    "native/ui/src/protocol.ts": "ad6c5808c81a2d9cef3b1f61c49500ac8a84f9a34b54c360d928fcb2e200989f"
+    "native/ui/src/protocol.ts": "2cb6392116aa8e2566484f38e887194d926ee55d479f7945446ef488f2bd322a"
   },
   "assets": {
-    "assets/browser_workspace_host_bg-BgDWhSsc.wasm": {
-      "sha256": "dfaaa3616cb9a49ffe4f9149e23a60450bc1f62285f506c40eb55ddfeb94d1dc",
-      "bytes": 6043287
+    "assets/browser_workspace_host_bg-Wx6Hkgba.wasm": {
+      "sha256": "b1975d4f425df97231b25ccf98a8d34bf63bcb573c30ff2f08672a52ecfa374c",
+      "bytes": 6098135
     },
-    "assets/index-jFSYeCL0.js": {
-      "sha256": "38697b32a2907d72a0ebe70f87b850621e50ab5d48ce96a4e992a2be19a73f15",
-      "bytes": 5975
+    "assets/index-CPugPKNm.js": {
+      "sha256": "1880874117b384a977c40463cdb92f8643e05b7864820be29dcfcb65c2fe7ad2",
+      "bytes": 6440
     },
-    "assets/owner-Ckouxpwz.js": {
-      "sha256": "8577951c2999ec65a673289681a15cb046177b46800fbcaa6d021520e2cbdff8",
-      "bytes": 245862
+    "assets/owner-Cvw8ZkJ4.js": {
+      "sha256": "e1859111b4b09f4d6370cf55aa4f55f10efb5ec903a8b1441a6207234fe4685f",
+      "bytes": 248049
     },
     "assets/turso.wasm32-wasi-KrOvB4jh.wasm": {
       "sha256": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9",
       "bytes": 11613778
     },
-    "assets/types-jLirL5JP.js": {
-      "sha256": "7c874d992b97d270c6bbeb011238acfbd51f324b6d128bf5ad3a1ded9078e309",
-      "bytes": 4991
+    "assets/types-9ia9prHv.js": {
+      "sha256": "7e2502a557286adac4cb6480e95e19558ba6cda5f41bda10aa51f4d15b2ea61f",
+      "bytes": 5004
     },
     "assets/worker-C3Ftajuj.js": {
       "sha256": "f05a971994e5bf0fd25ef55f621f171c29f7e9cb2df1ccce0381376552f5bceb",
       "bytes": 170918
     },
-    "assets/worker-Kdae83Tp.js": {
-      "sha256": "7f994996a4865791e818d8f4a1f467e58c3ef79afd165a29a3097ca631a95524",
-      "bytes": 1657
+    "assets/worker-jNMu-fDB.js": {
+      "sha256": "3131e76f0edcaf1006bf3cef5fc0607d6df597b512993e9e12b6566b3de53097",
+      "bytes": 1718
     },
     "index.html": {
-      "sha256": "9a6da091ffdc08f572ff5568ad52012d19a76b059a114329899f907ec628cde8",
+      "sha256": "a98c56975ed692677322e3824f702149ad65ea92fd6d5efbaf5d5f4ed14d7f6a",
       "bytes": 345
     }
   },
   "hosting": "Strictly loopback static asset server, ephemeral port, isolated responses",
   "static_server_closed": true,
   "source_unchanged": true,
-  "finished_at": "2026-10-25T15:08:52.885Z",
+  "finished_at": "2026-10-25T17:31:05.343Z",
   "profiles_removed": true
 }

@@ -1,8 +1,8 @@
-import { decodeInvite, decodeReceipt, decodeSnapshot, decodeSync, object, string } from '../../../native/ui/src/protocol.ts';
+import { decodeInvite, decodeReceipt, decodeSnapshot, decodeSync, decodeJoinStage, object, string, type JoinStage } from '../../../native/ui/src/protocol.ts';
 import type { Command, HostOptions, Invite, Receipt, Snapshot, SyncReport } from './types.ts';
 export type { Command, HostOptions, Invite, Receipt, Snapshot, SyncReport } from './types.ts';
 
-type Pending = Readonly<{ resolve: (value: unknown) => void; reject: (reason: unknown) => void }>;
+type Pending = Readonly<{ resolve: (value: unknown) => void; reject: (reason: unknown) => void; progress?: (stage: JoinStage) => void }>;
 
 /** Typed UI facade. SQL, signing, and transport live in one dedicated worker. */
 export class BrowserHost {
@@ -17,6 +17,10 @@ export class BrowserHost {
     worker.addEventListener('message', event => {
       const response = object(event.data), id = string(response.id), pending = this.#pending.get(id);
       if (!pending) return;
+      if (response.type === 'join_progress') {
+        pending.progress?.(decodeJoinStage(response.stage));
+        return;
+      }
       this.#pending.delete(id);
       if (response.ok === true) pending.resolve(response.value);
       else pending.reject(new Error(string(response.error)));
@@ -58,11 +62,11 @@ export class BrowserHost {
     this.#pending.clear();
   }
 
-  #call(method: string, value?: unknown): Promise<unknown> {
+  #call(method: string, value?: unknown, progress?: (stage: JoinStage) => void): Promise<unknown> {
     if (this.#closed) return Promise.reject(new Error('Browser host is closed.'));
     const id = crypto.randomUUID();
     return new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
+      this.#pending.set(id, { resolve, reject, ...(progress ? { progress } : {}) });
       try { this.#worker.postMessage({ id, method, value }); }
       catch (error) { this.#pending.delete(id); reject(error); }
     });
@@ -71,7 +75,7 @@ export class BrowserHost {
   async snapshot(): Promise<Snapshot> { return decodeSnapshot(await this.#call('snapshot')); }
   async command(command: Command): Promise<Receipt> { return decodeReceipt(await this.#call('command', command)); }
   async invite(workspaceIds: readonly string[]): Promise<Invite> { return decodeInvite(await this.#call('invite', [...workspaceIds])); }
-  async join(ticket: string): Promise<Snapshot> { return decodeSnapshot(await this.#call('join', ticket)); }
+  async join(ticket: string, onProgress?: (stage: JoinStage) => void): Promise<Snapshot> { return decodeSnapshot(await this.#call('join', ticket, onProgress)); }
   async sync(): Promise<SyncReport> { return decodeSync(await this.#call('sync')); }
   async setForeground(foreground: boolean): Promise<void> { await this.#call('foreground', foreground); }
 

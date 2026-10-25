@@ -1,12 +1,12 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { decodeInvite, decodeReceipt, decodeSnapshot, decodeSync } from './protocol.ts';
-import type { Command, Invite, Receipt, Snapshot, SyncReport } from './protocol.ts';
+import type { Command, Invite, Receipt, Snapshot, SyncReport, JoinStage } from './protocol.ts';
 export interface Host {
   readonly available: boolean;
   snapshot(): Promise<Snapshot>;
   command(command: Command): Promise<Receipt>;
   invite(workspaceIds: readonly string[]): Promise<Invite>;
-  join(ticket: string): Promise<Snapshot>;
+  join(ticket: string, onProgress?: (stage: JoinStage) => void): Promise<Snapshot>;
   sync(): Promise<SyncReport>;
 }
 export type Invoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
