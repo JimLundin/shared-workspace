@@ -14,9 +14,16 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 type Json = bool | int | float | str | list[Json] | dict[str, Json] | None
 type Object = dict[str, Json]
+
+
+class Options(argparse.Namespace):
+    binary: Path
+    source: Path
+    evidence: Path
 
 
 class SetupError(Exception):
@@ -31,10 +38,26 @@ class BehavioralError(Exception):
         self.expected = expected
 
 
+def json_value(value: object, context: str) -> Json:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, list):
+        return [json_value(item, context) for item in cast(list[object], value)]
+    if isinstance(value, dict):
+        return object_value(cast(dict[object, object], value), context)
+    raise SetupError(f"{context} is not a JSON value")
+
+
 def object_value(value: object, context: str) -> Object:
-    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+    if not isinstance(value, dict):
         raise SetupError(f"{context} is not a JSON object")
-    return value
+    fields = cast(dict[object, object], value)
+    return {string_value(key, f"{context} key"): json_value(item, context) for key, item in fields.items()}
+
+
+def parse_object(payload: str, context: str) -> Object:
+    value: object = json.loads(payload)
+    return object_value(value, context)
 
 
 def string_value(value: object, context: str) -> str:
@@ -46,7 +69,7 @@ def string_value(value: object, context: str) -> str:
 def rows(value: object, context: str) -> list[Object]:
     if not isinstance(value, list):
         raise SetupError(f"{context} is not a list")
-    return [object_value(row, context) for row in value]
+    return [object_value(row, context) for row in cast(list[object], value)]
 
 
 def digest(path: Path) -> str:
@@ -122,7 +145,7 @@ class Peer:
         assert self.process.stdout is not None
         try:
             for line in self.process.stdout:
-                self.output.put(object_value(json.loads(line), "CLI output"))
+                self.output.put(parse_object(line, "CLI output"))
         except Exception as error:
             self.output.put(SetupError(f"Malformed CLI output from {self.name}: {type(error).__name__}"))
 
@@ -246,11 +269,13 @@ def resource(snapshot: Object, identity: str) -> Object:
 
 
 def head_ids(snapshot: Object, identity: str) -> list[Json]:
-    return sorted(string_value(row.get("id"), "revision id") for row in rows(resource(snapshot, identity)["heads"], "heads"))
+    values = sorted(string_value(row.get("id"), "revision id") for row in rows(resource(snapshot, identity)["heads"], "heads"))
+    return [*values]
 
 
 def head_bodies(snapshot: Object, identity: str) -> list[Json]:
-    return sorted(string_value(row.get("body"), "revision body") for row in rows(resource(snapshot, identity)["heads"], "heads"))
+    values = sorted(string_value(row.get("body"), "revision body") for row in rows(resource(snapshot, identity)["heads"], "heads"))
+    return [*values]
 
 
 def create_workspace(peer: Peer, identity: str, title: str) -> Object:
@@ -325,7 +350,7 @@ def selected_pairing_and_equal_peers(cluster: Cluster) -> Object:
     b.success("join", {"ticket": ticket})
     after_join = b.snapshot()
     ids = sorted(string_value(row.get("id"), "workspace id") for row in rows(after_join["workspaces"], "workspaces"))
-    check("pairing-transfers-only-selected-workspace", ids == ["launch"], ids, ["launch"])
+    check("pairing-transfers-only-selected-workspace", ids == ["launch"], [*ids], ["launch"])
     check(
         "pairing-transfers-selected-note",
         head_bodies(after_join, "brief") == ["Start with three teams."],
@@ -394,7 +419,7 @@ def offline_recovery_and_replay(cluster: Cluster) -> Object:
         "reconnect-preserves-both-concurrent-bodies",
         head_bodies(a.snapshot(), "brief") == expected_bodies,
         head_bodies(a.snapshot(), "brief"),
-        expected_bodies,
+        [*expected_bodies],
     )
     check(
         "both-peers-observe-same-conflict-heads",
@@ -425,7 +450,7 @@ def offline_recovery_and_replay(cluster: Cluster) -> Object:
     check(
         "resolution-retains-earlier-writing",
         historical == ["Both choices reviewed.", "Laptop wording.", "Phone wording.", "Shared starting point."],
-        historical,
+        [*historical],
         ["Both choices reviewed.", "Laptop wording.", "Phone wording.", "Shared starting point."],
     )
     before = b.snapshot()["operation_count"]
@@ -523,7 +548,7 @@ def restart_and_third_member(cluster: Cluster, a: Peer, b: Peer, resolve: Object
     identities = {a.ready.device_id, b.ready.device_id, c.ready.device_id}
     contacts = [sorted(string_value(row.get("id"), "peer id") for row in rows(peer.snapshot()["peers"], "peers")) for peer in (a, b, c)]
     expected_contacts = [sorted(identities - {peer.ready.device_id}) for peer in (a, b, c)]
-    check("three-peers-discover-each-other", contacts == expected_contacts, contacts, expected_contacts)
+    check("three-peers-discover-each-other", contacts == expected_contacts, [[*row] for row in contacts], [[*row] for row in expected_contacts])
     return {
         "offline_versions_preserved": True,
         "origin_peer_was_stopped": True,
@@ -537,7 +562,7 @@ def main() -> int:
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--evidence", type=Path, required=True)
-    options = parser.parse_args()
+    options = parser.parse_args(namespace=Options())
     binary, source = options.binary.resolve(), options.source.resolve()
     evidence = Evidence(options.evidence.resolve())
     before = source_hashes(source)
@@ -545,7 +570,7 @@ def main() -> int:
         "kind": "native-workspace-process-acceptance-v1",
         "passed": False,
         "binary_sha256": digest(binary),
-        "source_hashes": before,
+        "source_hashes": {**before},
         "harness_sha256": digest(Path(__file__)),
         "python": sys.version,
         "scope": "Real independent native host processes and Turso stores over isolated Iroh loopback.",
@@ -558,9 +583,10 @@ def main() -> int:
     cluster = Cluster(binary, evidence)
     try:
         result = selected_pairing_and_equal_peers(cluster)
-        report["cases"] = [{"name": "selected_pairing_and_equal_peers", "passed": True, "result": result}]
+        cases: list[Json] = [{"name": "selected_pairing_and_equal_peers", "passed": True, "result": result}]
+        report["cases"] = cases
         result = offline_recovery_and_replay(cluster)
-        report["cases"].append({"name": "offline_recovery_and_replay", "passed": True, "result": result})
+        cases.append({"name": "offline_recovery_and_replay", "passed": True, "result": result})
         report["passed"] = True
     except BehavioralError as error:
         report["failure"] = {"type": "behavioral", "assertion": error.assertion, "observed": error.observed, "expected": error.expected}
@@ -568,8 +594,8 @@ def main() -> int:
         report["failure"] = {"type": "setup", "detail": str(error)}
     finally:
         cluster.cleanup()
-        report["assertions"] = evidence.assertions
-        report["process_exits"] = evidence.exits
+        report["assertions"] = [*evidence.assertions]
+        report["process_exits"] = [*evidence.exits]
         if report["passed"] is True and any(row["returncode"] != 0 for row in evidence.exits):
             report["passed"] = False
             report["failure"] = {"type": "setup", "detail": "A native process did not exit cleanly"}
@@ -582,17 +608,13 @@ def main() -> int:
             report["passed"] = False
             report["failure"] = {"type": "setup", "detail": "Executable changed during acceptance run"}
         evidence.save("report.json", report)
-    print(
-        json.dumps(
-            {
-                "passed": report["passed"],
-                "assertions": len(evidence.assertions),
-                "failure": report.get("failure"),
-                "report": str(evidence.path / "report.json"),
-            },
-            indent=2,
-        )
-    )
+    summary: Object = {
+        "passed": report["passed"],
+        "assertions": len(evidence.assertions),
+        "failure": report.get("failure"),
+        "report": str(evidence.path / "report.json"),
+    }
+    print(json.dumps(summary, indent=2))
     return 0 if report["passed"] else 1
 
 
