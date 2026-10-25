@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from 'playwright';
 import { createServer } from 'vite';
 
 // Real MediaRecorder: Chromium synthetic microphone, or WebKit synthetic Web Audio stream.
 const safari = process.argv.includes('--webkit');
 const cors = process.argv.includes('--openai-cors');
-const server = await createServer({ configFile: false, appType: 'custom', cacheDir: '/tmp/provider-voice-vite-cache', server: { host: '127.0.0.1', port: 0,
+const server = await createServer({ root: fileURLToPath(new URL('../', import.meta.url)), configFile: false, appType: 'custom', cacheDir: '/tmp/provider-voice-vite-cache', server: { host: '127.0.0.1', port: 0,
   headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' },
 } });
 server.middlewares.use((request, response, next) => {
