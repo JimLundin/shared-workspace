@@ -1,0 +1,20 @@
+{
+  "kind": "native-windows-launch-v1",
+  "status": "blocked",
+  "passed": false,
+  "app_sha256": "b24d6177d17ae75058db268ef041eca0b39bfc1c3adff856dcb018011730d6fd",
+  "phase": "CreateProcess",
+  "win_error": 5,
+  "assertions_completed": [],
+  "native_readiness_observed": false,
+  "native_app_data_created": false,
+  "policy": {
+    "provider": "Microsoft-Windows-Windows Defender",
+    "event_id": 1121,
+    "rule_id": "01443614-CD74-433A-B99E-2ECDC07BFC25",
+    "rule": "Block executable files from running unless they meet a prevalence, age, or trusted list criterion",
+    "observed_at_utc": "2026-10-25T13:24:29.244Z"
+  },
+  "file_acl_grants_current_user_full_access": true,
+  "policy_changes_or_alternate_execution_attempts": false
+}

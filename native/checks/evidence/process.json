@@ -1,0 +1,132 @@
+{
+  "assertions": [
+    "independent-device-identities",
+    "pairing-transfers-only-selected-workspace",
+    "pairing-transfers-selected-note",
+    "pairing-does-not-transfer-private-resource",
+    "consumed-invite-denies-a-different-peer",
+    "denied-peer-has-no-workspace",
+    "second-peer-contributes-to-same-workspace",
+    "first-peer-edit-reaches-second",
+    "paused-peer-network-is-explicit",
+    "offline-local-edit-is-retained",
+    "reconnect-preserves-both-concurrent-bodies",
+    "both-peers-observe-same-conflict-heads",
+    "explicit-resolution-is-applied",
+    "resolved-revision-reaches-other-peer",
+    "resolution-retains-earlier-writing",
+    "stale-edit-reports-conflict",
+    "stale-edit-adds-no-operation",
+    "exact-command-replay-is-identified",
+    "exact-command-replay-adds-no-operation",
+    "changed-command-identity-is-rejected",
+    "changed-replay-adds-no-operation",
+    "invalid-command-has-definitive-rejection",
+    "rejected-command-adds-no-operation",
+    "corrected-uncommitted-command-can-succeed",
+    "restart-retains-native-device-identity",
+    "restart-retains-resource-history",
+    "restart-retains-exact-replay-receipt",
+    "member-can-enroll-with-origin-peer-stopped",
+    "third-device-contributes-without-origin-peer",
+    "origin-peer-recovers-after-new-member-work",
+    "three-peers-converge-after-restart",
+    "three-peers-discover-each-other"
+  ],
+  "binary_sha256": "c2478e691e514ff5d128e63f6e1ecb1c9a59e2abe9ba8fbc9add9bb69f0e91bc",
+  "binary_unchanged": true,
+  "cases": [
+    {
+      "name": "selected_pairing_and_equal_peers",
+      "passed": true,
+      "result": {
+        "a": "0877ef3e14850f105a0af9eeccd078752a374777644f7672ffb6e41c822ad633",
+        "b": "6ba1e1553891c1ae9e3cde19a943da9702ab04acd5652aab8ed17f2bbf41ec1c",
+        "c": "1a1b6b1b5d90460cbbd67ec35776a8376c86259c98b10049d7d78cf1060e6bf6",
+        "independent_processes": true,
+        "selected_workspace": "launch",
+        "transport": "Iroh loopback"
+      }
+    },
+    {
+      "name": "offline_recovery_and_replay",
+      "passed": true,
+      "result": {
+        "offline_versions_preserved": true,
+        "origin_peer_was_stopped": true,
+        "restarted_device_ids": [
+          "09acc501d2c1db6815e6c3b0d522ef645a4a51a14ac60932d70aef1e67c26937",
+          "f585113d8b0ae92db4af3e933eea289e9c948375fc85fc09c76b433a199677d8"
+        ],
+        "third_member_contributed": true
+      }
+    }
+  ],
+  "harness_sha256": "57aff678a156540e4a99e0b5f242fe9a6e2bc32b20a0f5a5ac83960988633e8f",
+  "kind": "native-workspace-process-acceptance-v1",
+  "limits": [
+    "No physical iPhone installation or native UI result.",
+    "No internet/NAT/relay or managed device policy result.",
+    "No external agent/application effect."
+  ],
+  "passed": true,
+  "process_exits": [
+    {
+      "peer": "EditingPhone",
+      "pid": 96792,
+      "returncode": 0
+    },
+    {
+      "peer": "EditingLaptop",
+      "pid": 96786,
+      "returncode": 0
+    },
+    {
+      "peer": "EditingLaptop",
+      "pid": 96832,
+      "returncode": 0
+    },
+    {
+      "peer": "ThirdDevice",
+      "pid": 96824,
+      "returncode": 0
+    },
+    {
+      "peer": "EditingPhone",
+      "pid": 96818,
+      "returncode": 0
+    },
+    {
+      "peer": "Desktop",
+      "pid": 96780,
+      "returncode": 0
+    },
+    {
+      "peer": "Phone",
+      "pid": 96774,
+      "returncode": 0
+    },
+    {
+      "peer": "Laptop",
+      "pid": 96768,
+      "returncode": 0
+    }
+  ],
+  "python": "3.15.1 (main, Oct 22 2026, 01:08:56) [GCC 9.4.0]",
+  "scope": "Real independent native host processes and Turso stores over isolated Iroh loopback.",
+  "source_hashes": {
+    "Cargo.lock": "26508943472e69f5aa4b1cf98a58db771fa3553f441cf56e23c5bfe41aa7c5a8",
+    "Cargo.toml": "56270e690b730bd6c2cf29faea7c44309600287099d74365bf2baca329e5469c",
+    "PROTOCOL.md": "80d6962cfd6d6bc6e975486a910e758e4d3f0f3e53c69972973145bf5f1696bc",
+    "cli/Cargo.toml": "d7f495dc10120370e28f2ef0a99352338ad097f204f32039788fa7ffa965478b",
+    "cli/src/main.rs": "06a1ab9319af2977428a170f34caf81f0f3aeb9f15ed7a9ffcad22993ae05bcd",
+    "core/Cargo.toml": "59f09b4c6257aa3d50b0231bb0d1e6d624667d0a061b1315059633713bc56e94",
+    "core/src/host.rs": "1aa647074148cb667cbbe52edc68bd3b3cc8ef97a1c4ebc79cfa90b7e798e09c",
+    "core/src/identity.rs": "e0f7906a7496bc716dad2d968c8c34b3a3b724ebb4d005f6caad812220d72816",
+    "core/src/lib.rs": "dccd06256def89cdff72ca240e5a0944ef49cda9061a468a65c625682c3e7437",
+    "core/src/model.rs": "7510d0523a7d95ff97e1b48b7e22a08c6507e74af78f86cbc4ccb85f1575b959",
+    "core/src/peer.rs": "83a0187325d3fb591d533592b3088ced2fdbff538aa4d07ee6d307a59d069682",
+    "core/src/store.rs": "157686c430e5c622422fc54605a51398a24a216fdef8d177ec6079cfec36314b"
+  },
+  "source_unchanged": true
+}

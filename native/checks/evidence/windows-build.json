@@ -1,0 +1,60 @@
+{
+  "files": [
+    {
+      "bytes": 36427264,
+      "sha256": "b24d6177d17ae75058db268ef041eca0b39bfc1c3adff856dcb018011730d6fd",
+      "imports": [
+        "KERNEL32.dll",
+        "advapi32.dll",
+        "bcryptprimitives.dll",
+        "ntdll.dll",
+        "user32.dll",
+        "oleaut32.dll",
+        "gdi32.dll",
+        "dwmapi.dll",
+        "iphlpapi.dll",
+        "ws2_32.dll",
+        "ole32.dll",
+        "combase.dll",
+        "api-ms-win-core-synch-l1-2-0.dll",
+        "api-ms-win-core-winrt-error-l1-1-0.dll",
+        "comctl32.dll",
+        "imm32.dll",
+        "shlwapi.dll",
+        "shell32.dll",
+        "bcrypt.dll",
+        "crypt32.dll",
+        "WebView2Loader.dll",
+        "msvcrt.dll"
+      ],
+      "name": "workspace-host.exe"
+    },
+    {
+      "bytes": 160880,
+      "sha256": "86545b66cdb0603bc26b626fb9ad610cb6e71f28d468f5ea66df23b03dda96d5",
+      "imports": [
+        "KERNEL32.dll",
+        "ADVAPI32.dll",
+        "ole32.dll"
+      ],
+      "name": "WebView2Loader.dll"
+    }
+  ],
+  "source_hashes": {
+    "native/core/src/host.rs": "1aa647074148cb667cbbe52edc68bd3b3cc8ef97a1c4ebc79cfa90b7e798e09c",
+    "native/core/src/peer.rs": "83a0187325d3fb591d533592b3088ced2fdbff538aa4d07ee6d307a59d069682",
+    "native/core/src/model.rs": "7510d0523a7d95ff97e1b48b7e22a08c6507e74af78f86cbc4ccb85f1575b959",
+    "native/core/src/store.rs": "157686c430e5c622422fc54605a51398a24a216fdef8d177ec6079cfec36314b",
+    "native/app/src/lib.rs": "bbe351a01cba67a1274fad3e01e130cc6884ee2affd7c0e2ba990a9bbb81e141"
+  },
+  "target": "x86_64-pc-windows-gnu",
+  "kind": "native-windows-build-v1",
+  "built": true,
+  "toolchain": "Rust 1.97.1; LLVM-MinGW 20250402",
+  "runtime_executed": false,
+  "system_rendering": "WebView2",
+  "limits": [
+    "Windows GNU cross-build, not the configured MSVC/NSIS installer build",
+    "No native Windows UI or iPhone runtime pass"
+  ]
+}

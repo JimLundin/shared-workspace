@@ -1,11 +1,81 @@
+use anyhow::Context;
 use tempfile::tempdir;
 use workspace_core::{Command, Host, NetworkMode};
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cumulative_grants_sync_across_more_than_one_scope_batch() -> anyhow::Result<()> {
+    let left_dir = tempdir()?;
+    let right_dir = tempdir()?;
+    let left = Host::open(left_dir.path(), "Laptop".into(), NetworkMode::Loopback).await?;
+    let right = Host::open(right_dir.path(), "Phone".into(), NetworkMode::Loopback).await?;
+    let workspace_ids: Vec<_> = (0..33)
+        .map(|index| format!("workspace-{index:02}"))
+        .collect();
+    for workspace_id in &workspace_ids {
+        left.command(Command::CreateWorkspace {
+            operation_id: format!("create-{workspace_id}"),
+            workspace_id: workspace_id.clone(),
+            title: workspace_id.clone(),
+        })
+        .await?;
+    }
+    for selection in workspace_ids.chunks(11) {
+        right
+            .join(left.create_invite(selection.to_vec(), 600).await?.ticket)
+            .await
+            .with_context(|| format!("pairing {} selected workspaces", selection.len()))?;
+    }
+    for host in [&left, &right] {
+        let snapshot = host.snapshot().await?;
+        assert_eq!(snapshot.data.workspaces.len(), 33);
+        assert_eq!(snapshot.peers[0].workspace_ids, workspace_ids);
+    }
+    right.set_foreground(false).await?;
+    left.command(Command::CreateResource {
+        operation_id: "left-original-scope".into(),
+        workspace_id: workspace_ids[0].clone(),
+        resource_id: "laptop-note".into(),
+        title: "Original scope".into(),
+        body: "Laptop writing".into(),
+    })
+    .await?;
+    right
+        .command(Command::CreateResource {
+            operation_id: "right-additional-scope".into(),
+            workspace_id: workspace_ids[32].clone(),
+            resource_id: "phone-note".into(),
+            title: "Additional scope".into(),
+            body: "Phone writing".into(),
+        })
+        .await?;
+    right.set_foreground(true).await?;
+    for host in [&right, &left] {
+        let report = host.sync().await?;
+        assert!(
+            report
+                .peers
+                .iter()
+                .all(|peer| matches!(peer.state, workspace_core::SyncState::Synced { .. })),
+            "{report:?}"
+        );
+    }
+    let left_snapshot = left.snapshot().await?;
+    let right_snapshot = right.snapshot().await?;
+    assert_eq!(left_snapshot.data.resources.len(), 2);
+    assert_eq!(left_snapshot.data.resources, right_snapshot.data.resources);
+    for snapshot in [left_snapshot, right_snapshot] {
+        assert_eq!(snapshot.peers[0].workspace_ids, workspace_ids);
+    }
+    right.shutdown().await?;
+    left.shutdown().await?;
+    Ok(())
+}
 
 #[tokio::test]
 async fn paired_hosts_keep_concurrent_writing_across_real_connections() -> anyhow::Result<()> {
     let left_dir = tempdir()?;
     let right_dir = tempdir()?;
-    let left = Host::open(left_dir.path(), "Laptop".into(), NetworkMode::Loopback).await?;
+    let left = Host::open(left_dir.path(), "L".repeat(120), NetworkMode::Loopback).await?;
     let right = Host::open(right_dir.path(), "Phone".into(), NetworkMode::Loopback).await?;
     left.command(Command::CreateWorkspace {
         operation_id: "create-launch".into(),

@@ -1,0 +1,158 @@
+{
+  "baseline_report_sha256": "a3584c4bec9afe05b848b06bc1e11e069e6a516c0dc88fb03dc2eb8d7eec0b88",
+  "harness_hashes": {
+    "mutate.py": "cfb377ec1655cdb09075104fa8f3375889f93f9c04314744ba92e58cf8c79e77",
+    "process_check.py": "57aff678a156540e4a99e0b5f242fe9a6e2bc32b20a0f5a5ac83960988633e8f"
+  },
+  "kind": "native-workspace-targeted-mutations-v1",
+  "mutations": [
+    {
+      "binary_sha256": "1d4bb4b33a39834651e8b3798bff6e575951e83a7cf6330e49ac92b7ebc3571f",
+      "clean_stderr_sha256": "946d1ee5495de58e14d2daf7c109b0bf26f03fb01d4c0644029c7ee101f6f861",
+      "clean_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command": [
+        "/tmp/workspace-mutation-target/debug/deps/store-12a24e8813ece473",
+        "--exact",
+        "invalid_signature_unknown_author_and_changed_operation_reuse_are_denied_atomically",
+        "--nocapture"
+      ],
+      "edits": [
+        {
+          "after": "let _ = author;",
+          "before": "author.verify(\n            &signing_bytes(op)?,\n            &Signature::from_bytes(&signature_bytes),\n        )?;",
+          "mutant_sha256": "3e0189a5a108cc93e865872af746f7f7c70a06dd2ad0e4e96b7b4a0949063642",
+          "path": "core/src/model.rs",
+          "source_before_sha256": "7510d0523a7d95ff97e1b48b7e22a08c6507e74af78f86cbc4ccb85f1575b959"
+        }
+      ],
+      "expected_assertion": "reject-invalid-signature",
+      "id": "skip_operation_signature",
+      "intended_assertion_observed": true,
+      "outcome": "detected",
+      "returncode": 101,
+      "stderr_sha256": "478881bb9bb30fa238d1099a2c6725076a9c994db40092fe9956d081a2ebc1c4",
+      "stdout_sha256": "3f39bd973f65b731962813a97ffceed887d59ef36f0a05b4bd9187176681d841",
+      "test": "invalid_signature_unknown_author_and_changed_operation_reuse_are_denied_atomically"
+    },
+    {
+      "binary_sha256": "be2effa7475b6208d1f917bc97c63634d330137f82e838c8669c19dfc3ebb021",
+      "clean_stderr_sha256": "1682d43dd2ea446114baeb03e4fd5436e32b4f6ad44899829cbde09328df5d87",
+      "clean_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command": [
+        "/tmp/workspace-mutation-target/debug/deps/store-12a24e8813ece473",
+        "--exact",
+        "invalid_signature_unknown_author_and_changed_operation_reuse_are_denied_atomically",
+        "--nocapture"
+      ],
+      "edits": [
+        {
+          "after": "let _ = member;",
+          "before": "ensure!(\n                    member,\n                    \"operation author is not an authorized workspace member\"\n                );",
+          "mutant_sha256": "3af015e50dff64d71092f4b9cd22af7a2f73a610ab76ad3c0d9d8abf4ef190c7",
+          "path": "core/src/model.rs",
+          "source_before_sha256": "7510d0523a7d95ff97e1b48b7e22a08c6507e74af78f86cbc4ccb85f1575b959"
+        }
+      ],
+      "expected_assertion": "reject-ungranted-author",
+      "id": "skip_causal_membership",
+      "intended_assertion_observed": true,
+      "outcome": "detected",
+      "returncode": 101,
+      "stderr_sha256": "48c0fd3a280e37357e421f734ffd6032f91b117af519622fcf21c38f0cd8351d",
+      "stdout_sha256": "b130faa2ec8e12941c7747a029acd58e753167b2a2f1e6af2bc679586db219e0",
+      "test": "invalid_signature_unknown_author_and_changed_operation_reuse_are_denied_atomically"
+    },
+    {
+      "binary_sha256": "4bdfad6a8b5ff11a11ca734127002fabe2339f2f908f336358bb7494bbaa4646",
+      "clean_stderr_sha256": "946d1ee5495de58e14d2daf7c109b0bf26f03fb01d4c0644029c7ee101f6f861",
+      "clean_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command": [
+        "/tmp/workspace-mutation-target/debug/deps/store-12a24e8813ece473",
+        "--exact",
+        "invalid_signature_unknown_author_and_changed_operation_reuse_are_denied_atomically",
+        "--nocapture"
+      ],
+      "edits": [
+        {
+          "after": "let _ = previous;",
+          "before": "ensure!(\n                previous == signed,\n                \"operation identity was reused with different content\"\n            );",
+          "mutant_sha256": "b69c131887dcc014470424189dc12b8e354b7061c4d0d3dc95cddd78408586b9",
+          "path": "core/src/store.rs",
+          "source_before_sha256": "157686c430e5c622422fc54605a51398a24a216fdef8d177ec6079cfec36314b"
+        }
+      ],
+      "expected_assertion": "reject-operation-id-payload-reuse",
+      "id": "accept_changed_operation_reuse",
+      "intended_assertion_observed": true,
+      "outcome": "detected",
+      "returncode": 101,
+      "stderr_sha256": "b3cae6fa204d815279768acfbd0bf467b7c075681f15845f8d2bc60962c0d782",
+      "stdout_sha256": "f6efeb20b1bab1eb6467f3cc418f993a872fae386781c8ae0a0f9b6e9274aead",
+      "test": "invalid_signature_unknown_author_and_changed_operation_reuse_are_denied_atomically"
+    },
+    {
+      "binary_sha256": "308f9659c9846edd6351e63feeb802c99252120f12c2ca20445250dbda46e625",
+      "clean_stderr_sha256": "946d1ee5495de58e14d2daf7c109b0bf26f03fb01d4c0644029c7ee101f6f861",
+      "clean_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command": [
+        "/tmp/workspace-mutation-target/debug/deps/store-12a24e8813ece473",
+        "--exact",
+        "offline_branches_are_preserved_and_resolution_rechecks_current_heads",
+        "--nocapture"
+      ],
+      "edits": [
+        {
+          "after": "if false {",
+          "before": "if expected != actual {",
+          "mutant_sha256": "aeb8a48f0f8fa4b99d9c32037ae6ae6575342e06b2e20f40ca66cfcafc327ab5",
+          "path": "core/src/model.rs",
+          "source_before_sha256": "7510d0523a7d95ff97e1b48b7e22a08c6507e74af78f86cbc4ccb85f1575b959"
+        },
+        {
+          "after": "let _ = (&actual, &expected);",
+          "before": "ensure!(\n                    !actual.is_empty() && expected == actual,\n                    \"edit does not name its causal resource heads\"\n                );",
+          "mutant_sha256": "3d1e29ca3eecbbc43299ef6afaf0564cfc985aefb7d1675182e34efc7864f2d7",
+          "path": "core/src/model.rs",
+          "source_before_sha256": "7510d0523a7d95ff97e1b48b7e22a08c6507e74af78f86cbc4ccb85f1575b959"
+        }
+      ],
+      "expected_assertion": "reject-stale-heads",
+      "id": "skip_both_stale_revision_checks",
+      "intended_assertion_observed": true,
+      "outcome": "detected",
+      "returncode": 101,
+      "stderr_sha256": "2f864fe80627baf9401592f5183ce2ed2100457768e04804edc837e775516a59",
+      "stdout_sha256": "0c1f299b1bc8e15b7efe2518153fe70f7cc3362a8fb317529f898cceb8bac474",
+      "test": "offline_branches_are_preserved_and_resolution_rechecks_current_heads"
+    }
+  ],
+  "passed": true,
+  "plan_sha256": "e3c76e9816c43dbf788554674a904a9f8c1313b5de9abcdee929b52a3631833a",
+  "policy": "Only the named behavioral assertion in the selected test counts. No compiler, setup, timeout or unrelated failure counts.",
+  "private_logs_root": "/tmp/workspace-mutation-campaign-37cuc097",
+  "python": "3.15.1 (main, Oct 22 2026, 01:08:56) [GCC 9.4.0]",
+  "source_hashes": {
+    "Cargo.lock": "26508943472e69f5aa4b1cf98a58db771fa3553f441cf56e23c5bfe41aa7c5a8",
+    "Cargo.toml": "56270e690b730bd6c2cf29faea7c44309600287099d74365bf2baca329e5469c",
+    "PROTOCOL.md": "80d6962cfd6d6bc6e975486a910e758e4d3f0f3e53c69972973145bf5f1696bc",
+    "cli/Cargo.toml": "d7f495dc10120370e28f2ef0a99352338ad097f204f32039788fa7ffa965478b",
+    "cli/src/main.rs": "06a1ab9319af2977428a170f34caf81f0f3aeb9f15ed7a9ffcad22993ae05bcd",
+    "core/Cargo.toml": "59f09b4c6257aa3d50b0231bb0d1e6d624667d0a061b1315059633713bc56e94",
+    "core/src/host.rs": "1aa647074148cb667cbbe52edc68bd3b3cc8ef97a1c4ebc79cfa90b7e798e09c",
+    "core/src/identity.rs": "e0f7906a7496bc716dad2d968c8c34b3a3b724ebb4d005f6caad812220d72816",
+    "core/src/lib.rs": "dccd06256def89cdff72ca240e5a0944ef49cda9061a468a65c625682c3e7437",
+    "core/src/model.rs": "7510d0523a7d95ff97e1b48b7e22a08c6507e74af78f86cbc4ccb85f1575b959",
+    "core/src/peer.rs": "83a0187325d3fb591d533592b3088ced2fdbff538aa4d07ee6d307a59d069682",
+    "core/src/store.rs": "157686c430e5c622422fc54605a51398a24a216fdef8d177ec6079cfec36314b",
+    "core/tests/peer_authorization.rs": "1ec5daaed89dd4695951d034dd4130ab6dbf79b900974555671fcbbc133a5592",
+    "core/tests/peer_sync.rs": "d545cc5f0a673c619a2d200301fb8d31a51014203dad8a77eb80854c56477cf9",
+    "core/tests/store.rs": "88e475f2ce17de5763b529e74bb5cbab0213cc4e9ac809a742f4da6b2148611c",
+    "core/tests/turso_types.rs": "6ffa976c38b64cac6f9466c2d950594c4c8111eba2a0b8333c357dd9d477cfa4"
+  },
+  "source_unchanged": true,
+  "store_baseline": {
+    "binary_sha256": "c282544eec2c40bec15d39eb5ddb5a72837fda02c26b6d3adf1fe38b801aebff",
+    "passed": true,
+    "tests_passed": 9
+  }
+}

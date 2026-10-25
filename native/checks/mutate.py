@@ -23,6 +23,7 @@ def hashes(native: Path) -> dict[str, str]:
 
 
 def execute(command: list[str], directory: Path, label: str, seconds: int = 900) -> subprocess.CompletedProcess[str]:
+    print(json.dumps({"case": directory.name, "stage": label}), flush=True)
     try:
         result = subprocess.run(
             command,
@@ -114,13 +115,17 @@ def run_mutation(native: Path, copied: Path, target: Path, private: Path, *, mut
             )
         executable = build(copied, target, directory)
         result["binary_sha256"] = digest(executable)
-        observed = execute([str(executable), "--exact", mutation["test"], "--nocapture"], directory, "test", 180)
+        command = [str(executable), "--exact", mutation["test"], "--nocapture"]
+        result["command"] = command
+        observed = execute(command, directory, "test", 180)
         output = observed.stdout + observed.stderr
         intended = observed.returncode != 0 and mutation["expected_assertion"] in output and f"{mutation['test']} ... FAILED" in observed.stdout
         result["outcome"] = "detected" if intended else "survived" if observed.returncode == 0 else "unrelated_failure"
         result["returncode"] = observed.returncode
         result["stdout_sha256"] = digest(directory / "test.stdout.log")
         result["stderr_sha256"] = digest(directory / "test.stderr.log")
+        result["clean_stdout_sha256"] = digest(directory / "clean.stdout.log")
+        result["clean_stderr_sha256"] = digest(directory / "clean.stderr.log")
         result["intended_assertion_observed"] = intended
     except Exception as error:
         result["outcome"] = "setup_failure"
@@ -136,6 +141,12 @@ def prepare_copy(native: Path, copied: Path, target: Path, original: dict[str, s
         raise SetupError("Existing target lacks campaign ownership; refusing to affect another build")
     target.mkdir(parents=True, exist_ok=True)
     owner.write_text(json.dumps({"purpose": "workspace mutation campaigns only"}) + "\n", encoding="utf-8")
+    # Creating our ownership marker before Cargo's first build means Cargo does
+    # not initialize its own cache tag. Establish the standard tag only after
+    # confirming this is a new or already campaign-owned disposable directory.
+    (target / "CACHEDIR.TAG").write_text(
+        "Signature: 8a477f597d28d172789f06886806bc55\n# Disposable workspace mutation build cache.\n", encoding="utf-8"
+    )
     shutil.copytree(native, copied, ignore=shutil.ignore_patterns("node_modules", "target", "dist", "__pycache__", ".git"))
     if hashes(copied) != original:
         raise SetupError("Disposable source copy differs from frozen source")
@@ -168,7 +179,7 @@ def main() -> int:
     target = options.target_dir.resolve() if options.target_dir else private / "target"
     try:
         baseline = json.loads(options.baseline_report.read_text(encoding="utf-8"))
-        if baseline.get("passed") is not True or baseline.get("source_unchanged") is not True:
+        if any(baseline.get(field) is not True for field in ("passed", "source_unchanged", "binary_unchanged")):
             raise SetupError("A passing, unchanged process baseline is required")
         if baseline.get("harness_sha256") != digest(Path(__file__).with_name("process_check.py")):
             raise SetupError("Process harness differs from the passing baseline")
@@ -188,9 +199,10 @@ def main() -> int:
         baseline_dir.mkdir()
         executable = build(copied, target, baseline_dir)
         baseline_result = execute([str(executable), "--nocapture"], baseline_dir, "test", 180)
-        if baseline_result.returncode or "test result: ok." not in baseline_result.stdout:
+        passed_tests = re.search(r"test result: ok\. ([1-9][0-9]*) passed; 0 failed;", baseline_result.stdout)
+        if baseline_result.returncode or passed_tests is None:
             raise SetupError("Unmodified public Store tests failed in the disposable build")
-        report["store_baseline"] = {"passed": True, "binary_sha256": digest(executable)}
+        report["store_baseline"] = {"passed": True, "tests_passed": int(passed_tests.group(1)), "binary_sha256": digest(executable)}
         for mutation in plan:
             report["mutations"].append(run_mutation(native, copied, target, private, mutation=mutation, originals=originals))
         report["passed"] = bool(report["mutations"]) and all(row["outcome"] == "detected" for row in report["mutations"])

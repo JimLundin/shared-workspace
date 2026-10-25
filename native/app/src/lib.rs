@@ -115,17 +115,20 @@ pub fn run() {
             // receive a successful snapshot or command receipt.
             let directory = app.path().app_local_data_dir()?;
             std::fs::create_dir_all(&directory)?;
+            let host = tauri::async_runtime::block_on(Host::open(
+                &directory,
+                device_name(),
+                NetworkMode::Default,
+            ))?;
+            // Only the process holding the host directory lock may replace
+            // its readiness receipt. A second launch must preserve the live
+            // owner's marker when it fails to acquire that ownership.
             let receipt = directory.join("native-host-ready.json");
             if let Err(error) = std::fs::remove_file(&receipt)
                 && error.kind() != std::io::ErrorKind::NotFound
             {
                 return Err(error.into());
             }
-            let host = tauri::async_runtime::block_on(Host::open(
-                &directory,
-                device_name(),
-                NetworkMode::Default,
-            ))?;
             let snapshot = tauri::async_runtime::block_on(host.snapshot())?;
             let ready = serde_json::json!({
                 "schema_version": 1,

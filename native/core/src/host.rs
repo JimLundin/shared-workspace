@@ -24,6 +24,48 @@ pub enum NetworkState {
     Unavailable { detail: String },
 }
 
+#[cfg(test)]
+mod tests {
+    use std::future::Future;
+    use std::task::Poll;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn background_wake_cannot_reverse_an_explicit_pause() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let host = Host::open(directory.path(), "Laptop".into(), NetworkMode::Loopback).await?;
+        // Hold the lifecycle owner so a user pause is ahead of the background
+        // wake. Both operations still exercise the real endpoint and store.
+        let lifecycle = host.lifecycle.lock().await;
+        let pause = host.set_foreground(false);
+        tokio::pin!(pause);
+        std::future::poll_fn(|cx| {
+            assert!(pause.as_mut().poll(cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        host.command(Command::CreateWorkspace {
+            operation_id: "wake-background".into(),
+            workspace_id: "work".into(),
+            title: "Work".into(),
+        })
+        .await?;
+        tokio::task::yield_now().await;
+        drop(lifecycle);
+        pause.await?;
+        // Queue behind the maintenance turn before observing its result.
+        drop(host.lifecycle.lock().await);
+        assert!(matches!(
+            host.snapshot().await?.network,
+            NetworkState::Paused
+        ));
+        assert!(host.create_invite(vec!["work".into()], 60).await.is_err());
+        host.shutdown().await?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SyncState {
@@ -111,7 +153,7 @@ impl Host {
                 };
                 if host.foreground.load(Ordering::Acquire) {
                     // Errors stay visible in peer observations; durable local work remains.
-                    let _ = host.set_foreground(true).await;
+                    let _ = host.maintain_network().await;
                     let _ = host.sync().await;
                 }
             }
@@ -204,15 +246,7 @@ impl Host {
         }
         if foreground {
             self.foreground.store(true, Ordering::Release);
-            let peer = match RunningPeer::start(self.store.clone(), self.mode).await {
-                Ok(peer) => peer,
-                Err(error) => {
-                    *self.network_error.lock().await = Some(error.to_string());
-                    return Err(error);
-                }
-            };
-            *self.running.lock().await = Some(peer);
-            *self.network_error.lock().await = None;
+            self.start_network().await?;
             self.changed.notify_one();
         } else {
             self.foreground.store(false, Ordering::Release);
@@ -221,6 +255,33 @@ impl Host {
                 peer.shutdown().await?;
             }
         }
+        Ok(())
+    }
+
+    async fn maintain_network(&self) -> Result<()> {
+        let _serial = self.lifecycle.lock().await;
+        // Recovery observes the user's desired state under the same owner as
+        // pause/resume. An earlier foreground observation cannot undo a pause.
+        if self.closed.load(Ordering::Acquire) || !self.foreground.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        if self.running.lock().await.is_none() {
+            self.start_network().await?;
+        }
+        Ok(())
+    }
+
+    // The lifecycle owner serializes endpoint creation and shutdown.
+    async fn start_network(&self) -> Result<()> {
+        let peer = match RunningPeer::start(self.store.clone(), self.mode).await {
+            Ok(peer) => peer,
+            Err(error) => {
+                *self.network_error.lock().await = Some(error.to_string());
+                return Err(error);
+            }
+        };
+        *self.running.lock().await = Some(peer);
+        *self.network_error.lock().await = None;
         Ok(())
     }
 

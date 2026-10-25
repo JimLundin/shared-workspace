@@ -1,7 +1,7 @@
 # Distributed workspace hosts
 
-Real implementation in progress. This folder builds a separate Windows/iPhone
-application using a shared Rust workspace core and a TypeScript interface.
+This folder contains the first native workspace implementation: a separate
+Windows/iPhone application using a shared Rust core and a TypeScript interface.
 The previous HTML study remains a product-model reference, not this app's data.
 
 The core uses **Turso Database**, the Rust SQLite-compatible engine, not libSQL.
@@ -25,7 +25,24 @@ requires Apple's signing/provisioning path; unsigned CI artifacts cannot be
 installed on a physical phone. Build and install evidence will distinguish
 Linux/Windows process tests, simulator runs and actual device installation.
 
-Implementation interface: [PROTOCOL.md](PROTOCOL.md) (being finalized by the
-shared core and host lanes). Public command/snapshot and peer interfaces are the
-behavioral test seams already approved for this work. Targeted mutations must
-fail the intended behavior assertion; compiler/setup failures do not count.
+Implementation interface: [PROTOCOL.md](PROTOCOL.md). Public command/snapshot
+and peer interfaces are the behavioral test seams. Targeted mutations must fail
+the intended behavior assertion; compiler/setup failures do not count.
+
+Build instructions are in [app/README.md](app/README.md). The
+[architecture](../docs/native-architecture.md) describes the installed bundle;
+the [platform record](../docs/native-platforms.md) distinguishes available build
+and signing routes, and the [validation record](../docs/native-validation.md)
+tracks actual results.
+
+Once installed, create a workspace and save a note. In Devices, select the
+workspaces to share and create an invitation. The other installed host scans or
+pastes the ticket and explicitly joins. Each keeps its own local database.
+Edit while a peer is unavailable, then reconnect; competing edits appear for
+explicit review. The invitation is temporary and grants access to its selected
+workspaces, so share it only with the device you intend to pair.
+
+The command field accepts speech or typing: “Create a workspace called Planning,”
+“Open Planning,” “Note: Review the launch brief,” and “Sync my devices.” Commands
+are reviewed before submission. General agent requests and embedded Office/code
+applications are not yet implemented in this native host.

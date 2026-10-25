@@ -15,14 +15,15 @@ use tokio::sync::Semaphore;
 use tokio::task::{JoinHandle, JoinSet};
 use tokio::time::timeout;
 
-use crate::model::{ImportReceipt, PeerRecord, SignedOperation};
+use crate::model::{
+    ImportReceipt, MAX_WORKSPACE_SCOPE, PeerRecord, SignedOperation, validate_device_name,
+};
 use crate::store::Store;
 
 const ALPN: &[u8] = b"workspace/replication/1";
 const VERSION: u8 = 1;
 const MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_OPERATIONS: usize = 4096;
-const MAX_WORKSPACES: usize = 64;
 const MAX_TICKET_BYTES: usize = 12 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_INCOMING: usize = 16;
@@ -68,10 +69,7 @@ impl Contact {
     }
 
     fn validate(&self) -> Result<()> {
-        ensure!(
-            !self.name.trim().is_empty() && self.name.len() <= 120,
-            "invalid peer name"
-        );
+        validate_device_name(&self.name)?;
         ensure!(self.address.addrs.len() <= 16, "too many peer addresses");
         ensure!(
             serde_json::to_vec(&self.address)?.len() <= 4096,
@@ -322,6 +320,28 @@ impl PeerClient {
             "saved peer identity mismatch"
         );
         let workspace_ids = store.allowed_workspaces(&peer.id).await?;
+        ensure!(!workspace_ids.is_empty(), "no shared workspaces");
+        let mut receipt = ImportReceipt {
+            imported: 0,
+            already_present: 0,
+        };
+        for selection in workspace_ids.chunks(MAX_WORKSPACE_SCOPE) {
+            let batch = self
+                .synchronize_scope(store, &peer.id, address.clone(), selection.to_vec())
+                .await?;
+            receipt.imported += batch.imported;
+            receipt.already_present += batch.already_present;
+        }
+        Ok(receipt)
+    }
+
+    async fn synchronize_scope(
+        &self,
+        store: &Store,
+        peer_id: &str,
+        address: EndpointAddr,
+        workspace_ids: Vec<String>,
+    ) -> Result<ImportReceipt> {
         validate_workspaces(&workspace_ids)?;
         let fingerprint = store.fingerprint(&workspace_ids).await?;
         let contacts = shared_contacts(store, &workspace_ids).await?;
@@ -379,7 +399,7 @@ impl PeerClient {
             "sync reply changed workspace scope"
         );
         validate_operations(&workspace_ids, &operations)?;
-        let receipt = store.import(&peer.id, &operations).await?;
+        let receipt = store.import(peer_id, &operations).await?;
         store.save_peer(reply.contact.record()?).await?;
         retain_contacts(store, &workspace_ids, contacts).await?;
         Ok(receipt)
@@ -397,41 +417,40 @@ impl PeerClient {
             bytes.len() <= MAX_MESSAGE_BYTES,
             "workspace transfer exceeds the current 8 MiB limit"
         );
-        timeout(
-            if self.mode == NetworkMode::Loopback {
-                Duration::from_secs(2)
-            } else {
-                REQUEST_TIMEOUT
-            },
-            async {
-                let connection = self.endpoint.connect(address.clone(), ALPN).await?;
+        timeout(REQUEST_TIMEOUT, async {
+            let connect = self.endpoint.connect(address.clone(), ALPN);
+            let connection = match self.mode {
+                NetworkMode::Loopback => timeout(Duration::from_secs(2), connect)
+                    .await
+                    .context("peer did not connect before deadline")??,
+                NetworkMode::Default => connect.await?,
+            };
+            ensure!(
+                connection.remote_id() == address.id,
+                "authenticated peer identity mismatch"
+            );
+            let result = async {
+                let (mut send, mut receive) = connection.open_bi().await?;
+                send.write_all(&bytes).await?;
+                send.finish()?;
+                let incoming = receive.read_to_end(MAX_MESSAGE_BYTES).await?;
+                let reply: Reply =
+                    serde_json::from_slice(&incoming).context("invalid peer reply")?;
                 ensure!(
-                    connection.remote_id() == address.id,
-                    "authenticated peer identity mismatch"
+                    reply.version == VERSION && reply.id == request.id,
+                    "reply does not match request"
                 );
-                let result = async {
-                    let (mut send, mut receive) = connection.open_bi().await?;
-                    send.write_all(&bytes).await?;
-                    send.finish()?;
-                    let incoming = receive.read_to_end(MAX_MESSAGE_BYTES).await?;
-                    let reply: Reply =
-                        serde_json::from_slice(&incoming).context("invalid peer reply")?;
-                    ensure!(
-                        reply.version == VERSION && reply.id == request.id,
-                        "reply does not match request"
-                    );
-                    ensure!(
-                        reply.contact.address.id == address.id,
-                        "reply contact changed authenticated identity"
-                    );
-                    reply.contact.validate()?;
-                    Ok(reply)
-                }
-                .await;
-                connection.close(0u32.into(), b"exchange complete");
-                result
-            },
-        )
+                ensure!(
+                    reply.contact.address.id == address.id,
+                    "reply contact changed authenticated identity"
+                );
+                reply.contact.validate()?;
+                Ok(reply)
+            }
+            .await;
+            connection.close(0u32.into(), b"exchange complete");
+            result
+        })
         .await
         .context("peer did not respond before deadline")?
     }
@@ -636,7 +655,7 @@ fn scope_set(values: &[String]) -> BTreeSet<String> {
 
 fn validate_workspaces(values: &[String]) -> Result<()> {
     ensure!(
-        !values.is_empty() && values.len() <= MAX_WORKSPACES,
+        !values.is_empty() && values.len() <= MAX_WORKSPACE_SCOPE,
         "invalid workspace selection"
     );
     ensure!(

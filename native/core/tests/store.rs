@@ -4,6 +4,39 @@ use workspace_core::{
 };
 
 #[tokio::test]
+async fn device_names_have_the_same_byte_limit_for_local_and_saved_peers() {
+    let directory = tempfile::tempdir().unwrap();
+    let maximum_name = "x".repeat(120);
+    let oversized_name = "x".repeat(121);
+    assert!(
+        Store::open(directory.path(), &oversized_name)
+            .await
+            .is_err()
+    );
+    let store = Store::open(directory.path(), &maximum_name).await.unwrap();
+    assert_eq!(store.snapshot().await.unwrap().device_name, maximum_name);
+    create_launch(&store).await;
+    store.save_peer(peer(&store, &maximum_name)).await.unwrap();
+    assert!(
+        store
+            .save_peer(peer(&store, &oversized_name))
+            .await
+            .is_err()
+    );
+    assert_eq!(store.peers().await.unwrap()[0].name, maximum_name);
+    for invalid in [" ", "Phone\n", &"é".repeat(61)] {
+        let invalid_directory = tempfile::tempdir().unwrap();
+        assert!(
+            Store::open(invalid_directory.path(), invalid)
+                .await
+                .is_err()
+        );
+        assert!(store.save_peer(peer(&store, invalid)).await.is_err());
+    }
+    assert_eq!(store.peers().await.unwrap()[0].name, maximum_name);
+}
+
+#[tokio::test]
 async fn saved_workspace_and_note_survive_reopening_with_the_same_identity() {
     let directory = tempfile::tempdir().unwrap();
     let store = Store::open(directory.path(), "Laptop").await.unwrap();

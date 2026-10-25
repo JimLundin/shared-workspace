@@ -53,7 +53,7 @@ impl State {
 
 impl Store {
     pub async fn open(directory: impl AsRef<Path>, name: &str) -> Result<Self> {
-        model::validate_title(name)?;
+        model::validate_device_name(name)?;
         let directory = directory.as_ref();
         let (key, owner) = identity::open(directory)?;
         let database_path = directory.join("workspaces.db");
@@ -398,8 +398,9 @@ impl Store {
         let mut operations = state.operations.clone();
         let mut grants = Vec::new();
         for workspace_id in &workspace_ids {
-            let projection = model::project(&operations)?;
-            let workspace = projection
+            // Each scope appears once; a grant cannot change another workspace's heads.
+            let workspace = state
+                .projection
                 .workspaces
                 .get(workspace_id)
                 .context("invited workspace is absent")?;
@@ -485,7 +486,10 @@ fn validate_token_hash(value: &str) -> Result<()> {
     Ok(())
 }
 fn validate_workspaces(ids: &[String]) -> Result<()> {
-    ensure!(ids.len() <= 32, "too many selected workspaces");
+    ensure!(
+        ids.len() <= model::MAX_WORKSPACE_SCOPE,
+        "too many selected workspaces"
+    );
     let mut seen = BTreeSet::new();
     for id in ids {
         model::validate_id(id)?;
@@ -495,7 +499,7 @@ fn validate_workspaces(ids: &[String]) -> Result<()> {
 }
 fn validate_peer(peer: &PeerRecord) -> Result<()> {
     let id = model::validate_device(&peer.id)?;
-    model::validate_title(&peer.name)?;
+    model::validate_device_name(&peer.name)?;
     ensure!(
         peer.address_json.len() <= 32768,
         "peer address is too large"

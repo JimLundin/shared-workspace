@@ -174,6 +174,8 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const MAX_OPERATIONS: usize = 4096;
 pub const MAX_DOCUMENT_BYTES: usize = 128 * 1024;
 pub const MAX_HISTORY_BYTES: usize = 7 * 1024 * 1024;
+pub const MAX_DEVICE_NAME_BYTES: usize = 120;
+pub const MAX_WORKSPACE_SCOPE: usize = 32;
 const SIGNATURE_DOMAIN: &[u8] = b"workspace/operation/v1\0";
 
 pub fn validate_id(value: &str) -> Result<()> {
@@ -192,6 +194,16 @@ pub fn validate_title(value: &str) -> Result<()> {
     ensure!(
         !value.trim().is_empty() && value.len() <= 512 && !value.chars().any(char::is_control),
         "invalid title"
+    );
+    Ok(())
+}
+
+pub fn validate_device_name(value: &str) -> Result<()> {
+    ensure!(
+        !value.trim().is_empty()
+            && value.len() <= MAX_DEVICE_NAME_BYTES
+            && !value.chars().any(char::is_control),
+        "invalid device name"
     );
     Ok(())
 }

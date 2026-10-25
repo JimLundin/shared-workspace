@@ -18,7 +18,7 @@ npm --prefix native/app ci
 npm --prefix native/app run build
 ```
 
-The Tauri build hook builds `native/ui/dist`. Windows release builds require
+The Tauri build hook builds `native/ui/dist`. The standard Windows/MSVC build uses
 Microsoft's C++ build tools and the Rust MSVC target. The NSIS installer uses the
 system WebView2 runtime; it installs Microsoft's small bootstrapper only when
 that runtime is absent. Node/npm, Cargo and the C++ tools are build tools, not
@@ -60,9 +60,10 @@ Opening the native host does not wait for a peer or relay to become reachable.
 Its snapshot distinguishes transport unavailability from retained local data.
 The iPhone application forwards foreground/suspension observations to the host;
 it does not promise a process that runs continuously while iOS suspends it.
-Desktop exit waits for the owner to shut down. Each launch removes its prior
-readiness marker and writes a new `native-host-ready.json` only after opening the
-real host and obtaining a snapshot. This marker contains a public device ID,
+Desktop exit waits for the owner to shut down. After acquiring the host directory
+lock, a launch replaces its readiness marker with a new `native-host-ready.json`
+after opening the real host and obtaining a snapshot. A competing launch cannot
+remove the running owner's marker. This marker contains a public device ID,
 process ID and timestamp, never workspace material or private keys.
 
 ## Voice and pairing

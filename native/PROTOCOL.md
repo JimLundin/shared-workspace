@@ -13,14 +13,17 @@ Crate `workspace-core` exports `Host`, `NetworkMode`, `Command`,
 - `Host::open(data_dir: impl AsRef<Path>, device_name: String, mode: NetworkMode)`
   is async and returns `Result<Arc<Host>>`. `NetworkMode::Default` enables Iroh's
   standard native direct/relay discovery; `Loopback` is isolated test routing.
+  Device names must contain non-whitespace text, have no control characters,
+  and fit within 120 UTF-8 bytes; startup and peer contacts use the same validator.
 - `host.command(Command)` -> `CommandReceipt` after the local durable commit.
 - `host.snapshot()` -> `HostSnapshot`.
 - `host.create_invite(workspace_ids: Vec<String>, ttl_seconds: u32)` ->
   `PairingInvite { ticket: String, expires_at_ms: i64 }`.
 - `host.join(ticket: String)` -> `HostSnapshot` after paired bootstrap commits.
-- `host.sync()` -> `SyncReport` describing each peer attempt.
+- `host.sync()` -> `SyncReport` with current peer observations after one pass.
 - `host.set_foreground(bool)` suspends/resumes the native endpoint. Local work
   remains on disk. Foreground resumes catch-up; iOS is not always running.
+  Background transport recovery cannot reverse an explicit pause.
 - `host.shutdown()` closes network activity cleanly.
 
 All methods are async. Shell command names are `host_snapshot`, `host_command`
@@ -81,8 +84,14 @@ is running; it does not assert another peer is reachable. Peer state variants:
 `never_synced`, `syncing`, `synced { at_ms, imported }`,
 `unreachable { at_ms, detail }`. Snapshot times and availability are observations,
 not workspace authority. `SyncReport { peers: [PeerStatus] }` uses the same peer
-shape. A completed sync only acknowledges that exchange; another offline device
-may hold newer work.
+shape. Each pass attempts the contacts known at its start. An exchange may teach
+it about another authorized member: that newly discovered contact appears as
+`never_synced` until the next explicit or automatic foreground pass. This is
+pending work, not a completed exchange or a transport failure. The UI must not
+label the entire mesh synchronized while any member is pending or unreachable.
+A completed peer sync only acknowledges that exchange; another offline device
+may hold newer work. The foreground owner repeats catch-up every five seconds
+and after local changes.
 
 ## Pairing and peer transfer
 
@@ -101,6 +110,9 @@ work. No permanently privileged desktop or permanent server is required.
 Foreground peers first compare cached content fingerprints for the selected
 workspaces. Identical histories exchange only a small summary and member contact
 updates; they do not reload, revalidate or transfer the full operation log.
+Each invitation and exchange selects at most 32 workspaces. Cumulative membership
+may exceed that limit: synchronization exchanges consecutive bounded selections
+without removing earlier grants.
 Changed histories exchange bounded signed operation sets (up to 4,096 operations
 and an 8 MiB wire envelope; retained history has its own smaller store limit).
 A summary mismatch never itself establishes permission. Every requested scope

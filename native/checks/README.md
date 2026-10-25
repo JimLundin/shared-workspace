@@ -26,7 +26,7 @@ are never included in public evidence.
 
 ## Targeted mutation checks
 
-Mutations will run only after the root freezes a passing source and harness.
+Mutations run only against a frozen passing source and harness.
 Each campaign uses a disposable source copy and its own build target. The
 workspace-core package is cleaned before every mutant build while dependency
 artifacts remain reusable. Its
@@ -34,6 +34,17 @@ record includes source, test and binary hashes, exact mutation, command and the
 intended assertion. Compiler errors, setup failures and timeouts are not kills.
 The production checkout is never mutated. Baseline source must still match
 its original digest after the campaign.
+
+The target must be new or carry the campaign ownership marker. The harness
+initializes Cargo's standard cache tag in that owned directory, then requires
+a package clean before the baseline and every mutant build. Cleaning preserves
+dependency artifacts while preventing a restored source from reusing a mutant.
+
+The checked-in [process report](evidence/process.json) records 2 scenarios and
+32 assertions. The [mutation report](evidence/mutations.json) records 9 passing
+baseline Store tests and all 4 declared faults detected. Both reports bind the
+same production source; the mutation report also hashes the process report.
+Only these JSON reports are exported, without private state or raw logs.
 
 The declared faults in [mutations.json](mutations.json) bypass signature
 verification, causal author membership, imported operation payload checking,

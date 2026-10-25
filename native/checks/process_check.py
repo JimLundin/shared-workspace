@@ -95,6 +95,7 @@ class Peer:
         self.sequence = 0
         self.output: queue.Queue[Object | Exception] = queue.Queue()
         self.stderr: list[str] = []
+        self.exchanges: list[Object] = []
         self.exit_recorded = False
         self.process = subprocess.Popen(
             [str(cluster.binary), "--data-dir", str(state), "--name", name, "--network", "loopback"],
@@ -225,6 +226,9 @@ class Cluster:
         # Keys, tickets and diagnostic stderr stay outside the exported evidence.
         for index, peer in enumerate(self.processes):
             (self.private / f"{index}-{peer.name}.stderr.log").write_text("\n".join(peer.stderr), encoding="utf-8")
+            (self.private / f"{index}-{peer.name}.exchanges.json").write_text(
+                json.dumps(peer.exchanges, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
 
 
 def workspace(snapshot: Object, identity: str) -> Object:
@@ -282,11 +286,25 @@ def edit_note(peer: Peer, operation: str, expected: list[Json], body: str) -> Ob
 
 def sync(*peers: Peer, allowed_unreachable: set[str] | None = None) -> None:
     for peer in peers:
-        report = object_value(peer.success("sync"), "sync report")
-        for status in rows(report.get("peers"), "sync peers"):
-            state = object_value(status.get("state"), "sync peer state")
-            if state.get("type") != "synced" and status.get("id") not in (allowed_unreachable or set()):
-                raise SetupError(f"{peer.name} did not complete its peer exchange; transport failure is not a mutation kill")
+        for _ in range(3):
+            report = object_value(peer.success("sync"), "sync report")
+            peer.exchanges.append(report)
+            discovered = False
+            for status in rows(report.get("peers"), "sync peers"):
+                state = object_value(status.get("state"), "sync peer state")
+                kind = string_value(state.get("type"), "peer state kind")
+                if kind == "synced" or (kind == "unreachable" and status.get("id") in (allowed_unreachable or set())):
+                    continue
+                if kind == "never_synced":
+                    # A completed exchange can introduce another member contact.
+                    # That contact was not in the host's initial exchange set.
+                    discovered = True
+                    continue
+                raise SetupError(f"{peer.name} did not complete its peer exchange ({kind}); transport failure is not a mutation kill")
+            if not discovered:
+                break
+        else:
+            raise SetupError(f"{peer.name} did not finish exchanging with discovered peers in three passes")
 
 
 def selected_pairing_and_equal_peers(cluster: Cluster) -> Object:
@@ -502,6 +520,10 @@ def restart_and_third_member(cluster: Cluster, a: Peer, b: Peer, resolve: Object
         [final_heads, head_ids(b.snapshot(), "brief"), head_ids(c.snapshot(), "brief")],
         "same revision identities",
     )
+    identities = {a.ready.device_id, b.ready.device_id, c.ready.device_id}
+    contacts = [sorted(string_value(row.get("id"), "peer id") for row in rows(peer.snapshot()["peers"], "peers")) for peer in (a, b, c)]
+    expected_contacts = [sorted(identities - {peer.ready.device_id}) for peer in (a, b, c)]
+    check("three-peers-discover-each-other", contacts == expected_contacts, contacts, expected_contacts)
     return {
         "offline_versions_preserved": True,
         "origin_peer_was_stopped": True,
@@ -555,6 +577,10 @@ def main() -> int:
         if report["source_unchanged"] is not True:
             report["passed"] = False
             report["failure"] = {"type": "setup", "detail": "Source changed during acceptance run"}
+        report["binary_unchanged"] = report["binary_sha256"] == digest(binary)
+        if report["binary_unchanged"] is not True:
+            report["passed"] = False
+            report["failure"] = {"type": "setup", "detail": "Executable changed during acceptance run"}
         evidence.save("report.json", report)
     print(
         json.dumps(

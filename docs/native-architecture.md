@@ -84,10 +84,14 @@ Unsigned iOS simulator/device compilation establishes build compatibility;
 simulator execution establishes only that simulator's behavior. None proves a
 signed installation, camera, speech or network behavior on the user's iPhone.
 
-The user has no confirmed Mac access or Apple Developer membership. Physical
-installation requires an Apple provisioning path: personal-device development
-through Xcode/Personal Team, or an eligible paid distribution path such as
-TestFlight. No unsigned artifact will be presented as installable on the phone.
+The user has no confirmed Mac access or paid Apple Developer membership.
+Physical installation still requires signing, but the documented third-party
+AltServer route can sign a local IPA on Windows with a free Apple Account and
+a trusted USB-connected phone. It requires permitted device trust/Developer
+Mode and periodic renewal; it has not been exercised here. Xcode/Personal Team
+and TestFlight are the other documented paths. See the [platform and installation
+notes](native-platforms.md#documented-windows--usb-signing-route). No unsigned
+artifact will be presented as directly installable on the phone.
 The previously prohibited local HTTP preview has been stopped. This project will
 not use a tunnel or public preview to bypass that restriction.
 
