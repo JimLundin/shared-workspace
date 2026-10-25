@@ -15,7 +15,7 @@ export function observeAppearance(onChange: (appearance: Appearance) => void): {
   function apply(notify = true): void {
     const theme = resolveTheme(appearance, query.matches);
     document.documentElement.dataset.theme = theme;
-    document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'dark' ? '#181d1b' : '#f4f4ef');
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'dark' ? '#17181a' : '#f5f5f5');
     if (notify) onChange(appearance);
   }
   const systemChanged = (): void => { if (appearance === 'system') apply(); };

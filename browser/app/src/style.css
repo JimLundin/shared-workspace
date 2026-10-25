@@ -3,10 +3,10 @@ body { height: 100dvh; }
 .boot { margin: 12svh auto; padding: 32px 24px; max-width: 680px; }
 .boot h1 { font-size: 2rem; }
 .boot p { color: var(--muted); font-size: 1rem; }
-#browser-controls:empty::before { content: 'This app is up to date. Your saved work is available on this device.'; font-size: .875rem; color: var(--muted); line-height: 1.7; }
-#browser-controls { display: grid; gap: 12px; }
-#browser-controls>button { min-height: 48px; text-align: left; }
-#browser-controls>button[data-update] { background: var(--accent); color: var(--on-accent); }
+#browser-controls:empty::before { content: 'No additional app options are available on this device.'; font-size: .875rem; color: var(--muted); line-height: 1.7; }
+#browser-controls { display: grid; gap: 0; }
+#browser-controls>button { min-height: 52px; padding: 12px 2px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; text-align: left; }
+#browser-controls>button[data-update] { color: var(--accent); }
 .browser-notice { padding: 28px; }
 .browser-notice p { font-size: .9375rem; }
 .browser-notice button { margin: 8px 8px 0 0; }

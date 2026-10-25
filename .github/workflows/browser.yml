@@ -86,6 +86,8 @@ jobs:
           npm --prefix native/ui run check
           npm --prefix native/ui test
           npm --prefix browser/app test
+      - name: Verify automatic update discovery guards
+        run: npm --prefix browser/app run test:update-mutations
       - name: Exercise voice and application interactions
         run: |
           npm --prefix native/ui run test:browser

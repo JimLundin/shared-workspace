@@ -6,6 +6,7 @@ import { ProviderVoice } from './provider-voice.ts';
 import { BrowserVoice } from './voice.ts';
 import { consumeInvitation, invitationLink } from './invitation.ts';
 import { prepareBrowser } from './pwa.ts';
+import type { UpdateDiscovery } from './update-discovery.ts';
 
 const root = document.getElementById('app')!;
 const controls = document.getElementById('browser-controls')!;
@@ -14,6 +15,7 @@ const startupAppearance = observeAppearance(() => {});
 let app: ReturnType<typeof mountApp> | undefined;
 let closeHost: (() => Promise<void>) | undefined;
 let ready = false;
+let browserPreparation: UpdateDiscovery | undefined;
 
 function action(label: string, work: () => void | Promise<void>): HTMLButtonElement {
   const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
@@ -40,37 +42,58 @@ optionsDialog.addEventListener('close', () => {
   closeBrowserDialog();
   root.querySelector<HTMLButtonElement>('#workspace-picker')?.focus();
 });
-let updateWaiting = false;
-function offerUpdate(registration: ServiceWorkerRegistration): void {
-  if (controls.querySelector('[data-update]')) return;
-  updateWaiting = true; app?.setUpdateAvailable();
-  const button = action('Update available', () => {
-    const panel = document.createElement('dialog'); panel.className = 'browser-notice workspace-dialog'; panel.setAttribute('aria-label', 'Update application');
-    const heading = document.createElement('h2'); heading.textContent = 'Ready when you are.';
-    const message = document.createElement('p'); message.textContent = 'Save your work before reloading to the new version.';
-    let closing = false;
-    panel.addEventListener('cancel', event => { if (closing) event.preventDefault(); });
-    panel.addEventListener('close', () => { panel.remove(); closeBrowserDialog(); root.querySelector<HTMLButtonElement>('#workspace-picker')?.focus(); });
-    panel.append(heading, message, action('Reload with update', async () => {
-      if (app?.session.state.mutation.type === 'sending' || app?.session.state.mutation.type === 'uncertain') { message.textContent = 'Finish or recover the pending save before updating.'; return; }
-      if (app?.hasUnsubmittedInput()) { message.textContent = 'You have an unfinished edit or captured input. Choose Later to save or discard it first.'; return; }
-      closing = true; updateClosing = true;
-      for (const control of panel.querySelectorAll('button')) control.disabled = true;
-      root.inert = true;
-      app?.dispose();
-      try { await closeHost?.(); }
-      catch {
-        message.textContent = 'Closing this workspace was not confirmed. Reload to recover saved work.';
-        panel.replaceChildren(message, action('Reload and recover', () => location.reload()));
-        panel.querySelector('button')?.focus();
-        return;
-      }
-      if (!registration.waiting) { location.reload(); return; }
-      navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
-      registration.waiting.postMessage({ type: 'ACTIVATE_UPDATE' });
-    }), action('Later', () => panel.close()));
-    document.body.append(panel); panel.showModal(); optionsDialog.close();
-  }); button.dataset.update = ''; controls.append(button);
+let waitingRegistration: ServiceWorkerRegistration | null = null;
+function offerUpdate(registration: ServiceWorkerRegistration | null): void {
+  waitingRegistration = registration;
+  app?.setUpdateAvailable(registration !== null);
+}
+function focusUpdateAction(): void {
+  (root.querySelector<HTMLButtonElement>('[data-action="update"]') ?? root.querySelector<HTMLButtonElement>('#workspace-picker'))?.focus();
+}
+function openUpdate(): void {
+  if (updateClosing) return;
+  if (waitingRegistration?.waiting?.state !== 'installed') { offerUpdate(null); return; }
+  const existing = document.querySelector<HTMLDialogElement>('.browser-notice');
+  if (existing) { if (!existing.open) openBrowserDialog(existing); return; }
+  const panel = document.createElement('dialog'); panel.className = 'browser-notice workspace-dialog'; panel.setAttribute('aria-label', 'Update application');
+  const heading = document.createElement('h2'); heading.textContent = 'Ready when you are.';
+  const message = document.createElement('p'); message.textContent = 'Save your work before reloading to the new version.';
+  let closing = false;
+  panel.addEventListener('cancel', event => { if (closing) event.preventDefault(); });
+  panel.addEventListener('close', () => { panel.remove(); closeBrowserDialog(); focusUpdateAction(); });
+  const recover = (detail: string) => {
+    message.textContent = detail;
+    panel.replaceChildren(message, action('Reload and recover', () => location.reload()));
+    panel.querySelector('button')?.focus();
+  };
+  panel.append(heading, message, action('Reload with update', async () => {
+    if (app?.session.state.mutation.type === 'sending' || app?.session.state.mutation.type === 'uncertain') { message.textContent = 'Finish or recover the pending save before updating.'; return; }
+    if (app?.hasUnsubmittedInput()) { message.textContent = 'You have an unfinished edit or captured input. Choose Later to save or discard it first.'; return; }
+    closing = true; updateClosing = true;
+    for (const control of panel.querySelectorAll('button')) control.disabled = true;
+    root.inert = true;
+    browserPreparation?.dispose();
+    app?.dispose();
+    try { await closeHost?.(); }
+    catch { recover('Closing this workspace was not confirmed. Reload to recover saved work.'); return; }
+    const waiting = waitingRegistration?.waiting;
+    // A different tab may already have activated the update. This reload still
+    // follows this tab's explicit consent and completed local close.
+    if (!waiting || waiting.state !== 'installed') { location.reload(); return; }
+    let timer: ReturnType<typeof setTimeout>;
+    const activated = () => { clearTimeout(timer); location.reload(); };
+    navigator.serviceWorker.addEventListener('controllerchange', activated, { once: true });
+    timer = setTimeout(() => {
+      navigator.serviceWorker.removeEventListener('controllerchange', activated);
+      recover('The update could not be confirmed. Reload to recover saved work.');
+    }, 15_000);
+    try { waiting.postMessage({ type: 'ACTIVATE_UPDATE' }); }
+    catch {
+      clearTimeout(timer); navigator.serviceWorker.removeEventListener('controllerchange', activated);
+      recover('The update could not be started. Reload to recover saved work.');
+    }
+  }), action('Later', () => panel.close()));
+  document.body.append(panel); openBrowserDialog(panel); if (optionsDialog.open) optionsDialog.close();
 }
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> };
 window.addEventListener('beforeinstallprompt', event => {
@@ -80,13 +103,13 @@ window.addEventListener('beforeinstallprompt', event => {
 });
 
 async function start(): Promise<void> {
-  await prepareBrowser(base, offerUpdate);
+  browserPreparation = await prepareBrowser(base, offerUpdate);
   const initialInvite = consumeInvitation(location, history);
   const { BrowserHost } = await import('@shared-workspace/browser-host');
   const host = await BrowserHost.open({ deviceName: 'Web browser', baseUrl: base, startPaused: document.hidden });
   closeHost = () => host.close();
   app = mountApp(root, {
-    host, connections:host, voice: new ProviderVoice({locale:'',captureContext:()=>{if(!app)throw new Error('Workspace is opening');return app.voiceContext()},transcribe:(audio,{signal,locale,context})=>host.transcribe({workspace_id:context.workspaceId,connection_version:context.connectionVersion,audio,locale},signal)}),fallbackVoice:new BrowserVoice(), openAppOptions: () => openBrowserDialog(optionsDialog), invitationUrl: ticket => invitationLink(base, ticket),
+    host, connections:host, voice: new ProviderVoice({locale:'',captureContext:()=>{if(!app)throw new Error('Workspace is opening');return app.voiceContext()},transcribe:(audio,{signal,locale,context})=>host.transcribe({workspace_id:context.workspaceId,connection_version:context.connectionVersion,audio,locale},signal)}),fallbackVoice:new BrowserVoice(), openAppOptions: () => openBrowserDialog(optionsDialog), openUpdate, invitationUrl: ticket => invitationLink(base, ticket),
     ...(typeof navigator.share === 'function' ? { shareInvitation: async (url: string): Promise<'shared' | 'cancelled'> => {
       try { await navigator.share({ title: 'Shared workspaces', url }); return 'shared'; }
       catch (error) { if (error instanceof DOMException && error.name === 'AbortError') return 'cancelled'; throw error; }
@@ -95,14 +118,14 @@ async function start(): Promise<void> {
     scanner: { async available() { return false; }, async scan() { throw new Error('Open the invitation with your camera app, or paste a ticket.'); }, async cancel() {} },
   });
   startupAppearance.dispose();
-  ready = true; if(updateWaiting) app.setUpdateAvailable();
-  const foreground = () => { void host.setForeground(!document.hidden).then(() => { if (!document.hidden) return app?.session.refresh(); }).catch(() => app?.session.refresh()); };
+  ready = true; if (waitingRegistration) app.setUpdateAvailable();
+  const foreground = () => { if (updateClosing) return; void host.setForeground(!document.hidden).then(() => { if (!document.hidden) return app?.session.refresh(); }).catch(() => app?.session.refresh()); };
   document.addEventListener('visibilitychange', foreground);
   window.addEventListener('online', foreground);
   window.addEventListener('pagehide', event => {
     if (event.persisted) { void host.setForeground(false); return; }
     document.removeEventListener('visibilitychange', foreground); window.removeEventListener('online', foreground);
-    app?.dispose(); void host.close();
+    browserPreparation?.dispose(); app?.dispose(); void host.close();
   });
   window.addEventListener('pageshow', event => { if (event.persisted) foreground(); });
   if (navigator.storage.persist && !await navigator.storage.persisted()) {
@@ -115,6 +138,7 @@ async function start(): Promise<void> {
 }
 void start().catch(error => {
   if (ready) return;
+  browserPreparation?.dispose(); void closeHost?.().catch(() => undefined);
   const panel = document.createElement('main'); panel.className = 'boot';
   const heading = document.createElement('h1'); heading.textContent = 'Your workspace could not open.';
   const message = document.createElement('p'); message.setAttribute('role', 'alert');

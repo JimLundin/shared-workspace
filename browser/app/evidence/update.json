@@ -1,17 +1,24 @@
 {
   "passed": true,
   "assertions": [
-    "New build waits and offers update without reloading or replacing unsaved input.",
+    "Startup checks automatically; no top-level update button appears without a ready waiting worker.",
+    "Hidden/offline periods do not poll; a real online event discovers the ready update and preserves unsaved input.",
     "Deferring the update retains the open editor and text.",
     "Options survive polling and restore focus; update preserves unfinished workspace creation.",
     "Update preserves private key input and blocks an unconfirmed real connection write until its exact retry completes.",
+    "Automatic checking leaves a real MediaRecorder session listening until the user explicitly cancels capture.",
     "Explicit update reload reopens the committed note and isolated storage.",
     "Previous build asset remains available to an older client after removal from server.",
-    "A missing close acknowledgement offers explicit reload recovery and reopens committed work."
+    "A visible five-minute timer discovers a later real service-worker build without manual refresh.",
+    "BFCache lifecycle suspension stops polling and restoration requests one eligible check.",
+    "A missing close acknowledgement offers explicit reload recovery and reopens committed work.",
+    "Another client activating clears the stale update action without reloading or losing this tab’s draft.",
+    "An ordinary departure disposes discovery; timers and later events cannot restart it."
   ],
-  "scope": "Real waiting service worker update on headers-free static server; real BrowserHost editing.",
+  "scope": "Real service-worker discovery through online events and visible timers, explicit update and real BrowserHost editing on a headers-free server.",
   "limits": [
     "Chromium only.",
-    "No public update or physical iPhone verification."
+    "No public update or physical iPhone verification.",
+    "BFCache eligibility is not asserted: PageTransitionEvents exercise the actual application lifecycle handlers."
   ]
 }

@@ -1,0 +1,122 @@
+{
+  "kind": "workspace-update-discovery-mutations-v1",
+  "node": "v24.16.0",
+  "source_sha256": "608e4ed3709dda98784e60a81f7c44d1b07fb5651149f4efc1e5ac96768fabed",
+  "tests_sha256": "cc4f138f28e66f0d210f076546354deb69d4d5d0af41721a0c1a975f081efee4",
+  "harness_sha256": "e55bafd56f584d5f8faf6756f4c13cd0c635ba68c36087fdbd94a688be6c9ccc",
+  "baseline": {
+    "exit_code": 0,
+    "signal": null,
+    "error": null,
+    "output": "TAP version 13\n# Subtest: startup checks immediately then periodic discovery waits five visible minutes\nok 1 - startup checks immediately then periodic discovery waits five visible minutes\n  ---\n  duration_ms: 1.198485\n  type: 'test'\n  ...\n# Subtest: repeated foreground and online events share a sixty second throttle\nok 2 - repeated foreground and online events share a sixty second throttle\n  ---\n  duration_ms: 0.863782\n  type: 'test'\n  ...\n# Subtest: hidden and offline displays perform no polls and resume automatically when eligible\nok 3 - hidden and offline displays perform no polls and resume automatically when eligible\n  ---\n  duration_ms: 0.30979\n  type: 'test'\n  ...\n# Subtest: a display first opened in the background waits for visibility\nok 4 - a display first opened in the background waits for visibility\n  ---\n  duration_ms: 1.119498\n  type: 'test'\n  ...\n# Subtest: update checks remain single flight through repeated lifecycle events\nok 5 - update checks remain single flight through repeated lifecycle events\n  ---\n  duration_ms: 0.326095\n  type: 'test'\n  ...\n# Subtest: a failed check waits for the normal schedule instead of retrying continuously\nok 6 - a failed check waits for the normal schedule instead of retrying continuously\n  ---\n  duration_ms: 0.501642\n  type: 'test'\n  ...\n# Subtest: BFCache suspension ignores wake events and restores one automatic check\nok 7 - BFCache suspension ignores wake events and restores one automatic check\n  ---\n  duration_ms: 0.253754\n  type: 'test'\n  ...\n# Subtest: disposal ignores late completions and cannot revive from events or timers\nok 8 - disposal ignores late completions and cannot revive from events or timers\n  ---\n  duration_ms: 0.143659\n  type: 'test'\n  ...\n# Subtest: ordinary page departure permanently disposes the discovery owner\nok 9 - ordinary page departure permanently disposes the discovery owner\n  ---\n  duration_ms: 0.139504\n  type: 'test'\n  ...\n# Subtest: pure scheduling respects eligibility and exact throttle boundaries\nok 10 - pure scheduling respects eligibility and exact throttle boundaries\n  ---\n  duration_ms: 0.656755\n  type: 'test'\n  ...\n1..10\n# tests 10\n# suites 0\n# pass 10\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 122.207143\n"
+  },
+  "mutations": [
+    {
+      "id": "poll-hidden-display",
+      "from": "!observation.visible",
+      "to": "false",
+      "test": "hidden and offline displays perform no polls and resume automatically when eligible",
+      "marker": "HIDDEN_DISPLAY_POLLED",
+      "exit_code": 1,
+      "signal": null,
+      "error": null,
+      "output": "TAP version 13\n# Subtest: hidden and offline displays perform no polls and resume automatically when eligible\nnot ok 1 - hidden and offline displays perform no polls and resume automatically when eligible\n  ---\n  duration_ms: 2.914802\n  type: 'test'\n  location: '/tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:27:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    HIDDEN_DISPLAY_POLLED\n    \n    4 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 4\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:28:107)\n    async Test.run (node:internal/test_runner/test:1313:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 106.800884\n",
+      "mutated_sha256": "897913fb5b6f522febbb0d939df416bccbc30032894502a3e0727818fba2fecb",
+      "outcome": "killed-by-intended-assertion"
+    },
+    {
+      "id": "poll-offline-display",
+      "from": "!observation.online",
+      "to": "false",
+      "test": "hidden and offline displays perform no polls and resume automatically when eligible",
+      "marker": "OFFLINE_DISPLAY_POLLED",
+      "exit_code": 1,
+      "signal": null,
+      "error": null,
+      "output": "TAP version 13\n# Subtest: hidden and offline displays perform no polls and resume automatically when eligible\nnot ok 1 - hidden and offline displays perform no polls and resume automatically when eligible\n  ---\n  duration_ms: 2.032462\n  type: 'test'\n  location: '/tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:27:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    OFFLINE_DISPLAY_POLLED\n    \n    3 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 3\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:28:258)\n    async Test.run (node:internal/test_runner/test:1313:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 96.792134\n",
+      "mutated_sha256": "bcc487243bc370f6d8eb9963bbe4af46d156c1c77762e31cd000cf5dcf77d126",
+      "outcome": "killed-by-intended-assertion"
+    },
+    {
+      "id": "skip-wake-throttle",
+      "from": "UPDATE_THROTTLE_MS = 60_000",
+      "to": "UPDATE_THROTTLE_MS = 0",
+      "test": "repeated foreground and online events share a sixty second throttle",
+      "marker": "WAKE_THROTTLE_REMOVED",
+      "exit_code": 1,
+      "signal": null,
+      "error": null,
+      "output": "TAP version 13\n# Subtest: repeated foreground and online events share a sixty second throttle\nnot ok 1 - repeated foreground and online events share a sixty second throttle\n  ---\n  duration_ms: 2.025837\n  type: 'test'\n  location: '/tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:24:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    WAKE_THROTTLE_REMOVED\n    \n    3 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 3\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:25:174)\n    async Test.run (node:internal/test_runner/test:1313:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 97.749461\n",
+      "mutated_sha256": "f0b175c63e7dce51026f924f7faae3f6cbe6fd24a7609900ac659efcb180d482",
+      "outcome": "killed-by-intended-assertion"
+    },
+    {
+      "id": "poll-every-minute",
+      "from": "UPDATE_INTERVAL_MS = 5 * 60_000",
+      "to": "UPDATE_INTERVAL_MS = 60_000",
+      "test": "startup checks immediately then periodic discovery waits five visible minutes",
+      "marker": "PERIODIC_CHECK_TOO_EARLY",
+      "exit_code": 1,
+      "signal": null,
+      "error": null,
+      "output": "TAP version 13\n# Subtest: startup checks immediately then periodic discovery waits five visible minutes\nnot ok 1 - startup checks immediately then periodic discovery waits five visible minutes\n  ---\n  duration_ms: 2.008533\n  type: 'test'\n  location: '/tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:21:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    PERIODIC_CHECK_TOO_EARLY\n    \n    5 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 5\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:22:101)\n    async Test.run (node:internal/test_runner/test:1313:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 120.404585\n",
+      "mutated_sha256": "1717d3ec04573efdf5f29f6593636f809a395d7e2f6380368c73ca9cdae31ce4",
+      "outcome": "killed-by-intended-assertion"
+    },
+    {
+      "id": "overlap-update-checks",
+      "from": "const plan = planUpdateCheck(attempt,",
+      "to": "if (attempt.type === 'checking') attempt = { type: 'idle', lastAttemptAt: null };\n    const plan = planUpdateCheck(attempt,",
+      "test": "update checks remain single flight through repeated lifecycle events",
+      "marker": "OVERLAPPING_UPDATE_CHECK",
+      "exit_code": 1,
+      "signal": null,
+      "error": null,
+      "output": "TAP version 13\n# Subtest: update checks remain single flight through repeated lifecycle events\nnot ok 1 - update checks remain single flight through repeated lifecycle events\n  ---\n  duration_ms: 2.435344\n  type: 'test'\n  location: '/tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:33:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    OVERLAPPING_UPDATE_CHECK\n    \n    3 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 3\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:34:272)\n    async Test.run (node:internal/test_runner/test:1313:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 104.179662\n",
+      "mutated_sha256": "ff6db73a31672b50dc77a30c09731f7ce41eb2524a4feebdd2ce8444ed0f9151",
+      "outcome": "killed-by-intended-assertion"
+    },
+    {
+      "id": "publish-after-disposal",
+      "from": "if (attempt.type === 'disposed') return;\n      attempt =",
+      "to": "attempt =",
+      "test": "disposal ignores late completions and cannot revive from events or timers",
+      "marker": "DISPOSED_CHECK_PUBLISHED",
+      "exit_code": 1,
+      "signal": null,
+      "error": null,
+      "output": "TAP version 13\n# Subtest: disposal ignores late completions and cannot revive from events or timers\nnot ok 1 - disposal ignores late completions and cannot revive from events or timers\n  ---\n  duration_ms: 2.393803\n  type: 'test'\n  location: '/tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:42:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    DISPOSED_CHECK_PUBLISHED\n    \n    1 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 1\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:43:141)\n    async Test.run (node:internal/test_runner/test:1313:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 109.528788\n",
+      "mutated_sha256": "e867da259ffc9c023c1356c16bbdf52146172f444e5dce2119202d11937607c4",
+      "outcome": "killed-by-intended-assertion"
+    },
+    {
+      "id": "poll-in-bfcache",
+      "from": "active = false; clearTimer();",
+      "to": "clearTimer();",
+      "test": "BFCache suspension ignores wake events and restores one automatic check",
+      "marker": "BFCACHE_DISPLAY_POLLED",
+      "exit_code": 1,
+      "signal": null,
+      "error": null,
+      "output": "TAP version 13\n# Subtest: BFCache suspension ignores wake events and restores one automatic check\nnot ok 1 - BFCache suspension ignores wake events and restores one automatic check\n  ---\n  duration_ms: 4.165024\n  type: 'test'\n  location: '/tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:39:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    BFCACHE_DISPLAY_POLLED\n    \n    2 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:40:158)\n    async Test.run (node:internal/test_runner/test:1313:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 115.387722\n",
+      "mutated_sha256": "87e077cf057d5e0516ac5fd910b704257052b7d3127a87af6e1bf47a35f6a25f",
+      "outcome": "killed-by-intended-assertion"
+    },
+    {
+      "id": "fail-bfcache-resume",
+      "from": "active = true; step('wake');",
+      "to": "active = true;",
+      "test": "BFCache suspension ignores wake events and restores one automatic check",
+      "marker": "BFCACHE_RESUME_MISSING",
+      "exit_code": 1,
+      "signal": null,
+      "error": null,
+      "output": "TAP version 13\n# Subtest: BFCache suspension ignores wake events and restores one automatic check\nnot ok 1 - BFCache suspension ignores wake events and restores one automatic check\n  ---\n  duration_ms: 2.256457\n  type: 'test'\n  location: '/tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:39:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    BFCACHE_RESUME_MISSING\n    \n    1 !== 2\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 2\n  actual: 1\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/workspace-update-mutants-73DPgC/update-discovery.test.ts:40:259)\n    async Test.run (node:internal/test_runner/test:1313:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 115.148006\n",
+      "mutated_sha256": "523a84102353b170b4fd79758d288242a4a52faeb86d0c83d035f14e1e3de24e",
+      "outcome": "killed-by-intended-assertion"
+    }
+  ],
+  "source_unchanged": true,
+  "passed": true,
+  "scope": "Pure scheduler and lifecycle effect owner with an injected clock. Real service-worker behavior has separate update.mjs acceptance."
+}

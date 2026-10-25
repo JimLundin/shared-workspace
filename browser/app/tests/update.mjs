@@ -15,13 +15,18 @@ await cp(join(root, 'dist'), dist, { recursive: true });
 await writeFile(join(dist, 'assets/previous-build.js'), '/* previous build */');
 await generateWorker(dist);
 const server = await startStaticServer(dist);
-const browser = await chromium.launchPersistentContext(join(temporary, 'profile'), { headless: true });
-const report = { passed: false, assertions: [], scope: 'Real waiting service worker update on headers-free static server; real BrowserHost editing.', limits: ['Chromium only.', 'No public update or physical iPhone verification.'] };
+const browser = await chromium.launchPersistentContext(join(temporary, 'profile'), { headless: true, permissions: ['microphone'], args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
+const report = { passed: false, assertions: [], scope: 'Real service-worker discovery through online events and visible timers, explicit update and real BrowserHost editing on a headers-free server.', limits: ['Chromium only.', 'No public update or physical iPhone verification.', 'BFCache eligibility is not asserted: PageTransitionEvents exercise the actual application lifecycle handlers.'] };
 try {
   const context = browser;
   // Withhold one real close acknowledgement, after the host has closed its store.
   // This tests UI recovery at its worker boundary without a fake host/store.
   await context.addInitScript(() => {
+    window.updateCheckCalls = 0;
+    const originalUpdate = ServiceWorkerRegistration.prototype.update;
+    ServiceWorkerRegistration.prototype.update = function(...args) { window.updateCheckCalls++; return Reflect.apply(originalUpdate, this, args); };
+    const originalHidden = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden').get;
+    Object.defineProperty(document, 'hidden', { get: () => window.updateTestHidden ?? originalHidden.call(document) });
     const RealWorker = window.Worker;
     window.Worker = class extends RealWorker {
       closeId;
@@ -41,8 +46,12 @@ try {
     };
   });
   const page = await context.newPage();
+  await page.clock.install();
   await page.goto(server.url);
   await page.getByLabel('Workspace name', { exact: true }).waitFor({ timeout: 90000 });
+  assert.equal(await page.locator('#workspace-update').count(), 0);
+  assert.ok(await page.evaluate(() => window.updateCheckCalls >= 1));
+  report.assertions.push('Startup checks automatically; no top-level update button appears without a ready waiting worker.');
   await page.getByLabel('Workspace name', { exact: true }).fill('Update check');
   await page.getByRole('button', { name: 'Create workspace', exact: true }).click();
   await page.getByRole('button', { name: 'Add to workspace', exact: true }).click();
@@ -52,11 +61,22 @@ try {
   await rm(join(dist, 'assets/previous-build.js'));
   await writeFile(join(dist, 'assets/current-build.js'), '/* current build */');
   await generateWorker(dist);
-  await page.evaluate(async () => { await (await navigator.serviceWorker.getRegistration()).update(); });
-  await page.locator('[data-update]').waitFor({ state:'attached', timeout: 60000 });
+  const checksBeforePause = await page.evaluate(() => window.updateCheckCalls);
+  await page.evaluate(() => { window.updateTestHidden = true; document.dispatchEvent(new Event('visibilitychange')); });
+  await page.clock.fastForward(6 * 60_000);
+  assert.equal(await page.evaluate(() => window.updateCheckCalls), checksBeforePause);
+  assert.equal(await page.locator('#workspace-update').count(), 0);
+  await context.setOffline(true);
+  await page.evaluate(() => { window.updateTestHidden = false; document.dispatchEvent(new Event('visibilitychange')); });
+  await page.clock.fastForward(6 * 60_000);
+  assert.equal(await page.evaluate(() => window.updateCheckCalls), checksBeforePause);
+  await context.setOffline(false);
+  // The real online event invokes the production scheduler, not the update API.
+
+  await page.locator('#workspace-update').waitFor({ state:'visible', timeout: 60000 });
   assert.equal(await page.getByLabel('Content', { exact: true }).inputValue(), 'Keep this while installing an update.');
-  report.assertions.push('New build waits and offers update without reloading or replacing unsaved input.');
-  await openOptions(page);
+  assert.ok(await page.evaluate(() => window.updateCheckCalls > 0));
+  report.assertions.push('Hidden/offline periods do not poll; a real online event discovers the ready update and preserves unsaved input.');
   await page.getByRole('button', { name: 'Update available', exact: true }).click();
   await page.getByRole('button', { name: 'Reload with update', exact: true }).click();
   assert.ok(await page.getByRole('dialog',{name:'Update application'}).textContent().then(text=>text.includes('unfinished edit')));
@@ -78,7 +98,6 @@ try {
   await page.getByRole('button',{name:'Create workspace',exact:true}).click();
   await page.getByLabel('Workspace name',{exact:true}).fill('Unsubmitted workspace');
   await page.getByRole('button',{name:'Close dialog'}).click();
-  await openOptions(page);
   await page.getByRole('button',{name:'Update available',exact:true}).click();
   await page.getByRole('button',{name:'Reload with update',exact:true}).click();
   assert.ok(await page.getByRole('dialog',{name:'Update application'}).textContent().then(text=>text.includes('unfinished edit')));
@@ -92,15 +111,26 @@ try {
   // Private key input and an unconfirmed real worker write must also block update.
   await page.getByRole('button',{name:/Current workspace:/}).click();await page.getByRole('button',{name:'OpenAI connection',exact:true}).click();
   const syntheticKey='SYNTHETIC_ONLY_UPDATE_RECOVERY_KEY';await page.getByLabel('OpenAI API key',{exact:true}).fill(syntheticKey);await page.getByRole('button',{name:'Close dialog'}).click();
-  await openOptions(page);await page.getByRole('button',{name:'Update available',exact:true}).click();await page.getByRole('button',{name:'Reload with update',exact:true}).click();assert.ok((await page.getByRole('dialog',{name:'Update application'}).textContent()).includes('unfinished edit'));await page.getByRole('button',{name:'Later',exact:true}).click();
+  await page.getByRole('button',{name:'Update available',exact:true}).click();await page.getByRole('button',{name:'Reload with update',exact:true}).click();assert.ok((await page.getByRole('dialog',{name:'Update application'}).textContent()).includes('unfinished edit'));await page.getByRole('button',{name:'Later',exact:true}).click();
   await page.getByRole('button',{name:/Current workspace:/}).click();await page.getByRole('button',{name:'OpenAI connection',exact:true}).click();assert.equal(await page.getByLabel('OpenAI API key',{exact:true}).inputValue(),syntheticKey);
   await page.evaluate(()=>{window.failNextConnectionSave=true});await page.getByRole('button',{name:'Save connection',exact:true}).click();await page.getByRole('button',{name:'Retry connection change',exact:true}).waitFor();await page.getByRole('button',{name:'Close dialog'}).click();
-  await openOptions(page);await page.getByRole('button',{name:'Update available',exact:true}).click();await page.getByRole('button',{name:'Reload with update',exact:true}).click();assert.ok((await page.getByRole('dialog',{name:'Update application'}).textContent()).includes('unfinished edit'));await page.getByRole('button',{name:'Later',exact:true}).click();
+  await page.getByRole('button',{name:'Update available',exact:true}).click();await page.getByRole('button',{name:'Reload with update',exact:true}).click();assert.ok((await page.getByRole('dialog',{name:'Update application'}).textContent()).includes('unfinished edit'));await page.getByRole('button',{name:'Later',exact:true}).click();
   await page.getByRole('button',{name:/Current workspace:/}).click();await page.getByRole('button',{name:'OpenAI connection',exact:true}).click();await page.getByRole('button',{name:'Retry connection change',exact:true}).click();await page.getByRole('button',{name:'Continue to voice'}).waitFor();await page.getByRole('button',{name:'Close dialog'}).click();
   report.assertions.push('Update preserves private key input and blocks an unconfirmed real connection write until its exact retry completes.');
+  await page.getByRole('button', { name: 'Speak', exact: true }).click();
+  await page.locator('.voice-stage[data-phase="listening"]').waitFor();
+  const whileRecording = await page.evaluate(() => window.updateCheckCalls);
+  await page.clock.fastForward(60_001);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(before => window.updateCheckCalls > before, whileRecording);
+  assert.equal(await page.locator('.voice-stage[data-phase="listening"]').isVisible(), true);
+  assert.equal(await page.getByRole('dialog', { name: 'Update application' }).count(), 0);
+  await page.getByRole('button', { name: 'Cancel recording', exact: true }).click();
+  await page.locator('.voice-stage[data-phase="idle"]').waitFor();
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
+  report.assertions.push('Automatic checking leaves a real MediaRecorder session listening until the user explicitly cancels capture.');
   // A second old client remains open during activation, exercising old chunks.
-  const oldClient = await context.newPage(); await oldClient.goto(server.url);
-  await openOptions(page);
+  const oldClient = await context.newPage(); await oldClient.goto(server.url); await page.bringToFront();
   await page.getByRole('button', { name: 'Update available', exact: true }).click();
   await Promise.all([
     page.waitForEvent('domcontentloaded', { timeout: 60000 }),
@@ -117,10 +147,18 @@ try {
   report.assertions.push('Previous build asset remains available to an older client after removal from server.');
   await writeFile(join(dist, 'assets/following-build.js'), '/* following build */');
   await generateWorker(dist);
-  await page.evaluate(async () => { await (await navigator.serviceWorker.getRegistration()).update(); });
-  await page.locator('[data-update]').waitFor({ state:'attached', timeout: 60000 });
+  await page.clock.fastForward(5 * 60_000 + 1);
+  await page.locator('#workspace-update').waitFor({ state:'visible', timeout: 60000 });
+  report.assertions.push('A visible five-minute timer discovers a later real service-worker build without manual refresh.');
+  const beforeCache = await page.evaluate(() => window.updateCheckCalls);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+  await page.clock.fastForward(6 * 60_000);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  assert.equal(await page.evaluate(() => window.updateCheckCalls), beforeCache);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await page.waitForFunction(before => window.updateCheckCalls > before, beforeCache);
+  report.assertions.push('BFCache lifecycle suspension stops polling and restoration requests one eligible check.');
   await page.evaluate(() => { window.failNextWorkspaceClose = true; });
-  await openOptions(page);
   await page.getByRole('button', { name: 'Update available', exact: true }).click();
   await page.getByRole('button', { name: 'Reload with update', exact: true }).click();
   await page.getByRole('button', { name: 'Reload and recover', exact: true }).waitFor();
@@ -135,6 +173,20 @@ try {
   await page.locator('.note-body').waitFor({ timeout: 60000 });
   assert.equal(await page.locator('.note-body').textContent(), 'Keep this while installing an update.');
   report.assertions.push('A missing close acknowledgement offers explicit reload recovery and reopens committed work.');
+  await page.locator('#workspace-update').waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Add to workspace', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Note / }).click();
+  await page.getByLabel('Content', { exact: true }).fill('Keep this while another client activates.');
+  await oldClient.evaluate(async () => { const registration = await navigator.serviceWorker.getRegistration(); registration.waiting.postMessage({ type: 'ACTIVATE_UPDATE' }); });
+  await page.locator('#workspace-update').waitFor({ state: 'detached' });
+  assert.equal(await page.getByLabel('Content', { exact: true }).inputValue(), 'Keep this while another client activates.');
+  report.assertions.push('Another client activating clears the stale update action without reloading or losing this tab’s draft.');
+  const beforeDispose = await page.evaluate(() => window.updateCheckCalls);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })));
+  await page.clock.fastForward(10 * 60_000);
+  await page.evaluate(() => { window.dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })); });
+  assert.equal(await page.evaluate(() => window.updateCheckCalls), beforeDispose);
+  report.assertions.push('An ordinary departure disposes discovery; timers and later events cannot restart it.');
   report.passed = true;
 } catch (error) { report.failure = 'Update acceptance failed.'; await mkdir(join(root, 'artifacts'), { recursive: true }); await writeFile(join(root, 'artifacts/update-diagnostics.txt'), String(error.stack)); process.exitCode = 1; }
 finally {

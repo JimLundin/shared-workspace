@@ -61,8 +61,13 @@ versioned asset caching. On a host without custom headers, first opening may
 reload once to obtain cross-origin isolation. Host startup occurs afterward.
 The worker precaches JS, CSS, WASM, icons and the application page. Workspace
 records remain in OPFS; invitations and workspace data never enter app caches.
-An update waits; users can finish their edits before choosing to reload. The
-immediately previous asset cache remains available for older open clients.
+An update waits; users can finish their edits before choosing to reload. The app
+checks for updates on startup, when returning to the foreground or coming online
+(at most once per minute), and every five minutes while visible and online. A
+top-level **Update available** action appears only when a replacement worker is
+waiting. Discovery does not interrupt recording, transcription, unfinished input
+or an unconfirmed save. The immediately previous asset cache remains available
+for older open clients.
 
 ## Verified behavior and limits
 

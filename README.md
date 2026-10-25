@@ -17,12 +17,19 @@ provides voice command entry, editable transcripts, phone layouts and cached
 offline startup. This is a limited workspace prototype; desktop automation and
 native-host interoperability are separate integrations.
 
+The [product thesis and next proof](docs/work-continuity-thesis.md) focus on one
+durable piece of work that can continue across applications and devices. Shared
+state alone does not establish an agentic operating environment.
+
 [Browser acceptance](browser/checks/) exercises real Turso storage and Iroh
 connections across independent browser processes. The retained
 [storage](browser/storage-probe/README.md) and
 [transport](browser/iroh-probe/README.md) experiments explain the component
-choices. Physical iPhone behavior remains unverified, and the pinned Turso engine
-starts with 250 MiB of WASM linear memory, which requires device measurements.
+choices. The user has confirmed iPhone joining and browser speech; provider
+dictation and full phone lifecycle behavior still need device validation. The
+pinned Turso wrapper starts with 250 MiB of logical WASM linear memory, which is
+not resident RAM. The [memory audit](browser/storage-probe/memory-audit-20261025/README.md)
+separates those measurements; phone memory still needs measurement.
 See the [browser architecture and delivery requirements](docs/browser-host-direction.md).
 
 The [native workspace experiment](native/README.md) contains the existing signed
