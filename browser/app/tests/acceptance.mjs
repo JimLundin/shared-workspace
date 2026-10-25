@@ -32,18 +32,25 @@ async function start(name, width = 1280, offline = false) {
 }
 async function ready(page, path = server.url) {
   await page.goto(path);
-  await page.locator('nav[aria-label="Workspaces"]').waitFor({ timeout: 90000 });
+  await page.locator('#workspace-picker').waitFor({ state:'attached', timeout: 90000 });
   assert.equal(await page.evaluate(() => crossOriginIsolated), true);
 }
-async function nav(page, title) { await page.locator('nav').getByRole('button', { name: title, exact: true }).click(); }
+async function nav(page, title) {
+  if(await page.locator('dialog[open]').count())await page.getByRole('button',{name:'Close dialog',exact:true}).click();
+  await page.getByRole('button',{name:/Current workspace:/}).click();
+  try {await page.getByRole('dialog').getByRole('button',{name:title,exact:true}).click();}
+  catch(error){diagnostics.push({stage,ui:await page.evaluate(()=>({history:history.state,dialogs:Array.from(document.querySelectorAll('dialog')).map(el=>({name:el.getAttribute('aria-label'),open:el.open})),buttons:Array.from(document.querySelectorAll('button')).map(el=>({text:el.textContent,action:el.dataset.action}))}))});throw error}
+}
+
 async function edit(page, body) {
+  await focus(page);
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.getByLabel('Content', { exact: true }).fill(body);
   await page.getByRole('button', { name: 'Save note', exact: true }).click();
   await eventually(() => page.locator('.editor').count().then(count => count === 0), 'Save did not return a receipt.');
 }
 async function note(page, body) { await eventually(() => page.locator('.note-body').allTextContents().then(texts => texts.includes(body)), 'Expected committed note did not appear.'); }
-async function focus(page) { if (await page.getByRole('button', { name: 'Open', exact: true }).count()) await page.getByRole('button', { name: 'Open', exact: true }).click(); }
+async function focus(page) { const open=page.getByRole('button',{name:'Open Launch brief',exact:true});if(await open.count())await open.click(); }
 async function identity(page) { return page.evaluate(() => Object.keys(localStorage).find(key => /presentation/.test(key))); }
 async function stop(peer) { await peer.context.close(); contexts.delete(peer.context); }
 try {
@@ -55,7 +62,7 @@ try {
   const desktopIdentity = await identity(desktop.page); assert.ok(desktopIdentity);
   await desktop.page.getByLabel('Workspace name', { exact: true }).fill('Launch work');
   await desktop.page.getByRole('button', { name: 'Create workspace', exact: true }).click();
-  await desktop.page.getByRole('heading', { name: 'Launch work', exact: true }).waitFor();
+  await desktop.page.getByRole('button', { name: 'Current workspace: Launch work', exact: true }).waitFor();
   await desktop.page.getByRole('button', { name: 'Add a note', exact: true }).click();
   await desktop.page.getByLabel('Title', { exact: true }).fill('Launch brief');
   await desktop.page.getByLabel('Content', { exact: true }).fill('The launch starts with three pilot teams.');
@@ -75,7 +82,7 @@ try {
   const phone = await start('phone', 390); await ready(phone.page, link.href);
   assert.equal(new URL(phone.page.url()).hash, '');
   assert.equal(await phone.page.getByLabel('Invitation to join', { exact: true }).inputValue(), ticket);
-  assert.equal(await phone.page.locator('nav').getByRole('button', { name: 'Launch work', exact: true }).count(), 0);
+  assert.equal(await phone.page.locator('.resource-card').count(), 0);
   assert.notEqual(await identity(phone.page), desktopIdentity);
   const storage = await phone.page.evaluate(() => ({ local: JSON.stringify(localStorage), session: JSON.stringify(sessionStorage) }));
   assert.ok(!storage.local.includes(ticket) && !storage.session.includes(ticket));
@@ -89,33 +96,45 @@ try {
     observer.observe(document.getElementById('app'), { childList: true, subtree: true });
   });
   await phone.page.getByRole('button', { name: 'Join selected workspaces', exact: true }).click();
-  await phone.page.locator('nav').getByRole('button', { name: 'Launch work', exact: true }).waitFor({ timeout: 90000 });
+  await phone.page.getByRole('button', { name: 'Current workspace: Launch work', exact: true }).waitFor({ timeout: 90000 });
+  assert.equal(await phone.page.locator('dialog[open]').count(),0);
   const stages = await phone.page.evaluate(() => window.observedJoinLabels);
   for (const label of ['Checking invitation', 'Connecting this device', 'Contacting the inviting device', 'Saving work on this device']) assert.ok(stages.includes(label));
   record('Observed host stages reach the production UI through the real worker before joining completes.');
-  await nav(phone.page, 'Launch work'); await focus(phone.page); await note(phone.page, 'The launch starts with three pilot teams.');
+  await focus(phone.page); await note(phone.page, 'The launch starts with three pilot teams.');
   record('Explicit phone Join completes an authenticated peer exchange and imports the real note.');
   step('two-way-edits');
   await edit(phone.page, 'Phone revision retained.');
   await nav(desktop.page, 'Launch work'); await note(desktop.page, 'Phone revision retained.');
   await edit(desktop.page, 'Desktop revision returned.'); await note(phone.page, 'Desktop revision returned.');
   record('Notes edited from each production UI converge across isolated real browser hosts.');
-  // An addressed command remains attached to its original workspace during navigation.
-  await phone.page.getByRole('button', { name: 'Type instead', exact: true }).click();
+  // A command keeps its captured address even after opening another workspace.
+  await phone.page.getByRole('button',{name:/Current workspace:/}).click();
+  await phone.page.getByRole('button',{name:'Create workspace',exact:true}).click();
+  await phone.page.getByLabel('Workspace name',{exact:true}).fill('Private');
+  await phone.page.getByRole('button',{name:'Create workspace',exact:true}).click();
+  await phone.page.getByRole('dialog').waitFor({state:'hidden'});
+  await phone.page.getByRole('button',{name:'Current workspace: Private',exact:true}).waitFor();
+  await nav(phone.page,'Launch work');
+  await phone.page.getByRole('button', { name: 'Type a command', exact: true }).click();
   await phone.page.getByLabel('Command text', { exact: true }).fill('Remember a separate task');
-  await nav(phone.page, 'Devices'); assert.equal(await phone.page.getByRole('button', { name: 'Run command →' }).isDisabled(), true);
+  await phone.page.getByRole('button',{name:'Close dialog'}).click();
+  await nav(phone.page,'Private');
+  await phone.page.getByRole('button',{name:'Continue captured input',exact:true}).click();
+  assert.equal(await phone.page.getByRole('button', { name: 'Run command →' }).isDisabled(), true);
   await phone.page.getByRole('button', { name: 'Return to Launch work' }).click();
   assert.equal(await phone.page.getByRole('button', { name: 'Run command →' }).isDisabled(), false);
   await phone.page.getByRole('button', { name: 'New command here' }).click();
+  await phone.page.getByRole('button',{name:'Close dialog'}).click();
   const width = await phone.page.evaluate(() => ({ viewport: innerWidth, content: document.documentElement.scrollWidth }));
   assert.ok(width.content <= width.viewport);
   await phone.page.screenshot({ path: join(directory, 'artifacts/phone.png') });
-  record('Phone list/focus fits viewport and navigation preserves command address until explicit Run.');
+  record('Phone material fits viewport, picker is on demand, and capture keeps its original workspace across navigation.');
   step('stale-editor');
   await phone.page.getByRole('button', { name: 'Edit', exact: true }).click();
   await phone.page.getByLabel('Content', { exact: true }).fill('Unsaved phone edit.');
   await edit(desktop.page, 'Concurrent desktop edit.');
-  await phone.page.getByRole('heading', { name: 'Launch work', exact: true }).click();
+  await phone.page.getByRole('heading', { name: 'Edit note', exact: true }).click();
   await eventually(() => phone.page.locator('.comparison').count().then(count => count > 0), 'New version did not produce comparison.');
   assert.equal(await phone.page.getByLabel('Content', { exact: true }).inputValue(), 'Unsaved phone edit.');
   await phone.page.getByRole('button', { name: 'Save my edit as a new revision', exact: true }).click();

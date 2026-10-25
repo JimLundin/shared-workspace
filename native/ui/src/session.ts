@@ -77,7 +77,7 @@ export class WorkspaceSession {
         if (receipt.operation_id !== command.operation_id || receipt.workspace_id !== command.workspace_id) throw new Error('The native receipt does not identify this change.');
         const editor = this.state.editor;
         const sameEditor = editor && ((command.type === 'edit_resource' && editor.type === 'existing' && command.resource_id === editor.resourceId) || (command.type === 'create_resource' && editor.type === 'new' && command.workspace_id === editor.workspaceId)) && command.title === editor.title.trim() && command.body === editor.body;
-        this.update({ mutation: { type: 'idle' }, editor: sameEditor ? null : editor, message: command.type === 'remove_placement' ? 'Reference removed. The note and its history remain.' : 'Saved on this device. Peer delivery is tracked separately.' }, 'operation');
+        this.update({ mutation: { type: 'idle' }, editor: sameEditor ? null : editor, message: command.type === 'remove_placement' ? 'Reference removed. The note and its history remain.' : 'Saved here.' }, 'operation');
         await this.refresh();
         if (command.type === 'create_workspace' && this.snapshot()?.workspaces.some(w => w.id === command.workspace_id)) this.navigate({ type: 'workspace', id: command.workspace_id });
       } else if (receipt.type === 'rejected') {
@@ -111,6 +111,7 @@ export class WorkspaceSession {
   clearInvite(): void { if (this.state.pairing.type !== 'joining' && this.state.pairing.type !== 'creating') this.update({ pairing: { type: 'idle' } }); }
   async join(ticket: string): Promise<void> {
     if (this.disposed || !ticket.trim() || this.state.pairing.type === 'joining' || this.state.pairing.type === 'creating') return;
+    const beforeWorkspaces = new Set(this.snapshot()?.workspaces.map(w => w.id) ?? []);
     const attempt = ++this.pairingEpoch; this.refreshEpoch++;
     let observedStage: JoinStage | null = null;
     this.update({ pairing: { type: 'joining', stage: null }, message: '' }, 'operation');
@@ -122,8 +123,10 @@ export class WorkspaceSession {
       });
       if (this.disposed || attempt !== this.pairingEpoch) return;
       this.refreshEpoch++;
+      const received = snapshot.workspaces.filter(w => !beforeWorkspaces.has(w.id));
       this.acceptSnapshot(snapshot);
-      this.update({ pairing: { type: 'idle' }, message: 'Pairing was confirmed and the initial work committed on this device.' }, 'operation');
+      if (received.length === 1) this.navigate({ type: 'workspace', id: received[0]!.id });
+      this.update({ pairing: { type: 'idle' }, message: 'Connected. Your shared work is saved here.' }, 'operation');
     } catch {
       if (this.disposed || attempt !== this.pairingEpoch) return;
       this.update({ pairing: { type: 'failed', action: 'join', stage: observedStage, message: joinFailure(observedStage) } }, 'operation');

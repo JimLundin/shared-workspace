@@ -13,10 +13,10 @@ await cp(join(root, 'dist'), dist, { recursive: true });
 await writeFile(join(dist, 'assets/previous-build.js'), '/* previous build */');
 await generateWorker(dist);
 const server = await startStaticServer(dist);
-const browser = await chromium.launch();
+const browser = await chromium.launchPersistentContext(join(temporary, 'profile'), { headless: true });
 const report = { passed: false, assertions: [], scope: 'Real waiting service worker update on headers-free static server; real BrowserHost editing.', limits: ['Chromium only.', 'No public update or physical iPhone verification.'] };
 try {
-  const context = await browser.newContext();
+  const context = browser;
   // Withhold one real close acknowledgement, after the host has closed its store.
   // This tests UI recovery at its worker boundary without a fake host/store.
   await context.addInitScript(() => {
@@ -49,17 +49,45 @@ try {
   await writeFile(join(dist, 'assets/current-build.js'), '/* current build */');
   await generateWorker(dist);
   await page.evaluate(async () => { await (await navigator.serviceWorker.getRegistration()).update(); });
-  await page.getByRole('button', { name: 'Update available', exact: true }).waitFor({ timeout: 60000 });
+  await page.locator('[data-update]').waitFor({ state:'attached', timeout: 60000 });
   assert.equal(await page.getByLabel('Content', { exact: true }).inputValue(), 'Keep this while installing an update.');
   report.assertions.push('New build waits and offers update without reloading or replacing unsaved input.');
+  await page.getByRole('button', { name: /App options/ }).click();
   await page.getByRole('button', { name: 'Update available', exact: true }).click();
+  await page.getByRole('button', { name: 'Reload with update', exact: true }).click();
+  assert.ok(await page.getByRole('dialog',{name:'Update application'}).textContent().then(text=>text.includes('unfinished edit')));
+  assert.equal(await page.locator('dialog:modal').count(),1);
   await page.getByRole('button', { name: 'Later', exact: true }).click();
   assert.equal(await page.getByLabel('Content', { exact: true }).inputValue(), 'Keep this while installing an update.');
   report.assertions.push('Deferring the update retains the open editor and text.');
   await page.getByRole('button', { name: 'Save note', exact: true }).click();
   await page.locator('.note-body').waitFor();
+  // Browser options outlive the app's five-second observation refresh.
+  await page.getByRole('button',{name:/App options/}).click();
+  await page.getByRole('button',{name:'Close app options',exact:true}).focus();
+  await page.waitForTimeout(5500);
+  assert.equal(await page.getByRole('button',{name:'Close app options',exact:true}).evaluate(el=>el===document.activeElement),true);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.getByRole('button',{name:/App options/}).evaluate(el=>el===document.activeElement),true);
+  // An unfinished workspace name is input too, even after dismissing its dialog.
+  await page.getByRole('button',{name:/Current workspace:/}).click();
+  await page.getByRole('button',{name:'Create workspace',exact:true}).click();
+  await page.getByLabel('Workspace name',{exact:true}).fill('Unsubmitted workspace');
+  await page.getByRole('button',{name:'Close dialog'}).click();
+  await page.getByRole('button',{name:/App options/}).click();
+  await page.getByRole('button',{name:'Update available',exact:true}).click();
+  await page.getByRole('button',{name:'Reload with update',exact:true}).click();
+  assert.ok(await page.getByRole('dialog',{name:'Update application'}).textContent().then(text=>text.includes('unfinished edit')));
+  await page.getByRole('button',{name:'Later',exact:true}).click();
+  await page.getByRole('button',{name:/Current workspace:/}).click();
+  await page.getByRole('button',{name:'Create workspace',exact:true}).click();
+  assert.equal(await page.getByLabel('Workspace name',{exact:true}).inputValue(),'Unsubmitted workspace');
+  await page.getByLabel('Workspace name',{exact:true}).fill('');
+  await page.getByRole('button',{name:'Close dialog'}).click();
+  report.assertions.push('Options survive polling and restore focus; update preserves unfinished workspace creation.');
   // A second old client remains open during activation, exercising old chunks.
   const oldClient = await context.newPage(); await oldClient.goto(server.url);
+  await page.getByRole('button', { name: /App options/ }).click();
   await page.getByRole('button', { name: 'Update available', exact: true }).click();
   await Promise.all([
     page.waitForEvent('domcontentloaded', { timeout: 60000 }),
@@ -77,12 +105,16 @@ try {
   await writeFile(join(dist, 'assets/following-build.js'), '/* following build */');
   await generateWorker(dist);
   await page.evaluate(async () => { await (await navigator.serviceWorker.getRegistration()).update(); });
-  await page.getByRole('button', { name: 'Update available', exact: true }).waitFor({ timeout: 60000 });
+  await page.locator('[data-update]').waitFor({ state:'attached', timeout: 60000 });
   await page.evaluate(() => { window.failNextWorkspaceClose = true; });
+  await page.getByRole('button', { name: /App options/ }).click();
   await page.getByRole('button', { name: 'Update available', exact: true }).click();
   await page.getByRole('button', { name: 'Reload with update', exact: true }).click();
   await page.getByRole('button', { name: 'Reload and recover', exact: true }).waitFor();
   assert.equal(await page.locator('#app').evaluate(element => element.inert), true);
+  await page.goBack();
+  assert.equal(await page.getByRole('button',{name:'Reload and recover',exact:true}).isVisible(),true);
+  assert.equal(await page.locator('dialog:modal').count(),1);
   await Promise.all([
     page.waitForEvent('domcontentloaded', { timeout: 60000 }),
     page.getByRole('button', { name: 'Reload and recover', exact: true }).click(),

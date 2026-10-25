@@ -49,7 +49,7 @@ test('transport unavailable still permits local committed work',async()=>{
   assert.equal(session.state.mutation.type,'idle');assert.equal(host.commands.length,1);assert.equal(session.snapshot()?.network.type,'unavailable');
 });
 test('failed refresh after a valid commit does not invent an uncertain write',async()=>{
-  const host=new HostFixture(),session=new WorkspaceSession(host,ids());await session.refresh();host.snapshotHandler=async()=>{throw new Error('Read unavailable')};await session.capture('w1','Saved');assert.equal(session.state.mutation.type,'idle');assert.equal(session.state.host.type,'failed');assert.match(session.state.message,/Saved on this device/);
+  const host=new HostFixture(),session=new WorkspaceSession(host,ids());await session.refresh();host.snapshotHandler=async()=>{throw new Error('Read unavailable')};await session.capture('w1','Saved');assert.equal(session.state.mutation.type,'idle');assert.equal(session.state.host.type,'failed');assert.match(session.state.message,/Saved here/);
 });
 test('a returned invitation keeps the exact workspace selection that created it',async()=>{
   const host=new HostFixture(),session=new WorkspaceSession(host,ids());const pending=deferred<Invite>();let sent:readonly string[]=[];

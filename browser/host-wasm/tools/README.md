@@ -69,12 +69,19 @@ checks the served production UI, explicit invitation acceptance, and note edits
 in both directions over real Iroh. Run from `browser/host-wasm`, using the
 matching Playwright browsers; the official `mcr.microsoft.com/playwright:v1.64.1-noble`
 image supplies Linux WebKit 27.2. `--url` also accepts an existing permitted
-loopback static origin for checking a build before publication.
+loopback static origin for checking a build before publication. Alternatively,
+`--dist /absolute/path/to/frozen/dist` starts and closes its own loopback static
+server, records asset hashes, and verifies the served build remains unchanged.
 
 Each participant uses a separate fresh temporary persistent profile, closed and
 removed before the report is written. The check handles the invitation's
-copy/paste disclosure and entry URL, and stops on either workspace navigation
-or a handled boot failure. It exports redacted stage/transport counts and verdicts,
+copy/paste disclosure and entry URL, and waits for the current-workspace control
+or a handled boot failure. It also checks direct reading/editing, on-demand workspace
+switching, full-viewport dialogs, focus through refresh and Back/Escape, addressed
+capture, explicit sharing scope, narrow layouts, and returning-user persistence.
+Native dialogs may briefly transfer Tab focus to browser chrome; background page
+controls must remain inert, and the next Tab must return to the dialog.
+It exports redacted stage/transport counts and verdicts,
 without screenshots, traces, invitations, keys, database files, or profiles.
 The [startup comparison](../evidence/public-startup-comparison.json) explains why:
 on the same public URL, WebKit's ephemeral context rejected OPFS `getDirectory()`

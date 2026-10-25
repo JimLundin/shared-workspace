@@ -17,19 +17,47 @@ function action(label: string, work: () => void | Promise<void>): HTMLButtonElem
   button.addEventListener('click', () => { void Promise.resolve(work()).catch(() => { button.textContent = 'Could not complete. Try again.'; }); });
   return button;
 }
+// Install/storage are occasional actions in a stable top-layer panel.
+const optionsDialog = document.createElement('dialog'); optionsDialog.className = 'workspace-dialog browser-options';
+optionsDialog.setAttribute('aria-label', 'App options');
+const optionsHeader = document.createElement('header'); optionsHeader.className = 'dialog-heading';
+const optionsTitle = document.createElement('h2'); optionsTitle.textContent = 'App options';
+optionsHeader.append(optionsTitle, action('Close app options', () => optionsDialog.close()));
+const optionsBody = document.createElement('div'); optionsBody.className = 'dialog-body';
+optionsBody.append(controls); optionsDialog.append(optionsHeader, optionsBody); document.body.append(optionsDialog);
+let modalHistory = false, updateClosing = false;
+function openBrowserDialog(panel: HTMLDialogElement): void {
+  if (!modalHistory) { history.pushState({ ...history.state, browserDialog: true }, ''); modalHistory = true; }
+  panel.showModal();
+}
+function closeBrowserDialog(): void { if (modalHistory) { modalHistory = false; history.back(); } }
+window.addEventListener('popstate', () => { if(updateClosing){history.pushState({...history.state,browserDialog:true},'');modalHistory=true;document.querySelector<HTMLDialogElement>('.browser-notice')?.querySelector('button')?.focus();return}if (!modalHistory) return; modalHistory = false; optionsDialog.close(); document.querySelector<HTMLDialogElement>('.browser-notice')?.close(); });
+optionsDialog.addEventListener('close', () => {
+  if (document.querySelector('.browser-notice[open]')) return;
+  closeBrowserDialog();
+  root.querySelector<HTMLButtonElement>('[data-action=app-options]')?.focus();
+});
+let updateWaiting = false;
 function offerUpdate(registration: ServiceWorkerRegistration): void {
   if (controls.querySelector('[data-update]')) return;
+  updateWaiting = true; app?.setUpdateAvailable();
   const button = action('Update available', () => {
-    const panel = document.createElement('div'); panel.className = 'browser-notice';
-    const message = document.createElement('p'); message.textContent = 'Save or finish your edits before reloading. Unsubmitted input stays only in this tab.';
-    panel.append(message, action('Reload with update', async () => {
+    const panel = document.createElement('dialog'); panel.className = 'browser-notice workspace-dialog'; panel.setAttribute('aria-label', 'Update application');
+    const heading = document.createElement('h2'); heading.textContent = 'Ready when you are.';
+    const message = document.createElement('p'); message.textContent = 'Save your work before reloading to the new version.';
+    let closing = false;
+    panel.addEventListener('cancel', event => { if (closing) event.preventDefault(); });
+    panel.addEventListener('close', () => { panel.remove(); closeBrowserDialog(); root.querySelector<HTMLButtonElement>('[data-action=app-options]')?.focus(); });
+    panel.append(heading, message, action('Reload with update', async () => {
       if (app?.session.state.mutation.type === 'sending' || app?.session.state.mutation.type === 'uncertain') { message.textContent = 'Finish or recover the pending save before updating.'; return; }
+      if (app?.hasUnsubmittedInput()) { message.textContent = 'You have an unfinished edit or captured input. Choose Later to save or discard it first.'; return; }
+      closing = true; updateClosing = true;
       for (const control of panel.querySelectorAll('button')) control.disabled = true;
       root.inert = true;
       app?.dispose();
       try { await closeHost?.(); }
       catch {
-        message.textContent = 'Closing this workspace was not confirmed. Reload to recover saved work. Unsubmitted input is not restored.';
+        message.textContent = 'Closing this workspace was not confirmed. Reload to recover saved work.';
         panel.replaceChildren(message, action('Reload and recover', () => location.reload()));
         panel.querySelector('button')?.focus();
         return;
@@ -37,8 +65,8 @@ function offerUpdate(registration: ServiceWorkerRegistration): void {
       if (!registration.waiting) { location.reload(); return; }
       navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
       registration.waiting.postMessage({ type: 'ACTIVATE_UPDATE' });
-    }), action('Later', () => panel.remove()));
-    controls.append(panel);
+    }), action('Later', () => panel.close()));
+    document.body.append(panel); panel.showModal(); optionsDialog.close();
   }); button.dataset.update = ''; controls.append(button);
 }
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> };
@@ -55,7 +83,7 @@ async function start(): Promise<void> {
   const host = await BrowserHost.open({ deviceName: 'Web browser', baseUrl: base, startPaused: document.hidden });
   closeHost = () => host.close();
   app = mountApp(root, {
-    host, voice: new BrowserVoice(), invitationUrl: ticket => invitationLink(base, ticket),
+    host, voice: new BrowserVoice(), openAppOptions: () => openBrowserDialog(optionsDialog), invitationUrl: ticket => invitationLink(base, ticket),
     ...(typeof navigator.share === 'function' ? { shareInvitation: async (url: string): Promise<'shared' | 'cancelled'> => {
       try { await navigator.share({ title: 'Shared workspaces', url }); return 'shared'; }
       catch (error) { if (error instanceof DOMException && error.name === 'AbortError') return 'cancelled'; throw error; }
@@ -63,7 +91,7 @@ async function start(): Promise<void> {
     ...(initialInvite ? { initialInvite } : {}),
     scanner: { async available() { return false; }, async scan() { throw new Error('Open the invitation with your camera app, or paste a ticket.'); }, async cancel() {} },
   });
-  ready = true;
+  ready = true; if(updateWaiting) app.setUpdateAvailable();
   const foreground = () => { void host.setForeground(!document.hidden).then(() => { if (!document.hidden) return app?.session.refresh(); }).catch(() => app?.session.refresh()); };
   document.addEventListener('visibilitychange', foreground);
   window.addEventListener('online', foreground);
