@@ -11,7 +11,7 @@ from pathlib import Path
 
 from keeper import copy_source, source_diff, source_digest, source_files
 
-DEFAULT_REMOTE = "https://github.com/JimLundin/toolkit.git"
+DEFAULT_REMOTE = "https://github.com/JimLundin/shared-workspace.git"
 
 
 class PublishError(Exception):

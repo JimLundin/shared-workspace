@@ -1,0 +1,40 @@
+{
+  "engine": "@tursodatabase/database-wasm@0.8.3",
+  "binary_sha256": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9",
+  "wasm_imports": [
+    {
+      "module": "env",
+      "field": "memory",
+      "minimum_pages": 1009,
+      "maximum_pages": 65536,
+      "shared": true
+    }
+  ],
+  "binary_minimum_bytes": 66125824,
+  "wrapper_initial_bytes": 262144000,
+  "wrapper_maximum_bytes": 4294967296,
+  "public_memory_configuration": false,
+  "interpretation": "Static binary and published wrapper configuration, not measured resident memory; engine is unmodified.",
+  "production_assets": [
+    {
+      "file": "index-BcCRIbnz.js",
+      "bytes": 7180,
+      "gzip_bytes": 2930
+    },
+    {
+      "file": "promise-default-C_oeRxzP.js",
+      "bytes": 203037,
+      "gzip_bytes": 46444
+    },
+    {
+      "file": "turso.wasm32-wasi-KrOvB4jh.wasm",
+      "bytes": 11613778,
+      "gzip_bytes": 3963233
+    },
+    {
+      "file": "worker-CdU7_LgZ.js",
+      "bytes": 170916,
+      "gzip_bytes": 37619
+    }
+  ]
+}

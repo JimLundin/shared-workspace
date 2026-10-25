@@ -1,0 +1,15 @@
+{
+  "status": "killed",
+  "mutation": "Remove incoming selected-peer identity guard",
+  "baseline_wasm_sha256": "fb55cfe2f56ccaf1a3849d4f11583ae72bff9863e217b1cdf75ec1b122fc0124",
+  "baseline_source_sha256": {
+    "Cargo.toml": "aee9538853e1d68a0c10ba13bdbe1a406dee0ad756cc387ae98f0c24bbfc7d08",
+    "Cargo.lock": "896af76b5d538f9c75a4c16cd7e77f4f684b5055a2012abf93068ce6d5c0a4b3",
+    "src/lib.rs": "e2d2cbb9a4e5814475ebc9668412d4605e88e75769ba4572f92c1689c937381a",
+    "page.js": "b44483446816ff2b24f374975dcffeb9a68b668f38115c24d94f30b7471a26b8",
+    "check.mjs": "e4208f5ec5a39d40a54a47c99634e9ac12135d586b38f3b37dfa906c218e2e39"
+  },
+  "mutant_wasm_sha256": "9701b766ee541678bed006d6948add8cb7ffe664ee5d1c91191309d9648b746f",
+  "observed_failure": "Authenticated but unselected third browser peer was accepted; rejection assertion failed",
+  "timestamp": "2026-10-25T14:40:04.735Z"
+}

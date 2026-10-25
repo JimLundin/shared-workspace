@@ -1,5 +1,10 @@
 # Native distributed workspace architecture
 
+This records the native-host experiment. The primary delivery target is now
+[a browser host reached through a website](browser-host-direction.md); native
+desktop capabilities are optional. The user changed this direction on
+25 October 2026 after clarifying that visiting a URL must be the entry point.
+
 This implementation turns the accepted workspace model into an installed app
 with real local storage and peer synchronization. The app's visible title is
 “Workspace” as a descriptive label; no replacement product brand is selected.
@@ -99,5 +104,5 @@ Iroh also supports genuine browser peers through WASM and relay transport. The
 native shell is selected for this implementation's operating-system capabilities,
 voice adapters, embedded engine and platform lifecycle; it is not a claim that
 peer synchronization is categorically impossible in a browser. A browser host
-would require its own durable-storage/lifecycle work and a permitted HTTPS
-installation path. It is not being substituted for the requested native app.
+requires its own durable-storage/lifecycle work and HTTPS delivery. That browser
+host is now the primary direction; the native host remains an optional capability.

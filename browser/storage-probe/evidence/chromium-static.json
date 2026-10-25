@@ -1,0 +1,49 @@
+{
+  "verified_at": "2026-10-25T14:35:24.512Z",
+  "build": "static-production-service-worker",
+  "server_headers": {
+    "coop": null,
+    "coep": null
+  },
+  "browser": "156.0.8078.4",
+  "reload_passed": true,
+  "browser_restart_passed": true,
+  "isolated_context_gets_distinct_identity": true,
+  "external_requests": [],
+  "strict": {
+    "rejected": true,
+    "message": "Error: step failed: cannot store TEXT value in INTEGER column notes.revision (19)",
+    "retained_revision": 2
+  },
+  "restarted": {
+    "engine": "@tursodatabase/database-wasm@0.8.3",
+    "provider": "OPFS worker SyncAccessHandle (database + WAL)",
+    "device_id": "f91eeb8d14a0482eac9988649b5a2b2bc16ae751c21b003411144ef3a45f6b84",
+    "created_identity": false,
+    "identity_verified": true,
+    "workspace": {
+      "id": "launch",
+      "title": "Launch workspace"
+    },
+    "note": {
+      "id": "first-note",
+      "workspace_id": "launch",
+      "body": "Durable browser note: survives tab reload and browser-process restart.",
+      "revision": 2
+    },
+    "files": [
+      {
+        "name": "workspace-storage-prototype-wipe-me.db",
+        "bytes": 4096
+      },
+      {
+        "name": "workspace-storage-prototype-wipe-me.db-wal",
+        "bytes": 57712
+      }
+    ],
+    "cross_origin_isolated": true,
+    "isolation_service_worker": "http://127.0.0.1:4387/proof/coi-serviceworker.js",
+    "persistent_storage_granted": false,
+    "startup_ms": 710
+  }
+}

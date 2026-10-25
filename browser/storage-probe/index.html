@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Workspace storage experiment</title>
+    <style>
+      :root { color-scheme: light dark; font: 16px/1.5 system-ui, sans-serif; }
+      body { max-width: 52rem; margin: 3rem auto; padding: 0 1.25rem; }
+      textarea { box-sizing: border-box; width: 100%; min-height: 8rem; font: inherit; padding: 1rem; }
+      button { font: inherit; padding: .6rem 1rem; margin: .7rem .5rem .7rem 0; }
+      pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 1rem; background: #8882; }
+      #status { min-height: 1.5rem; }
+    </style>
+  </head>
+  <body>
+    <h1>A workspace that stays here</h1>
+    <p>Storage experiment: a device key and workspace note saved by Turso directly in this browser.</p>
+    <p id="status" role="status">Opening the database…</p>
+    <label for="note">Workspace note</label>
+    <textarea id="note" disabled></textarea>
+    <button id="save" disabled>Save note</button>
+    <button id="reload">Reload this page</button>
+    <button id="persist" disabled>Request persistent storage</button>
+    <pre id="evidence"></pre>
+    <p>This experiment does not synchronize devices. Clearing this site's storage deletes its local key and data.</p>
+    <script>window.coi = { coepCredentialless: () => false };</script>
+    <script src="./coi-serviceworker.js"></script>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browser peer transport probe</title>
+<style>
+  :root { font: 16px/1.5 system-ui; color: #eee; background: #161b24; color-scheme: dark; }
+  body { max-width: 48rem; margin: 3rem auto; padding: 0 1rem; }
+  textarea, input, button { font: inherit; padding: .65rem; box-sizing: border-box; }
+  textarea, input { display: block; width: 100%; margin: .5rem 0 1rem; }
+  button { cursor: pointer; margin-right: .5rem; }
+  pre { overflow-wrap: anywhere; white-space: pre-wrap; }
+</style>
+<h1>Browser peer transport probe</h1>
+<p>Each page owns a fresh Iroh endpoint. Select another peer to exchange synthetic
+test text through an encrypted relay connection. Keep both pages open.</p>
+<button id="start">Start this peer</button><button id="close" disabled>Close peer</button>
+<pre id="status">Not started</pre>
+<label>This peer’s public address<textarea id="address" readonly rows="4"></textarea></label>
+<label>Other peer’s public address<textarea id="remote" rows="4"></textarea></label>
+<button id="select" disabled>Select peer</button>
+<label>Test text<input id="message" value="Hello from this browser" maxlength="1000"></label>
+<button id="send" disabled>Send and verify reply</button>
+<pre id="events" aria-live="polite"></pre>
+<script type="module" src="./page.js"></script>
+</html>

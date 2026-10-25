@@ -1,4 +1,28 @@
-# Toolkit
+# Shared Workspace
+
+A distributed workspace experiment. The intended entry point is a website:
+open it on a device, pair with another device, and keep working with locally
+retained data. Devices are equal peers; none is a permanent coordinator.
+
+The primary direction is a TypeScript browser interface with **actual Turso
+Database** in WebAssembly for local storage and **Iroh** in WebAssembly for
+encrypted peer connections. Browser peers use relay infrastructure for transport.
+Desktop automation is an optional capability supplied by a permitted local host;
+ordinary workspace access should not require a native installer or App Store app.
+
+The browser [storage proof](browser/storage-probe/README.md) has retained typed
+data and identity across browser restarts. The [Iroh proof](browser/iroh-probe/README.md)
+has exchanged authenticated messages between isolated browser contexts. These are
+component proofs, not yet a complete browser workspace or a tested iPhone app.
+See the [browser architecture and delivery requirements](docs/browser-host-direction.md).
+
+The [native workspace experiment](native/README.md) contains the existing signed
+workspace model, conflict handling, selected-workspace pairing and independent
+peer tests. It remains available as an optional-host implementation and a source
+of shared domain behavior. The repository also retains the original Windows
+assistant and keyboard implementation documented below.
+
+## Existing Windows assistant and keyboard
 
 A personal toolkit for a Windows laptop: extract and run, with its own Python
 and no admin installation. It changes itself: ask its agent for a new feature or a fix,
@@ -419,7 +443,7 @@ Optional environment settings:
 
 | Variable | Default |
 |---|---|
-| `TOOLKIT_GIT_REMOTE` | `https://github.com/JimLundin/toolkit.git` |
+| `TOOLKIT_GIT_REMOTE` | `https://github.com/JimLundin/shared-workspace.git` |
 | `TOOLKIT_GIT_BASE` | `main` |
 | `TOOLKIT_GIT_AUTHOR_NAME` | `Toolkit Agent` |
 | `TOOLKIT_GIT_AUTHOR_EMAIL` | `toolkit@localhost` |
@@ -550,7 +574,7 @@ lifecycle subclasses and Qt objects inherit their libraries' storage. Behaviour 
 
 ## Development
 
-The canonical source is the private repository `JimLundin/toolkit`. Clone it and
+The canonical source is the public repository `JimLundin/shared-workspace`. Clone it and
 run checks with Python 3.15 or later. Install source dependencies first:
 `python -m pip install -e .`. The prebuilt Windows bundle needs no pip step.
 Development tools are optional locally and required by CI.
