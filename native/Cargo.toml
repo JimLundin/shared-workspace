@@ -1,0 +1,9 @@
+[workspace]
+members = ["core", "cli", "app", "app/voice-plugin"]
+default-members = ["core", "cli"]
+resolver = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"

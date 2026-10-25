@@ -1,0 +1,270 @@
+name: Native workspace hosts
+
+on:
+  push:
+    paths:
+      - 'native/**'
+      - '.github/workflows/native-hosts.yml'
+  pull_request:
+    paths:
+      - 'native/**'
+      - '.github/workflows/native-hosts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-hosts-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: '2'
+  RUST_TOOLCHAIN: '1.97.1'
+  CI: 'true'
+
+jobs:
+  core:
+    name: Durable core and peer checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: rustfmt, clippy
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/target
+          key: native-linux-${{ hashFiles('native/Cargo.lock') }}
+          restore-keys: native-linux-
+      - name: Record toolchain
+        run: |
+          rustc --version
+          cargo --version
+      - name: Check formatting
+        run: cargo fmt --manifest-path native/Cargo.toml --all --check
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test real storage and peers
+        run: cargo test --manifest-path native/core/Cargo.toml --locked --all-targets
+      - name: Check core and CLI warnings
+        run: |
+          cargo clippy --manifest-path native/core/Cargo.toml --locked --all-targets -- -D warnings
+          cargo clippy --manifest-path native/cli/Cargo.toml --locked --all-targets -- -D warnings
+      - name: Build command-line peer
+        run: cargo build --manifest-path native/cli/Cargo.toml --locked --release
+      - name: Exercise independent persistent peer processes
+        run: python -B native/checks/process_check.py --binary ${{ github.workspace }}/native/target/release/workspace-peer --source native --evidence native/artifacts/linux-process
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workspace-linux-cli-${{ github.sha }}
+          path: |
+            native/target/release/workspace-peer
+            native/artifacts/linux-process/
+          if-no-files-found: error
+
+  windows:
+    name: Windows host and installer
+    runs-on: windows-2022
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            native/ui/package-lock.json
+            native/app/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/target
+          key: native-windows-${{ hashFiles('native/Cargo.lock') }}
+          restore-keys: native-windows-
+      - name: Install pinned frontend and host build tools
+        run: |
+          npm --prefix native/ui ci
+          npm --prefix native/app ci
+      - name: Check frontend types and public interfaces
+        run: |
+          npm --prefix native/ui run check
+          npm --prefix native/ui test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test storage and peers on Windows
+        run: cargo test --manifest-path native/core/Cargo.toml --locked --all-targets
+      - name: Build native command-line peer
+        run: cargo build --manifest-path native/cli/Cargo.toml --locked --release
+      - name: Exercise independent persistent peer processes
+        run: python -B native/checks/process_check.py --binary "${{ github.workspace }}/native/target/release/workspace-peer.exe" --source native --evidence native/artifacts/windows-process
+      - name: Build Windows system-WebView application
+        working-directory: native/app
+        run: npm run tauri -- build --ci
+      - name: Record Windows bundle hashes
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force native/artifacts | Out-Null
+          $files = @(Get-ChildItem native/target/release/*.exe)
+          $files += @(Get-ChildItem native/target/release/bundle/nsis/*.exe)
+          $entries = @($files | ForEach-Object { @{ name=$_.Name; bytes=$_.Length; sha256=(Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant() } })
+          @{ commit=$env:GITHUB_SHA; platform='windows-x86_64'; files=$entries } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 native/artifacts/windows-build.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workspace-windows-${{ github.sha }}
+          path: |
+            native/target/release/workspace-host.exe
+            native/target/release/workspace-peer.exe
+            native/target/release/bundle/nsis/*.exe
+            native/artifacts/windows-build.json
+            native/artifacts/windows-process/
+          if-no-files-found: error
+
+  ios:
+    name: iOS unsigned build and simulator lifecycle
+    runs-on: macos-15
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            native/ui/package-lock.json
+            native/app/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/target
+          key: native-ios-${{ runner.arch }}-${{ hashFiles('native/Cargo.lock') }}
+          restore-keys: native-ios-${{ runner.arch }}-
+      - name: Record Apple toolchain and ensure generator dependencies
+        run: |
+          mkdir -p native/artifacts
+          xcodebuild -version | tee native/artifacts/xcode-version.txt
+          xcrun swift --version | tee native/artifacts/swift-version.txt
+          rustc --version | tee native/artifacts/rust-version.txt
+          xcrun simctl list runtimes --json > native/artifacts/ios-runtimes.json
+          if ! command -v pod >/dev/null; then brew install cocoapods; fi
+          pod --version
+      - name: Install pinned frontend and host build tools
+        run: |
+          npm --prefix native/ui ci
+          npm --prefix native/app ci
+      - name: Generate iOS host project
+        working-directory: native/app
+        run: npm run ios:init
+      - name: Build simulator host without Apple signing credentials
+        working-directory: native/app
+        run: |
+          case "$(uname -m)" in
+            arm64) simulator_target=aarch64-sim ;;
+            x86_64) simulator_target=x86_64 ;;
+            *) exit 1 ;;
+          esac
+          npm run tauri -- ios build --ci --no-sign --target "$simulator_target"
+      - name: Launch native core on iPhone simulator and verify restart identity
+        env:
+          WORKSPACE_BUNDLE_ID: dev.jimlundin.workspace
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, re, subprocess, time
+          artifacts = pathlib.Path('native/artifacts')
+          def run(*args):
+              return subprocess.check_output(args, text=True).strip()
+          candidates = [p for p in pathlib.Path('native/app/gen/apple').rglob('*.app') if not any(part.endswith('.xcarchive') for part in p.parts)]
+          if len(candidates) != 1:
+              raise SystemExit(f'Expected one simulator app, found {candidates}')
+          app = candidates[0]
+          listing = json.loads(run('xcrun', 'simctl', 'list', 'devices', 'available', '--json'))
+          devices = [d for runtime, ds in listing['devices'].items() if 'iOS' in runtime for d in ds if d.get('isAvailable') and d['name'].startswith('iPhone')]
+          if not devices:
+              raise SystemExit('No available iPhone simulator runtime')
+          device = next((d for d in devices if d['state'] == 'Booted'), devices[0])
+          udid = device['udid']
+          if device['state'] != 'Booted':
+              subprocess.run(['xcrun', 'simctl', 'boot', udid], check=True)
+          subprocess.run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], check=True)
+          subprocess.run(['xcrun', 'simctl', 'install', udid, str(app)], check=True)
+          bundle = os.environ['WORKSPACE_BUNDLE_ID']
+          observations = []
+          for attempt in range(2):
+              started = time.time() * 1000
+              output = run('xcrun', 'simctl', 'launch', udid, bundle)
+              match = re.search(r': (\d+)$', output)
+              if not match:
+                  raise SystemExit(f'Unexpected launch output: {output}')
+              pid = int(match.group(1))
+              container = pathlib.Path(run('xcrun', 'simctl', 'get_app_container', udid, bundle, 'data'))
+              receipt = None
+              for _ in range(60):
+                  for p in container.rglob('native-host-ready.json'):
+                      try:
+                          candidate = json.loads(p.read_text())
+                      except (OSError, json.JSONDecodeError):
+                          continue
+                      if candidate.get('state') == 'ready' and candidate.get('pid') == pid and candidate.get('started_at_ms', 0) >= started - 2000 and candidate.get('device_id'):
+                          receipt = candidate
+                          break
+                  if receipt:
+                      break
+                  time.sleep(1)
+              if receipt is None:
+                  raise SystemExit('Native core produced no fresh readiness receipt within 60 seconds')
+              observations.append(receipt)
+              time.sleep(1)
+              subprocess.run(['xcrun', 'simctl', 'io', udid, 'screenshot', str(artifacts / f'ios-launch-{attempt + 1}.png')], check=True)
+              subprocess.run(['xcrun', 'simctl', 'terminate', udid, bundle], check=True)
+          if observations[0]['device_id'] != observations[1]['device_id']:
+              raise SystemExit('Device identity changed across app restart')
+          (artifacts / 'ios-simulator-smoke.json').write_text(json.dumps({'commit': os.environ['GITHUB_SHA'], 'device': device['name'], 'bundle_id': bundle, 'observations': observations, 'verified': ['real native core startup', 'same device identity after restart'], 'not_verified': ['physical iPhone installation', 'cross-network phone synchronization', 'microphone recognition']}, indent=2) + '\n')
+          subprocess.run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(app), str(artifacts / 'Workspace-simulator.zip')], check=True)
+          PY
+      - name: Build unsigned physical-device archive
+        working-directory: native/app
+        run: npm run tauri -- ios build --ci --no-sign --target aarch64
+      - name: Capture generated project and unsigned device artifact
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, shutil, zipfile
+          artifacts = pathlib.Path('native/artifacts')
+          ipas = list(pathlib.Path('native/app/gen/apple').rglob('*.ipa'))
+          if len(ipas) != 1:
+              raise SystemExit(f'Expected one unsigned device IPA, found {ipas}')
+          dest = artifacts / 'Workspace-device-UNSIGNED.ipa'
+          shutil.copy2(ipas[0], dest)
+          (artifacts / 'ios-device-build.json').write_text(json.dumps({'commit': os.environ['GITHUB_SHA'], 'artifact': dest.name, 'sha256': hashlib.sha256(dest.read_bytes()).hexdigest(), 'signed_for_device_installation': False, 'installation_requirement': 'Apple signing and provisioning are required; this artifact cannot be installed directly on a physical iPhone.'}, indent=2) + '\n')
+          generated = pathlib.Path('native/app/gen/apple')
+          with zipfile.ZipFile(artifacts / 'Generated-iOS-project.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+              for path in sorted(generated.rglob('*')):
+                  relative = path.relative_to(generated)
+                  if path.is_file() and not {'build', 'target', 'Pods'}.intersection(relative.parts) and not any(part.endswith('.xcarchive') for part in relative.parts):
+                      archive.write(path, pathlib.Path('apple') / relative)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workspace-ios-unsigned-${{ github.sha }}
+          path: native/artifacts/
+          if-no-files-found: warn

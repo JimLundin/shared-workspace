@@ -1,0 +1,3 @@
+[default]
+description = "Explicit voice controls for the bundled workspace UI. No capture begins automatically."
+permissions = ["allow-capability", "allow-start", "allow-stop", "allow-cancel"]

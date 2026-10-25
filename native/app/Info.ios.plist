@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSCameraUsageDescription</key>
+  <string>Scan a pairing code from a device you choose to share a workspace with.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Speak a workspace command when you choose the microphone control.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Turn your spoken workspace command into text for you to review.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Connect to devices you pair with to synchronize your chosen workspaces.</string>
+  <key>UIFileSharingEnabled</key>
+  <false/>
+  <key>LSSupportsOpeningDocumentsInPlace</key>
+  <false/>
+</dict>
+</plist>

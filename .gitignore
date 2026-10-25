@@ -15,3 +15,10 @@ uv.lock
 .bundle-cache/
 dist/
 *.egg-info/
+
+native/**/node_modules/
+native/**/target/
+native/**/build/
+native/**/xcuserdata/
+native/**/.DS_Store
+native/**/.swiftpm/

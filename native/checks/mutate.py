@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+"""Run declared native-workspace mutants in a disposable source/build copy."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+from process_check import SetupError, digest, source_hashes
+
+
+def hashes(native: Path) -> dict[str, str]:
+    result = source_hashes(native)
+    result.update({str(path.relative_to(native)): digest(path) for path in sorted((native / "core" / "tests").glob("*.rs"))})
+    return result
+
+
+def execute(command: list[str], directory: Path, label: str, seconds: int = 900) -> subprocess.CompletedProcess[str]:
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            encoding="utf-8",
+            timeout=seconds,
+            env={**os.environ, "CARGO_TERM_COLOR": "never", "RUST_BACKTRACE": "0"},
+        )
+    except subprocess.TimeoutExpired as error:
+        raise SetupError(f"{label} timed out; timeout is not a mutation kill") from error
+    (directory / f"{label}.stdout.log").write_text(result.stdout, encoding="utf-8")
+    (directory / f"{label}.stderr.log").write_text(result.stderr, encoding="utf-8")
+    return result
+
+
+def build(native: Path, target: Path, directory: Path) -> Path:
+    manifest = native / "Cargo.toml"
+    if not manifest.exists():
+        manifest = native / "core" / "Cargo.toml"
+    # This target belongs only to the disposable campaign. Clean the package
+    # before every build so restoring/copying sources cannot reuse a mutant.
+    clean = execute(["cargo", "clean", "--manifest-path", str(manifest), "-p", "workspace-core", "--target-dir", str(target)], directory, "clean")
+    if clean.returncode:
+        raise SetupError("Disposable package clean failed")
+    result = execute(
+        [
+            "cargo",
+            "test",
+            "--locked",
+            "--manifest-path",
+            str(manifest),
+            "-p",
+            "workspace-core",
+            "--test",
+            "store",
+            "--no-run",
+            "--message-format=json",
+            "--target-dir",
+            str(target),
+            "-j",
+            "2",
+        ],
+        directory,
+        "build",
+    )
+    if result.returncode:
+        raise SetupError("Mutant/baseline build failed; compilation failure is not a mutation kill")
+    executables = []
+    for line in result.stdout.splitlines():
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("reason") == "compiler-artifact" and row.get("target", {}).get("name") == "store" and row.get("executable"):
+            executables.append(Path(row["executable"]))
+    if len(set(executables)) != 1:
+        raise SetupError("Build did not identify exactly one Store test executable")
+    return executables[0]
+
+
+def run_mutation(native: Path, copied: Path, target: Path, private: Path, *, mutation: dict, originals: dict[str, str]) -> dict:
+    name = mutation["id"]
+    directory = private / name
+    directory.mkdir()
+    result = {"id": name, "test": mutation["test"], "expected_assertion": mutation["expected_assertion"], "edits": []}
+    try:
+        for relative, content in originals.items():
+            (copied / relative).write_text(content, encoding="utf-8")
+        for edit in mutation["edits"]:
+            path = copied / edit["path"]
+            before = path.read_text(encoding="utf-8")
+            matches = list(re.finditer(edit["pattern"], before))
+            if len(matches) != 1:
+                raise SetupError(f"Mutation site count is {len(matches)} for {edit['path']}")
+            after = re.sub(edit["pattern"], edit["replacement"], before)
+            if after == before:
+                raise SetupError("Mutation did not change its source")
+            path.write_text(after, encoding="utf-8")
+            result["edits"].append(
+                {
+                    "path": edit["path"],
+                    "before": matches[0].group(),
+                    "after": matches[0].expand(edit["replacement"]),
+                    "source_before_sha256": digest(native / edit["path"]),
+                    "mutant_sha256": digest(path),
+                }
+            )
+        executable = build(copied, target, directory)
+        result["binary_sha256"] = digest(executable)
+        observed = execute([str(executable), "--exact", mutation["test"], "--nocapture"], directory, "test", 180)
+        output = observed.stdout + observed.stderr
+        intended = observed.returncode != 0 and mutation["expected_assertion"] in output and f"{mutation['test']} ... FAILED" in observed.stdout
+        result["outcome"] = "detected" if intended else "survived" if observed.returncode == 0 else "unrelated_failure"
+        result["returncode"] = observed.returncode
+        result["stdout_sha256"] = digest(directory / "test.stdout.log")
+        result["stderr_sha256"] = digest(directory / "test.stderr.log")
+        result["intended_assertion_observed"] = intended
+    except Exception as error:
+        result["outcome"] = "setup_failure"
+        result["detail"] = str(error)
+    return result
+
+
+def prepare_copy(native: Path, copied: Path, target: Path, original: dict[str, str]) -> None:
+    if target == native or native in target.parents:
+        raise SetupError("Mutation target must be outside the production native tree")
+    owner = target / ".workspace-mutation-target.json"
+    if target.exists() and any(target.iterdir()) and not owner.is_file():
+        raise SetupError("Existing target lacks campaign ownership; refusing to affect another build")
+    target.mkdir(parents=True, exist_ok=True)
+    owner.write_text(json.dumps({"purpose": "workspace mutation campaigns only"}) + "\n", encoding="utf-8")
+    shutil.copytree(native, copied, ignore=shutil.ignore_patterns("node_modules", "target", "dist", "__pycache__", ".git"))
+    if hashes(copied) != original:
+        raise SetupError("Disposable source copy differs from frozen source")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--baseline-report", type=Path, required=True)
+    parser.add_argument("--plan", type=Path, default=Path(__file__).with_name("mutations.json"))
+    parser.add_argument("--evidence", type=Path, required=True)
+    parser.add_argument("--target-dir", type=Path)
+    options = parser.parse_args()
+    native, evidence = options.source.resolve(), options.evidence.resolve()
+    evidence.mkdir(parents=True, exist_ok=False)
+    original = hashes(native)
+    report = {
+        "kind": "native-workspace-targeted-mutations-v1",
+        "passed": False,
+        "source_hashes": original,
+        "plan_sha256": digest(options.plan),
+        "harness_hashes": {name: digest(Path(__file__).with_name(name)) for name in ("mutate.py", "process_check.py")},
+        "baseline_report_sha256": digest(options.baseline_report),
+        "python": sys.version,
+        "policy": "Only the named behavioral assertion in the selected test counts. No compiler, setup, timeout or unrelated failure counts.",
+        "mutations": [],
+    }
+    private = Path(tempfile.mkdtemp(prefix="workspace-mutation-campaign-"))
+    copied = private / "native"
+    target = options.target_dir.resolve() if options.target_dir else private / "target"
+    try:
+        baseline = json.loads(options.baseline_report.read_text(encoding="utf-8"))
+        if baseline.get("passed") is not True or baseline.get("source_unchanged") is not True:
+            raise SetupError("A passing, unchanged process baseline is required")
+        if baseline.get("harness_sha256") != digest(Path(__file__).with_name("process_check.py")):
+            raise SetupError("Process harness differs from the passing baseline")
+        for relative, expected in baseline["source_hashes"].items():
+            if original.get(relative) != expected:
+                raise SetupError(f"Native source differs from process baseline: {relative}")
+        prepare_copy(native, copied, target, original)
+        plan = json.loads(options.plan.read_text(encoding="utf-8"))["mutations"]
+        originals = {}
+        for mutation in plan:
+            for edit in mutation["edits"]:
+                relative = Path(edit["path"])
+                if relative.parts[:2] != ("core", "src") or ".." in relative.parts or relative.suffix != ".rs":
+                    raise SetupError("Mutation plan must only change Rust implementation source")
+                originals[edit["path"]] = (copied / relative).read_text(encoding="utf-8")
+        baseline_dir = private / "baseline"
+        baseline_dir.mkdir()
+        executable = build(copied, target, baseline_dir)
+        baseline_result = execute([str(executable), "--nocapture"], baseline_dir, "test", 180)
+        if baseline_result.returncode or "test result: ok." not in baseline_result.stdout:
+            raise SetupError("Unmodified public Store tests failed in the disposable build")
+        report["store_baseline"] = {"passed": True, "binary_sha256": digest(executable)}
+        for mutation in plan:
+            report["mutations"].append(run_mutation(native, copied, target, private, mutation=mutation, originals=originals))
+        report["passed"] = bool(report["mutations"]) and all(row["outcome"] == "detected" for row in report["mutations"])
+    except Exception as error:
+        report["failure"] = {"type": "setup", "detail": str(error)}
+    finally:
+        report["source_unchanged"] = original == hashes(native)
+        if not report["source_unchanged"]:
+            report["passed"] = False
+            report["failure"] = {"type": "setup", "detail": "Live source changed during the campaign"}
+        report["private_logs_root"] = str(private)
+        (evidence / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(
+        json.dumps(
+            {
+                "passed": report["passed"],
+                "outcomes": [{"id": row["id"], "outcome": row["outcome"]} for row in report["mutations"]],
+                "failure": report.get("failure"),
+                "report": str(evidence / "report.json"),
+            },
+            indent=2,
+        )
+    )
+    return 0 if report["passed"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

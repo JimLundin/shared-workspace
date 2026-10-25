@@ -1,0 +1,16 @@
+[package]
+name = "tauri-plugin-workspace-voice"
+version = "0.1.0"
+edition = "2024"
+publish = false
+links = "tauri-plugin-workspace-voice"
+
+[build-dependencies]
+tauri-plugin = { version = "=2.7.2", features = ["build"] }
+
+[dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+tauri = { version = "=2.12.5", features = [] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }

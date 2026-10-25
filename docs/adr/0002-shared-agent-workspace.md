@@ -4,6 +4,10 @@ status: proposed
 
 # One agent workspace, with replaceable runtime adapters
 
+The new distributed Windows/iPhone host uses the shared native core and shell
+selected in [ADR 0003](0003-distributed-native-workspaces.md). The work ownership,
+application isolation and migration requirements below remain relevant.
+
 The recommended product is an agent-managed workspace on Windows: a continuous
 conversation and a canvas showing the same resources, tasks and observed
 outcomes. Its target implementation is TypeScript compiled to JavaScript in

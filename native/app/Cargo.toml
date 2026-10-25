@@ -1,0 +1,26 @@
+[package]
+name = "workspace-host"
+version = "0.1.0"
+description = "A local workspace host for Windows and iPhone"
+edition = "2024"
+publish = false
+
+[lib]
+name = "workspace_host_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.7.4", features = [] }
+
+[dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+tauri = { version = "=2.12.5", features = [] }
+tauri-plugin-barcode-scanner = "=2.5.3"
+tauri-plugin-workspace-voice = { path = "voice-plugin" }
+tokio = { version = "=1.53.2", features = ["rt-multi-thread", "net", "time", "sync"] }
+workspace-core = { path = "../core" }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

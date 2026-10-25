@@ -1,0 +1,7 @@
+/gen/android/
+/gen/apple/
+/gen/schemas/
+/node_modules/
+/voice-plugin/ios/.build/
+/voice-plugin/ios/.swiftpm/
+/voice-plugin/.tauri/

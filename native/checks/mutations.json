@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "mutations": [
+    {
+      "id": "skip_operation_signature",
+      "description": "Accept a modified member operation without checking its author's signature.",
+      "test": "invalid_signature_unknown_author_and_changed_operation_reuse_are_denied_atomically",
+      "expected_assertion": "reject-invalid-signature",
+      "edits": [
+        {
+          "path": "core/src/model.rs",
+          "pattern": "author\\.verify\\(\\s*&signing_bytes\\(op\\)\\?,\\s*&Signature::from_bytes\\(&signature_bytes\\),?\\s*\\)\\?;",
+          "replacement": "let _ = author;"
+        }
+      ]
+    },
+    {
+      "id": "skip_causal_membership",
+      "description": "Accept a correctly signed author with no workspace grant in its causal history.",
+      "test": "invalid_signature_unknown_author_and_changed_operation_reuse_are_denied_atomically",
+      "expected_assertion": "reject-ungranted-author",
+      "edits": [
+        {
+          "path": "core/src/model.rs",
+          "pattern": "ensure!\\(\\s*member,\\s*\"operation author is not an authorized workspace member\"\\s*,?\\s*\\);",
+          "replacement": "let _ = member;"
+        }
+      ]
+    },
+    {
+      "id": "accept_changed_operation_reuse",
+      "description": "Treat a different signed payload under an existing operation ID as an accepted duplicate.",
+      "test": "invalid_signature_unknown_author_and_changed_operation_reuse_are_denied_atomically",
+      "expected_assertion": "reject-operation-id-payload-reuse",
+      "edits": [
+        {
+          "path": "core/src/store.rs",
+          "pattern": "ensure!\\(\\s*previous == signed,\\s*\"operation identity was reused with different content\"\\s*,?\\s*\\);",
+          "replacement": "let _ = previous;"
+        }
+      ]
+    },
+    {
+      "id": "skip_both_stale_revision_checks",
+      "description": "Remove both command-head comparison and independent signed causal-head validation so a stale reconciliation is accepted.",
+      "test": "offline_branches_are_preserved_and_resolution_rechecks_current_heads",
+      "expected_assertion": "reject-stale-heads",
+      "edits": [
+        {
+          "path": "core/src/model.rs",
+          "pattern": "if expected != actual \\{",
+          "replacement": "if false {"
+        },
+        {
+          "path": "core/src/model.rs",
+          "pattern": "ensure!\\(\\s*!actual\\.is_empty\\(\\) && expected == actual,\\s*\"edit does not name its causal resource heads\"\\s*,?\\s*\\);",
+          "replacement": "let _ = (&actual, &expected);"
+        }
+      ]
+    }
+  ]
+}

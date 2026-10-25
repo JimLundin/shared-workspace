@@ -1,0 +1,13 @@
+{
+  "name": "workspace-native-shell",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "tauri": "tauri",
+    "build": "tauri build",
+    "ios:init": "tauri ios init --ci --skip-targets-install && tauri icon icons/source.svg"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4"
+  }
+}
