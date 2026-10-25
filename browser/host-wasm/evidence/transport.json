@@ -1,0 +1,35 @@
+{
+  "status": "passed",
+  "timestamp": "2026-10-25T15:06:02.371Z",
+  "protocol": "shared-workspace/browser/1",
+  "scope": "Transport callback seam; full Turso host invitation/membership tests are separate",
+  "source_sha256": "99e6bdd701c77dd9155dc60c321ebdfcdb9573a2141583bf169fbdf208f1b93f",
+  "wasm_sha256": "dfaaa3616cb9a49ffe4f9149e23a60450bc1f62285f506c40eb55ddfeb94d1dc",
+  "observations": [
+    "Persisted-seed interface gives domain signatures and Iroh the same device identity",
+    "Separate real browser endpoints exchange authenticated messages in both directions",
+    "Callback receives transport identity despite a forged payload ID; handler rejection and malformed requests fail the exchange",
+    "Wrong contact identity and payloads above 8 MiB are rejected at the transport boundary",
+    "Reopening the endpoint with the same supplied seed preserves identity and allows reconnection",
+    "Incoming work is limited to 16 handlers; closing the endpoint retires all pending exchanges"
+  ],
+  "relay_connections": [
+    {
+      "context": 0,
+      "origin": "wss://euc1-1.relay.n0.iroh.link."
+    },
+    {
+      "context": 2,
+      "origin": "wss://euc1-1.relay.n0.iroh.link."
+    },
+    {
+      "context": 1,
+      "origin": "wss://euc1-1.relay.n0.iroh.link."
+    },
+    {
+      "context": 1,
+      "origin": "wss://euc1-1.relay.n0.iroh.link."
+    }
+  ],
+  "browser_errors": []
+}

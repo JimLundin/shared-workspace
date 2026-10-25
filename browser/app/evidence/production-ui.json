@@ -1,0 +1,25 @@
+{
+  "passed": true,
+  "started_at": "2026-10-25T15:07:20.830Z",
+  "assertions": [
+    "Fresh browser shows genuine empty host; service worker enables isolation without server headers.",
+    "Workspace and note created through UI receive real durable host receipts.",
+    "Phone fragment survives initial isolation reload, clears from URL, remains memory-only, and does not auto-join.",
+    "Explicit phone Join completes an authenticated peer exchange and imports the real note.",
+    "Notes edited from each production UI converge across isolated real browser hosts.",
+    "Phone list/focus fits viewport and navigation preserves command address until explicit Run.",
+    "Peer update preserves unsaved editor; explicit reconciliation saves a new revision.",
+    "Offline browser-process restart opens cached application and retained identity/work; offline save succeeds.",
+    "Foreground reconnection exchanges the offline edit with the paired browser.",
+    "Service-worker caches contain application assets only; no fragment, pairing ticket, or workspace records.",
+    "Production browser bundle contains no native bridge or native speech/scanner calls."
+  ],
+  "scope": "Built production UI with real BrowserHost, Turso OPFS and Iroh peers; headers-free static /shared-workspace/ origin.",
+  "limits": [
+    "Desktop Chromium with phone viewport; no physical iPhone result.",
+    "Browser speech adapter tested separately; no microphone recognition claim.",
+    "No public deployment from this test."
+  ],
+  "asset_hash": "303cbfed10e1253cbb205089a2ba9be6f862102214f762e5274deb8b0dbcd1b2",
+  "finished_at": "2026-10-25T15:08:21.091Z"
+}

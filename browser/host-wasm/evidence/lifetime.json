@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "timestamp": "2026-10-25T15:07:09.353Z",
+  "environment": "Actual Chromium context switched offline after static WASM assets load",
+  "source_sha256": "99e6bdd701c77dd9155dc60c321ebdfcdb9573a2141583bf169fbdf208f1b93f",
+  "wasm_sha256": "dfaaa3616cb9a49ffe4f9149e23a60450bc1f62285f506c40eb55ddfeb94d1dc",
+  "observations": [
+    "Offline address wait is cancelled promptly by close; immediate free has no borrowed-object error",
+    "Dropping an endpoint before its address future runs also retires the owned wait safely"
+  ]
+}

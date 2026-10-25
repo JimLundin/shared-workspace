@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "mutations": [
+    {
+      "id": "acknowledge_rolled_back_browser_work",
+      "description": "Roll back the Turso transaction while still publishing the prepared domain state and returning an applied receipt.",
+      "path": "browser/host/src/store.ts",
+      "before": "await this.#db.exec('COMMIT');",
+      "after": "await this.#db.exec('ROLLBACK');",
+      "case": "durability",
+      "expected_assertion": "browser-restart-retains-acknowledged-resources",
+      "required_prior_assertions": [
+        "local-note-has-acknowledged-content",
+        "duplicate-tab-rejects-without-stealing-lock",
+        "first-tab-remains-usable-after-duplicate-open",
+        "browser-restart-retains-device-identity"
+      ]
+    }
+  ]
+}

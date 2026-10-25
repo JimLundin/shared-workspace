@@ -231,9 +231,12 @@ isolated. The built Iroh WASM is 5,153,622 bytes; observed linear memories range
 from 1,835,008 to 2,031,616 bytes across the three contexts. These values are not
 browser-process RAM measurements.
 
-These are separate storage and transport proofs. They do not yet establish
-integrated signed-workspace replication, durable Iroh identity recovery, browser
-pairing/membership, the complete user interface, or an iPhone host.
+These are separate storage and transport proofs. The subsequent
+[integrated host checks](../browser/checks/) and
+[production UI checks](../browser/app/) exercise signed workspace replication,
+durable identity recovery, selected pairing, offline conflicts and reconciliation
+through the actual browser host. Their retained reports distinguish Chromium
+results from physical iPhone and public-hosting evidence.
 
 Required completion evidence for a real browser release:
 

@@ -1,0 +1,9 @@
+{
+  "status": "killed",
+  "mutation": "Supply a claimed payload identity to the host callback instead of the authenticated Iroh identity",
+  "baseline_source_sha256": "99e6bdd701c77dd9155dc60c321ebdfcdb9573a2141583bf169fbdf208f1b93f",
+  "baseline_wasm_sha256": "dfaaa3616cb9a49ffe4f9149e23a60450bc1f62285f506c40eb55ddfeb94d1dc",
+  "mutant_wasm_sha256": "b777fee8c63606d6fb2616789363233dab12e6927d4915247061ccad7be6a34b",
+  "observed_failure": "The real third browser forged the allowed peer ID and was accepted; rejection assertion failed",
+  "timestamp": "2026-10-25T15:07:37.249Z"
+}

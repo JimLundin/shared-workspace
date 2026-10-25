@@ -1,0 +1,9 @@
+{
+  "status": "failed",
+  "timestamp": "2026-10-25T15:04:59.410Z",
+  "environment": "Actual Chromium context switched offline after static WASM assets load",
+  "source_sha256": "de72a3c55ffbeda51ee6f764cc75d88b76681c57b87ea8d037d0bfba9efd6009",
+  "wasm_sha256": "925e634a8d0c366e9977262308964949cacaf314129efd9dc0faba64ec7e21b2",
+  "observations": [],
+  "failure": "page.evaluate: Error: attempted to take ownership of Rust value while it was borrowed\n    at __wbg___wbindgen_throw_5d9e815e6fdf150f (https://browser-host-lifetime.invalid/pkg/browser_workspace_host.js:629:19)\n    at browser_workspace_host.wasm.wasm_bindgen[401296960de039a8]::__wbindgen_throw (https://browser-host-lifetime.invalid/pkg/browser_workspace_host_bg.wasm:wasm-function[12555]:0x2c91b1)\n    at browser_workspace_host.wasm.wasm_bindgen[401296960de039a8]::throw_str (https://browser-host-lifetime.invalid/pkg/browser_workspace_host_bg.wasm:wasm-function[12282]:0x2c861c)\n    at browser_workspace_host.wasm.<browser_workspace_host[b2ebf8c0018df5a0]::transport::BrowserEndpoint as wasm_bindgen[401296960de039a8]::convert::traits::FromWasmAbi>::from_abi (https://browser-host-lifetime.invalid/pkg/browser_workspace_host_bg.wasm:wasm-function[5604]:0x267340)\n    at browser_workspace_host.wasm.__wbg_browserendpoint_free (https://browser-host-lifetime.invalid/pkg/browser_workspace_host_bg.wasm:wasm-function[3970]:0x227dd5)\n    at BrowserEndpoint.free (https://browser-host-lifetime.invalid/pkg/browser_workspace_host.js:18:14)\n    at eval (eval at evaluate (:370:30), <anonymous>:3:21)\n    at async <anonymous>:396:30\n    at /home/jim/toolkit-hosts/browser/host-wasm/tools/check-lifetime.mjs:42:14"
+}

@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "assertions": [
+    "New build waits and offers update without reloading or replacing unsaved input.",
+    "Deferring the update retains the open editor and text.",
+    "Explicit update reload reopens the committed note and isolated storage.",
+    "Previous build asset remains available to an older client after removal from server.",
+    "A missing close acknowledgement offers explicit reload recovery and reopens committed work."
+  ],
+  "scope": "Real waiting service worker update on headers-free static server; real BrowserHost editing.",
+  "limits": [
+    "Chromium only.",
+    "No public update or physical iPhone verification."
+  ]
+}

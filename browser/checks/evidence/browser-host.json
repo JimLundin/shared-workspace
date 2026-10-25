@@ -1,0 +1,234 @@
+{
+  "kind": "browser-workspace-acceptance-v1",
+  "passed": true,
+  "started_at": "2026-10-25T15:07:18.265Z",
+  "case": "all",
+  "assertions": [
+    "local-note-has-acknowledged-content",
+    "duplicate-tab-rejects-without-stealing-lock",
+    "first-tab-remains-usable-after-duplicate-open",
+    "browser-restart-retains-device-identity",
+    "browser-restart-retains-acknowledged-resources",
+    "browser-restart-retains-workspace-history",
+    "independent-browser-profiles-have-distinct-identities",
+    "pairing-shares-only-selected-workspace",
+    "pairing-transfers-selected-note",
+    "pairing-excludes-private-resource",
+    "consumed-invite-rejects-a-different-authenticated-browser",
+    "denied-browser-has-no-workspace",
+    "malformed-invitation-is-rejected",
+    "second-browser-contributes-to-shared-workspace",
+    "first-browser-edit-reaches-second-browser",
+    "offline-browser-endpoints-report-paused",
+    "offline-local-work-is-retained",
+    "reconnect-preserves-both-offline-revisions",
+    "both-browsers-observe-the-same-conflict",
+    "explicit-reconciliation-applies",
+    "reconciled-revision-reaches-other-browser",
+    "reconciliation-retains-previous-writing",
+    "stale-edit-reports-conflict",
+    "stale-edit-adds-no-operation",
+    "exact-command-replay-is-identified",
+    "exact-command-replay-adds-no-operation",
+    "changed-command-identity-is-rejected",
+    "changed-command-replay-adds-no-operation",
+    "invalid-command-has-definitive-rejection",
+    "rejected-command-adds-no-operation",
+    "corrected-uncommitted-command-can-succeed",
+    "paired-browser-restart-retains-identity",
+    "paired-browser-restart-retains-resource-history",
+    "paired-browser-restart-retains-replay-receipt",
+    "member-enrolls-third-browser-while-origin-stopped",
+    "third-browser-contributes-without-origin",
+    "returning-origin-retains-browser-identity",
+    "origin-catches-up-with-new-member-work",
+    "three-browser-hosts-converge",
+    "browser-members-discover-each-other-Editing-laptop",
+    "browser-members-discover-each-other-Editing-phone",
+    "browser-members-discover-each-other-Third-browser"
+  ],
+  "cases": [
+    {
+      "name": "durability",
+      "passed": true
+    },
+    {
+      "name": "pairing",
+      "passed": true
+    },
+    {
+      "name": "offline",
+      "passed": true
+    }
+  ],
+  "browser_launches": [
+    {
+      "peer": "Durable-device",
+      "launch": 1,
+      "browser": "156.0.8078.4"
+    },
+    {
+      "peer": "Durable-device",
+      "launch": 2,
+      "browser": "156.0.8078.4"
+    },
+    {
+      "peer": "Laptop",
+      "launch": 1,
+      "browser": "156.0.8078.4"
+    },
+    {
+      "peer": "Phone",
+      "launch": 1,
+      "browser": "156.0.8078.4"
+    },
+    {
+      "peer": "Other-device",
+      "launch": 1,
+      "browser": "156.0.8078.4"
+    },
+    {
+      "peer": "Editing-laptop",
+      "launch": 1,
+      "browser": "156.0.8078.4"
+    },
+    {
+      "peer": "Editing-phone",
+      "launch": 1,
+      "browser": "156.0.8078.4"
+    },
+    {
+      "peer": "Editing-phone",
+      "launch": 2,
+      "browser": "156.0.8078.4"
+    },
+    {
+      "peer": "Third-browser",
+      "launch": 1,
+      "browser": "156.0.8078.4"
+    },
+    {
+      "peer": "Editing-laptop",
+      "launch": 2,
+      "browser": "156.0.8078.4"
+    }
+  ],
+  "browser_closes": [
+    {
+      "peer": "Durable-device",
+      "launch": 1
+    },
+    {
+      "peer": "Durable-device",
+      "launch": 2
+    },
+    {
+      "peer": "Phone",
+      "launch": 1
+    },
+    {
+      "peer": "Laptop",
+      "launch": 1
+    },
+    {
+      "peer": "Other-device",
+      "launch": 1
+    },
+    {
+      "peer": "Editing-phone",
+      "launch": 1
+    },
+    {
+      "peer": "Editing-laptop",
+      "launch": 1
+    },
+    {
+      "peer": "Third-browser",
+      "launch": 1
+    },
+    {
+      "peer": "Editing-laptop",
+      "launch": 2
+    },
+    {
+      "peer": "Editing-phone",
+      "launch": 2
+    }
+  ],
+  "relay_origins": [
+    "wss://euc1-1.relay.n0.iroh.link."
+  ],
+  "scope": "Real BrowserHost public facade, Turso OPFS and Iroh WASM in separate persistent Chromium profiles.",
+  "limits": [
+    "No physical iPhone result.",
+    "No production UI or voice interaction result.",
+    "No LAN listener or public deployment.",
+    "No managed-device policy approval or storage-eviction guarantee."
+  ],
+  "source_hashes": {
+    "browser/checks/check.mjs": "67f076e51899cea2eb8e716dbc13f64609dc4a152b28beb1e35cb9e08036113e",
+    "browser/checks/index.html": "a1549648b7fcd7b246ae9b5194f2564de6316611086132cf80b2337e018d371d",
+    "browser/checks/package-lock.json": "4e1f24d0646f5dfaca3be2ee28be413058ccdf8bfacc9017d72aee75634d798c",
+    "browser/checks/package.json": "82b1928f130cbc856eaf8ca73f0222d02dabc6f65db3b17d55e660f9398f827b",
+    "browser/checks/page.ts": "6d8f3838b3c9d58cb478e177448bfa26337850d349973a1a501cc05563fc323c",
+    "browser/checks/tsconfig.json": "c7c5cac65bdbb49c6218fa56c8d8c1d1718a1a69568c6c84234a75ad3262f0cf",
+    "browser/host-wasm/Cargo.lock": "d42756c79012e7b6e82e0b280947ebf616dcbfc55f6fddc30f58c27dc6c90048",
+    "browser/host-wasm/Cargo.toml": "8179041b112c6fdd0bf66eaa21a62ec33bad5f9c0082a65f346c51034bc5ac26",
+    "browser/host-wasm/build.sh": "a8c5f53f672826745ed18a399f2adc64a0bc8fbe0aa611d7f29840c8422a56e2",
+    "browser/host-wasm/pkg/browser_workspace_host.d.ts": "3eff7c840e2a7f5cdc6e8dec6eefa2085d327ae90abdd9100d40cf7404c006f5",
+    "browser/host-wasm/pkg/browser_workspace_host.js": "5aa5a13678b0fccc1ba13db4ba2c28230f1203ecdd0f3b6bc6846735ea748ac0",
+    "browser/host-wasm/pkg/browser_workspace_host_bg.wasm": "dfaaa3616cb9a49ffe4f9149e23a60450bc1f62285f506c40eb55ddfeb94d1dc",
+    "browser/host-wasm/pkg/browser_workspace_host_bg.wasm.d.ts": "25ff50e9173f8b140f2c3bb11f5bc558f912bbb5d36edd8351dfbe0c774a511d",
+    "browser/host-wasm/src/domain.rs": "0d51b56de0e39b9124bd4fd41d1b5b629e731d3f48a214454a637932a003d876",
+    "browser/host-wasm/src/lib.rs": "de9720b9c3d7d03de082e6bac6718468154057f738eb61f2013fb2e6a47e2e2b",
+    "browser/host-wasm/src/transport.rs": "99e6bdd701c77dd9155dc60c321ebdfcdb9573a2141583bf169fbdf208f1b93f",
+    "browser/host/package-lock.json": "bd39995299cbb1b4c55cddb78ff355af99be439c30611067e0c8a7e48cf17b8a",
+    "browser/host/package.json": "e9f7a50cbc5deccda6341ec04b39008f08ed240a5e907f90f83282a699efa1fe",
+    "browser/host/src/host.ts": "8d2011607011595a7b0b1c008d0c7ef7c68e6bf503d250871d65b71eb927ea81",
+    "browser/host/src/owner.ts": "74caa38ad71eeb2f4cdad31378abbcf28decaa17790a83cec5e4a5250d36afae",
+    "browser/host/src/store.ts": "834097d1cc8d995bb152a89693661cffe14d24de40ece3804e1ebf354d47b9ce",
+    "browser/host/src/types.ts": "6c9e0e58539e195744ac67a672e4357b6d9bfcb398e5ad2ba3806044d387cd58",
+    "browser/host/src/worker.ts": "00bf0065e568ce5b1847f75e1418a1c534f5f6325186708733262249e061f7d6",
+    "native/core/src/model.rs": "7510d0523a7d95ff97e1b48b7e22a08c6507e74af78f86cbc4ccb85f1575b959",
+    "native/ui/src/protocol.ts": "ad6c5808c81a2d9cef3b1f61c49500ac8a84f9a34b54c360d928fcb2e200989f"
+  },
+  "assets": {
+    "assets/browser_workspace_host_bg-BgDWhSsc.wasm": {
+      "sha256": "dfaaa3616cb9a49ffe4f9149e23a60450bc1f62285f506c40eb55ddfeb94d1dc",
+      "bytes": 6043287
+    },
+    "assets/index-jFSYeCL0.js": {
+      "sha256": "38697b32a2907d72a0ebe70f87b850621e50ab5d48ce96a4e992a2be19a73f15",
+      "bytes": 5975
+    },
+    "assets/owner-Ckouxpwz.js": {
+      "sha256": "8577951c2999ec65a673289681a15cb046177b46800fbcaa6d021520e2cbdff8",
+      "bytes": 245862
+    },
+    "assets/turso.wasm32-wasi-KrOvB4jh.wasm": {
+      "sha256": "2905104bf0d1e9e3b17faf474bd61d541f7b35b02477a3022dc728f7f26499b9",
+      "bytes": 11613778
+    },
+    "assets/types-jLirL5JP.js": {
+      "sha256": "7c874d992b97d270c6bbeb011238acfbd51f324b6d128bf5ad3a1ded9078e309",
+      "bytes": 4991
+    },
+    "assets/worker-C3Ftajuj.js": {
+      "sha256": "f05a971994e5bf0fd25ef55f621f171c29f7e9cb2df1ccce0381376552f5bceb",
+      "bytes": 170918
+    },
+    "assets/worker-Kdae83Tp.js": {
+      "sha256": "7f994996a4865791e818d8f4a1f467e58c3ef79afd165a29a3097ca631a95524",
+      "bytes": 1657
+    },
+    "index.html": {
+      "sha256": "9a6da091ffdc08f572ff5568ad52012d19a76b059a114329899f907ec628cde8",
+      "bytes": 345
+    }
+  },
+  "hosting": "Strictly loopback static asset server, ephemeral port, isolated responses",
+  "static_server_closed": true,
+  "source_unchanged": true,
+  "finished_at": "2026-10-25T15:08:52.885Z",
+  "profiles_removed": true
+}

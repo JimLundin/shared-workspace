@@ -10,10 +10,19 @@ encrypted peer connections. Browser peers use relay infrastructure for transport
 Desktop automation is an optional capability supplied by a permitted local host;
 ordinary workspace access should not require a native installer or App Store app.
 
-The browser [storage proof](browser/storage-probe/README.md) has retained typed
-data and identity across browser restarts. The [Iroh proof](browser/iroh-probe/README.md)
-has exchanged authenticated messages between isolated browser contexts. These are
-component proofs, not yet a complete browser workspace or a tested iPhone app.
+The [browser host](browser/README.md) implements local workspaces and notes,
+selected-workspace invitations, encrypted synchronization, retained offline
+conflicts and explicit reconciliation. The [browser interface](browser/app/)
+provides voice command entry, editable transcripts, phone layouts and cached
+offline startup. This is a limited workspace prototype; desktop automation and
+native-host interoperability are separate integrations.
+
+[Browser acceptance](browser/checks/) exercises real Turso storage and Iroh
+connections across independent browser processes. The retained
+[storage](browser/storage-probe/README.md) and
+[transport](browser/iroh-probe/README.md) experiments explain the component
+choices. Physical iPhone behavior remains unverified, and the pinned Turso engine
+starts with 250 MiB of WASM linear memory, which requires device measurements.
 See the [browser architecture and delivery requirements](docs/browser-host-direction.md).
 
 The [native workspace experiment](native/README.md) contains the existing signed

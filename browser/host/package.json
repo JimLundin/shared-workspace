@@ -1,0 +1,10 @@
+{
+  "name": "@shared-workspace/browser-host",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": "./src/host.ts",
+  "scripts": { "check": "tsc --noEmit" },
+  "dependencies": { "@tursodatabase/database-wasm": "0.8.3" },
+  "devDependencies": { "typescript": "7.0.2", "vite": "8.3.5", "playwright": "1.64.1" }
+}

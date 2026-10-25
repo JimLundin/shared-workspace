@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "scope": "Pure browser Domain facade using the unchanged native signed workspace model; browser persistence and network integration are separate checks.",
+  "source_sha256": {
+    "browser/host-wasm/Cargo.toml": "8179041b112c6fdd0bf66eaa21a62ec33bad5f9c0082a65f346c51034bc5ac26",
+    "browser/host-wasm/Cargo.lock": "d42756c79012e7b6e82e0b280947ebf616dcbfc55f6fddc30f58c27dc6c90048",
+    "browser/host-wasm/src/lib.rs": "de9720b9c3d7d03de082e6bac6718468154057f738eb61f2013fb2e6a47e2e2b",
+    "browser/host-wasm/src/domain.rs": "0d51b56de0e39b9124bd4fd41d1b5b629e731d3f48a214454a637932a003d876",
+    "native/core/src/model.rs": "7510d0523a7d95ff97e1b48b7e22a08c6507e74af78f86cbc4ccb85f1575b959"
+  },
+  "tests": {
+    "passed": 7,
+    "failed": 0,
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "browser/host-wasm/Cargo.toml",
+      "--locked",
+      "--lib"
+    ]
+  },
+  "strict_clippy": {
+    "status": "passed",
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "browser/host-wasm/Cargo.toml",
+      "--locked",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ]
+  },
+  "mutations": {
+    "total": 6,
+    "killed": 6,
+    "results": [
+      {
+        "mutation": "stale_commit_token",
+        "test": "domain::tests::publication_requires_exact_durable_commit_and_retry_keeps_its_identity",
+        "intended_failure": "An unrelated token cannot commit or discard the pending change.",
+        "status": "killed",
+        "exit_code": 101,
+        "fresh_project_compile": true
+      },
+      {
+        "mutation": "publish_uncommitted_snapshot",
+        "test": "domain::tests::publication_requires_exact_durable_commit_and_retry_keeps_its_identity",
+        "intended_failure": "A prepared change cannot appear in the committed snapshot.",
+        "status": "killed",
+        "exit_code": 101,
+        "fresh_project_compile": true
+      },
+      {
+        "mutation": "export_without_receiver_membership",
+        "test": "domain::tests::selected_export_checks_both_members_even_after_an_empty_import",
+        "intended_failure": "An ungranted receiver cannot export selected workspace history.",
+        "status": "killed",
+        "exit_code": 101,
+        "fresh_project_compile": true
+      },
+      {
+        "mutation": "import_without_existing_enrollment",
+        "test": "domain::tests::member_can_carry_an_existing_members_grant_but_not_an_unrelated_root",
+        "intended_failure": "Normal import cannot introduce an unrelated workspace root.",
+        "status": "killed",
+        "exit_code": 101,
+        "fresh_project_compile": true
+      },
+      {
+        "mutation": "retained_request_wrong_author",
+        "test": "domain::tests::retained_requests_cannot_invent_replay_or_claim_another_authors_operation",
+        "intended_failure": "A retained request cannot claim an operation signed by another device.",
+        "status": "killed",
+        "exit_code": 101,
+        "fresh_project_compile": true
+      },
+      {
+        "mutation": "retained_request_wrong_content",
+        "test": "domain::tests::retained_requests_cannot_invent_replay_or_claim_another_authors_operation",
+        "intended_failure": "A retained request cannot claim success for content absent from the committed signed operation.",
+        "status": "killed",
+        "exit_code": 101,
+        "fresh_project_compile": true
+      }
+    ]
+  },
+  "restoration": {
+    "production_source_unchanged": true,
+    "native_model_unchanged": true,
+    "final_original_tests_passed": 7,
+    "final_original_tests_failed": 0,
+    "final_original_strict_clippy": "passed",
+    "fresh_mutant_compilation_verified": true,
+    "cache_observation": "Cargo reused the copied mutant package binary for the original package when both shared a native test target directory.",
+    "cache_resolution": "Cleared only the browser-workspace-host package artifacts, then rebuilt and reran the original tests and strict Clippy successfully.",
+    "wasm_build_target_untouched": true
+  }
+}
