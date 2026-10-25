@@ -34,5 +34,5 @@ Current code seams: [`Host`](../../native/ui/src/host.ts),
 [`WorkspaceSession`](../../native/ui/src/session.ts),
 [`captured commands`](../../native/ui/src/commands.ts),
 [`BrowserHost`](../host/src/host.ts). Existing direction:
-[`canvas work design`](../../docs/canvas-workspace-design.md) and
+[`canvas work design`](https://github.com/JimLundin/toolkit/blob/main/docs/canvas-workspace-design.md) and
 [`host architecture`](../../docs/native-architecture.md).

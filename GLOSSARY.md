@@ -1,27 +1,27 @@
-# Toolkit work
+# Shared work
 
-Toolkit carries out requested outcomes and standing instructions across
-conversations and interruptions.
+Shared Workspace organizes outcomes and their material across applications,
+conversations and participating hosts.
 
 ## Language
 
-**Task**:
-A requested outcome with its constraints, progress, and result. A task has a
-lifetime independent of the conversation in which it was requested.
-_Avoid_: Chat turn, command
+**Work**:
+An intended outcome together with its material, constraints, decisions, progress
+and results. It retains its identity across conversations, applications and hosts.
+_Avoid_: Card, chat turn, application
 
 **Run**:
-One period of execution of a task. A task can have several runs as it waits,
+One period of execution of work. Work can have several runs as it waits,
 resumes, or recovers from an interruption.
 _Avoid_: Task, session
 
 **Conversation**:
 The context shared by a sequence of requests and replies. Starting a new
-conversation does not erase its tasks.
+conversation does not erase its work.
 _Avoid_: Task history
 
 **Action attempt**:
-A recorded intention to change something outside the task itself. An attempt
+A recorded intention to change something outside the work itself. An attempt
 does not establish that the intended effect occurred.
 _Avoid_: Completed action
 
@@ -31,13 +31,13 @@ an uncertain outcome until the affected state is inspected.
 _Avoid_: Assumed success
 
 **Checkpoint**:
-A bounded account of a task's progress that helps a later run continue from
+A bounded account of progress that helps a later run continue from
 known facts.
 _Avoid_: Conversation dump
 
 **Workspace**:
 A named working context containing resources and their arrangement. Showing a
-different workspace does not change the identity of its resources or tasks.
+different workspace does not change the identity of its resources or work.
 _Avoid_: Conversation, source checkout
 
 **Host**:
@@ -83,15 +83,15 @@ _Avoid_: New task
 **Accepted handoff**:
 A standing instruction's commitment to carry out a trigger occurrence. Later
 editing or disabling the instruction does not revoke work already accepted;
-that task can be cancelled separately.
+that work can be cancelled separately.
 _Avoid_: Unobserved event, pending trigger
 
 **Cancellation**:
-The user's decision to end a task. An effect already underway can still acquire
-an observed outcome without reviving the cancelled task.
+The user's decision to end work. An effect already underway can still acquire
+an observed outcome without reviving the cancelled work.
 _Avoid_: Shutdown, interruption
 
 **Interruption**:
-An execution break that leaves a task unfinished and recoverable. It does not
+An execution break that leaves work unfinished and recoverable. It does not
 authorize blindly repeating an action with an uncertain outcome.
 _Avoid_: Cancellation, failure

@@ -72,7 +72,7 @@ try {
   record('Workspace and note created through UI receive real durable host receipts.');
   await mkdir(join(directory, 'artifacts'), { recursive: true });
   await desktop.page.screenshot({ path: join(directory, 'artifacts/desktop.png') });
-  await desktop.page.getByRole('button',{name:/Current workspace:/}).click();await desktop.page.getByRole('button',{name:'Appearance',exact:true}).click();await desktop.page.getByRole('button',{name:'Dark',exact:true}).click();
+  await desktop.page.getByRole('button',{name:'Settings',exact:true}).click();await desktop.page.getByRole('button',{name:'Appearance',exact:true}).click();await desktop.page.getByRole('button',{name:'Dark',exact:true}).click();
   await desktop.page.emulateMedia({colorScheme:'dark'});await desktop.page.emulateMedia({colorScheme:'light'});assert.equal(await desktop.page.locator('html').getAttribute('data-theme'),'dark');
   await desktop.page.getByRole('button',{name:'Light',exact:true}).click();await desktop.page.emulateMedia({colorScheme:'dark'});assert.equal(await desktop.page.locator('html').getAttribute('data-theme'),'light');await desktop.page.getByRole('button',{name:'Close dialog'}).click();
   record('Production startup theme observer cannot override explicit Light or Dark after an OS preference change.');

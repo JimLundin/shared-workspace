@@ -248,6 +248,49 @@ async function captureChecks(peer, originalTitle) {
     record('Narrow, reduced-height and landscape layouts keep work and capture dialogs reachable; this is not physical keyboard evidence.');
   }
 }
+async function settingsChecks(page, workspaceTitle) {
+  const gear = page.getByRole('button', { name: 'Settings', exact: true });
+  await gear.waitFor();
+  assert.equal(await gear.getAttribute('id'), 'workspace-settings', 'Settings must have its dedicated top-level control.');
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const content = page.getByLabel('Content', { exact: true });
+  const draft = 'Unsaved draft retained while Settings adapts to the window.';
+  await content.fill(draft);
+  await gear.click();
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await settings.getByRole('button', { name: 'Appearance', exact: true }).waitFor();
+  assert(await settings.getByRole('button', { name: 'Connections', exact: true }).isVisible());
+  assert(await settings.getByRole('button', { name: 'Install and storage', exact: true }).isVisible());
+  const sizes = [{ width: 1024, height: 768 }, { width: 540, height: 720 }, { width: 390, height: 844 }];
+  for (const size of sizes) {
+    const focusedControl = settings.getByRole('button', { name: 'Appearance', exact: true });
+    await focusedControl.focus();
+    await page.setViewportSize(size);
+    assert(await focusedControl.evaluate(element => document.activeElement === element), 'Resizing must preserve the active Settings control.');
+    assert.equal(await content.inputValue(), draft, 'Resizing an open Settings dialog must retain the underlying unsaved draft.');
+    assert.equal(await page.locator('#workspace-picker').getAttribute('aria-label'), 'Current workspace: ' + workspaceTitle, 'Resizing Settings must preserve workspace context.');
+    await modalChecks(page, 'Settings');
+    const bounds = await page.locator('#workspace-settings').boundingBox();
+    assert(bounds && bounds.width >= 44 && bounds.height >= 44, 'The Settings target must remain at least 44 by 44 pixels.');
+    observations.push({ stage, engine: page.context().browser().browserType().name(), settings_viewport: size, draft_retained: true, focused_control_retained: true });
+  }
+  await page.goBack();
+  await settings.waitFor({ state: 'hidden' });
+  assert(await gear.evaluate(element => document.activeElement === element), 'Back must close Settings and restore focus to its gear.');
+  assert.equal(await content.inputValue(), draft, 'Closing Settings must retain the unsaved edit.');
+  await gear.click(); await settings.waitFor();
+  await page.keyboard.press('Escape'); await settings.waitFor({ state: 'hidden' });
+  assert(await gear.evaluate(element => document.activeElement === element), 'Escape must restore focus to the Settings gear.');
+  await page.getByRole('button', { name: 'Discard local edit', exact: true }).click();
+  await content.waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: /^Current workspace:/ }).click();
+  const picker = page.getByRole('dialog', { name: 'Switch workspace', exact: true });
+  assert.equal(await picker.getByRole('button', { name: 'Appearance', exact: true }).count(), 0, 'Workspace switching must not mix in device settings.');
+  await picker.getByRole('button', { name: 'Close dialog', exact: true }).click();
+  await picker.waitFor({ state: 'hidden' });
+  await page.setViewportSize({ width: 390, height: 900 });
+  record('Dedicated Settings covers the viewport, restores Back/Escape focus, and retains an unsaved draft across 1024/540/390-pixel windows.');
+}
 try {
   assert(engines[inviterEngine] && engines[joinerEngine], 'Choose chromium or webkit for each participant.');
   assert(!(dist && args.includes('--url')), 'Choose an existing URL or a local distribution, not both.');
@@ -345,6 +388,8 @@ try {
   await openNote(joiner.page, noteTitle);
   await note(joiner.page, inviterContent);
   record('Reload resumes the current workspace and retained note, ready for direct reading and editing.');
+  stage = 'settings-and-draft-resize';
+  await settingsChecks(joiner.page, title);
   if (dist) assert.deepEqual(await hashes(resolve(dist)), servedAssets, 'Served build files must remain unchanged during acceptance.');
   observations.push({ stage: 'complete', joined, ...transfers });
 } catch (error) {

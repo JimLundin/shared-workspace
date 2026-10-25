@@ -17,7 +17,7 @@ dictation, bounded commands, shared revisions and an embedded code editor. Offic
 and VS Code links open externally. Sharing a URL neither grants access to the
 vendor account nor gives an agent control of the application.
 
-Separately, the Windows implementation has durable tasks, meeting preparation,
+Separately, [Toolkit](https://github.com/JimLundin/toolkit) has durable Windows tasks, meeting preparation,
 source-linked outputs and recovery for unsent mail. These are valuable foundations,
 but they are not yet one browser-to-desktop execution path. The
 [UI's engine requests](../browser/app/ENGINE-REQUESTS.md) identify missing retained

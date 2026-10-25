@@ -2,6 +2,8 @@
   "passed": true,
   "assertions": [
     "Startup checks automatically; no top-level update button appears without a ready waiting worker.",
+    "Settings opens install/storage guidance; conditional install events are deduplicated, user-triggered, and do not claim extra device powers or move Safari work.",
+    "Controlled standalone detection hides redundant install actions; dismissal and failure do not falsely claim an app window, and closing returns focus to Settings.",
     "Hidden/offline periods do not poll; a real online event discovers the ready update and preserves unsaved input.",
     "Deferring the update retains the open editor and text.",
     "Options survive polling and restore focus; update preserves unfinished workspace creation.",
@@ -13,11 +15,13 @@
     "BFCache lifecycle suspension stops polling and restoration requests one eligible check.",
     "A missing close acknowledgement offers explicit reload recovery and reopens committed work.",
     "Another client activating clears the stale update action without reloading or losing this tab’s draft.",
-    "An ordinary departure disposes discovery; timers and later events cannot restart it."
+    "An ordinary departure disposes discovery; timers and later events cannot restart it.",
+    "Departed-page cleanup also removes install event handling and cannot revive an install action."
   ],
   "scope": "Real service-worker discovery through online events and visible timers, explicit update and real BrowserHost editing on a headers-free server.",
   "limits": [
     "Chromium only.",
+    "Install events and display-mode observations are controlled test inputs; no actual OS installation or Safari-to-Home-Screen storage migration is claimed.",
     "No public update or physical iPhone verification.",
     "BFCache eligibility is not asserted: PageTransitionEvents exercise the actual application lifecycle handlers."
   ]

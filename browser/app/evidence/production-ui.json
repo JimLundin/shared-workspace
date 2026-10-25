@@ -1,6 +1,6 @@
 {
   "passed": true,
-  "started_at": "2026-10-25T21:28:12.956Z",
+  "started_at": "2026-10-25T22:17:48.913Z",
   "assertions": [
     "Fresh browser shows genuine empty host; service worker enables isolation without server headers.",
     "Workspace and note created through UI receive real durable host receipts.",
@@ -22,6 +22,6 @@
     "Browser speech adapter tested separately; no microphone recognition claim.",
     "No public deployment from this test."
   ],
-  "asset_hash": "4735e3bbbb17e5140a28ae2b62ca901d5fce3feee2e749074364caa072121d61",
-  "finished_at": "2026-10-25T21:29:16.771Z"
+  "asset_hash": "8ca45815e0d7eda91bc8a4c0f6945b6732a377b02d3d72bb8a90fffb6975ba18",
+  "finished_at": "2026-10-25T22:18:48.203Z"
 }

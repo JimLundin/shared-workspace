@@ -11,3 +11,6 @@ body { height: 100dvh; }
 .browser-notice p { font-size: .9375rem; }
 .browser-notice button { margin: 8px 8px 0 0; }
 .app-options { font-size: 1.5rem; min-width: 44px; padding: 4px 8px; }
+@media(min-width:900px) {
+  .browser-options { inset: calc(86px + env(safe-area-inset-top,0px)) max(var(--chrome-edge),calc((100vw - 1360px)/2)) auto auto; width: 440px; max-height: calc(100dvh - 112px); margin: 0; }
+}

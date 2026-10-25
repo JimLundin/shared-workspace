@@ -24,12 +24,17 @@ function action(label: string, work: () => void | Promise<void>): HTMLButtonElem
 }
 // Install/storage are occasional actions in a stable top-layer panel.
 const optionsDialog = document.createElement('dialog'); optionsDialog.className = 'workspace-dialog browser-options';
-optionsDialog.setAttribute('aria-label', 'App options');
+optionsDialog.setAttribute('aria-label', 'Install and storage');
 const optionsHeader = document.createElement('header'); optionsHeader.className = 'dialog-heading';
-const optionsTitle = document.createElement('h2'); optionsTitle.textContent = 'App options';
-optionsHeader.append(optionsTitle, action('Close app options', () => optionsDialog.close()));
+const optionsTitle = document.createElement('h2'); optionsTitle.textContent = 'Install and storage';
+optionsHeader.append(optionsTitle, action('Close install and storage', () => optionsDialog.close()));
 const optionsBody = document.createElement('div'); optionsBody.className = 'dialog-body';
-optionsBody.append(controls); optionsDialog.append(optionsHeader, optionsBody); document.body.append(optionsDialog);
+const installStatus = document.createElement('p'); installStatus.id = 'installation-state'; installStatus.setAttribute('role', 'status');
+const installBenefits = document.createElement('p'); installBenefits.textContent = 'Install for an app icon and a separate window. Saved workspace notes also work offline in a browser tab.';
+const installInstructions = document.createElement('p'); installInstructions.textContent = 'On iPhone or iPad: in Safari, choose Share → Add to Home Screen, then open the new icon.';
+const installStorage = document.createElement('p'); installStorage.textContent = 'On iPhone and iPad, the Home Screen app may have separate storage and need pairing again. Keep your Safari work; if the app opens empty, pair it from another connected device. Installation does not transfer Safari’s saved work.';
+const installPermissions = document.createElement('p'); installPermissions.textContent = 'Browser permissions still apply. Installation does not add desktop control or continuous background operation.';
+optionsBody.append(installStatus, installBenefits, installInstructions, controls, installStorage, installPermissions); optionsDialog.append(optionsHeader, optionsBody); document.body.append(optionsDialog);
 let modalHistory = false, updateClosing = false;
 function openBrowserDialog(panel: HTMLDialogElement): void {
   if (!modalHistory) { history.pushState({ ...history.state, browserDialog: true }, ''); modalHistory = true; }
@@ -40,7 +45,7 @@ window.addEventListener('popstate', () => { if(updateClosing){history.pushState(
 optionsDialog.addEventListener('close', () => {
   if (document.querySelector('.browser-notice[open]')) return;
   closeBrowserDialog();
-  root.querySelector<HTMLButtonElement>('#workspace-picker')?.focus();
+  (root.querySelector<HTMLButtonElement>('#workspace-settings') ?? root.querySelector<HTMLButtonElement>('#workspace-picker'))?.focus();
 });
 let waitingRegistration: ServiceWorkerRegistration | null = null;
 function offerUpdate(registration: ServiceWorkerRegistration | null): void {
@@ -72,7 +77,7 @@ function openUpdate(): void {
     closing = true; updateClosing = true;
     for (const control of panel.querySelectorAll('button')) control.disabled = true;
     root.inert = true;
-    browserPreparation?.dispose();
+    browserPreparation?.dispose(); disposeInstallGuidance();
     app?.dispose();
     try { await closeHost?.(); }
     catch { recover('Closing this workspace was not confirmed. Reload to recover saved work.'); return; }
@@ -96,11 +101,57 @@ function openUpdate(): void {
   document.body.append(panel); openBrowserDialog(panel); if (optionsDialog.open) optionsDialog.close();
 }
 type InstallEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> };
-window.addEventListener('beforeinstallprompt', event => {
-  event.preventDefault(); const install = event as InstallEvent;
-  const button = action('Install on this device', async () => { await install.prompt(); await install.userChoice; button.remove(); });
-  controls.append(button);
-});
+const installedDisplay = window.matchMedia('(display-mode: standalone)');
+let pendingInstall: InstallEvent | undefined, installButton: HTMLButtonElement | undefined;
+let installPromptOpen = false, installGuidanceDisposed = false;
+let installNotice: 'none' | 'failed' = 'none';
+const standalone = () => installedDisplay.matches || ('standalone' in navigator && navigator.standalone === true);
+function renderInstallGuidance(): void {
+  if (installGuidanceDisposed) return;
+  const installed = standalone();
+  installStatus.textContent = installed ? 'Running in an app window. Saved workspace notes are available offline.' : installNotice === 'failed' ? 'The browser did not complete installation. Try its install menu.' : 'Running in a browser tab.';
+  installBenefits.hidden = installed;
+  installInstructions.hidden = installed;
+  if (installed) { pendingInstall = undefined; installButton?.remove(); installButton = undefined; }
+  if (!installed && pendingInstall && !installButton && !installPromptOpen) {
+    const button = action('Install on this device', async () => {
+      const prompt = pendingInstall;
+      if (!prompt || installPromptOpen || standalone()) return;
+      pendingInstall = undefined; installPromptOpen = true; button.disabled = true;
+      try { await prompt.prompt(); await prompt.userChoice; }
+      catch { installNotice = 'failed'; }
+      finally {
+        installPromptOpen = false; button.remove();
+        if (installButton === button) installButton = undefined;
+        renderInstallGuidance();
+      }
+    });
+    installButton = button; controls.prepend(button);
+  }
+}
+function onInstallPrompt(event: Event): void {
+  if (!('prompt' in event) || typeof event.prompt !== 'function' || !('userChoice' in event)) return;
+  event.preventDefault();
+  if (standalone()) return;
+  pendingInstall = event as InstallEvent; installNotice = 'none';
+  renderInstallGuidance();
+}
+function onInstalled(): void {
+  pendingInstall = undefined; installButton?.remove(); installButton = undefined;
+  renderInstallGuidance();
+}
+function disposeInstallGuidance(): void {
+  installGuidanceDisposed = true; pendingInstall = undefined; installButton?.remove(); installButton = undefined;
+  installedDisplay.removeEventListener('change', renderInstallGuidance);
+  window.removeEventListener('beforeinstallprompt', onInstallPrompt);
+  window.removeEventListener('appinstalled', onInstalled);
+  window.removeEventListener('pageshow', renderInstallGuidance);
+}
+installedDisplay.addEventListener('change', renderInstallGuidance);
+window.addEventListener('beforeinstallprompt', onInstallPrompt);
+window.addEventListener('appinstalled', onInstalled);
+window.addEventListener('pageshow', renderInstallGuidance);
+renderInstallGuidance();
 
 async function start(): Promise<void> {
   browserPreparation = await prepareBrowser(base, offerUpdate);
@@ -125,7 +176,7 @@ async function start(): Promise<void> {
   window.addEventListener('pagehide', event => {
     if (event.persisted) { void host.setForeground(false); return; }
     document.removeEventListener('visibilitychange', foreground); window.removeEventListener('online', foreground);
-    browserPreparation?.dispose(); app?.dispose(); void host.close();
+    browserPreparation?.dispose(); disposeInstallGuidance(); app?.dispose(); void host.close();
   });
   window.addEventListener('pageshow', event => { if (event.persisted) foreground(); });
   if (navigator.storage.persist && !await navigator.storage.persisted()) {
@@ -138,7 +189,7 @@ async function start(): Promise<void> {
 }
 void start().catch(error => {
   if (ready) return;
-  browserPreparation?.dispose(); void closeHost?.().catch(() => undefined);
+  browserPreparation?.dispose(); disposeInstallGuidance(); void closeHost?.().catch(() => undefined);
   const panel = document.createElement('main'); panel.className = 'boot';
   const heading = document.createElement('h1'); heading.textContent = 'Your workspace could not open.';
   const message = document.createElement('p'); message.setAttribute('role', 'alert');

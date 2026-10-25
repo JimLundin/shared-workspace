@@ -1,44 +1,49 @@
+# Scope
+
+This repository owns Shared Workspace's browser/PWA and optional native hosts.
+The Windows keyboard, system dictation, Python assistant and local executor belong
+to [Toolkit](https://github.com/JimLundin/toolkit). Keep source, dependency pins and
+release pipelines independent. Read [project boundaries](docs/project-boundaries.md)
+when changing repository ownership or proposing a connection between the products.
+
 # Design
 
-- Model domain alternatives like Rust enums: use unions of frozen, slotted
-  dataclasses for variants with payloads and `Enum` for variants without payloads.
-  Handle variants with `match` and `typing.assert_never` where exhaustive handling
-  matters. Use `Literal` for fixed values in external contracts.
-- Put decisions and state transitions in pure functions. Pass timestamps and
-  observations in; return immutable values. Keep threads, locks, files, network
-  calls, and UI updates in the modules that own those effects.
-- Validate external data when it enters a typed interface. Use the variant's
-  fields to express required data instead of unrelated flags and empty defaults.
-- Preserve the keyboard process's isolation from the assistant. Its bounded
-  mutable buffers and direct updates use the same variant definitions as the
-  rest of the code: convert native event flags to variants once, then reuse those
-  events during buffering and replay. Measure key-event latency,
-  allocation peaks, and GC with `scripts/benchmark_keyboard.py` before and after
-  changing the hook, engine, or their shared dependencies. Keep GC enabled during
-  measurement and keep event data acyclic: the live hook disables cyclic GC.
-  Apply the same care to audio sample loops and buffer copying.
-- Prefer Python 3.15's native annotation and type-alias syntax. Keep the runtime
-  bootstrap importable on the system Python 3.12 interpreter.
-- When changing domain models or profiling input, read
-  [docs/functional-design.md](docs/functional-design.md) for the module map and
-  measurement scope.
+- Model alternatives with Rust enums and TypeScript discriminated unions. Keep
+  domain values immutable; use readonly payloads and exhaustive handling.
+- Put decisions and state transitions in pure functions. Supply timestamps, IDs
+  and observations; effect owners handle storage, network, capture and UI lifetime.
+- Validate external data at typed boundaries. TypeScript annotations do not validate
+  JSON, worker messages, persisted records or provider responses.
+- Preserve captured workspace/resource/revision identities through asynchronous
+  work. Exact retries retain operation identity; an unknown result remains unknown
+  until evidence resolves it. Local save, peer delivery and external execution are
+  separate observations.
+- Use actual Turso Database and Iroh. Keep workspace access scoped to accepted
+  grants; UI selection and device availability cannot expand authorization.
+- Read [GLOSSARY.md](GLOSSARY.md) when changing work terminology and the
+  [work-continuity thesis](docs/work-continuity-thesis.md) when designing execution.
+  Browser/host and native/PROTOCOL.md contain the current implementation contracts.
 
-# Windows deployment
+# Interface and validation
 
-After each completed change, update the Windows Downloads copy as part of the
-task. The user has authorized this sync and a reload whenever Toolkit is already
-running; no separate confirmation is needed.
+Voice is the primary input, with optional typing. Adapt to available space and
+input capabilities; retain drafts and focus through layout changes. Apply accessible
+light/dark materials, reduced-motion/transparency fallbacks and safe areas.
 
-- Deploy the checked working tree to
-  `C:\Users\Jim.Lundin\Downloads\toolkit-sdk\toolkit`
-  (`/mnt/c/Users/Jim.Lundin/Downloads/toolkit-sdk/toolkit` from WSL).
-- Refresh `C:\Users\Jim.Lundin\Downloads\toolkit-sdk-python315-win64.zip` too.
-  Preserve `.python` and `.runtime` when their pins in `requirements/` are
-  unchanged; rebuild with `scripts/bundle.py` when either pin changes.
-- If that copy is running, close its `toolkit assistant` window with `WM_CLOSE`
-  and wait for its keeper and layout to exit cleanly before replacing files.
-  Relaunch `toolkit.pyw` using that copy's `.python\pythonw.exe` and folder.
-  Leave a stopped copy stopped.
-- Clear replaced modules' bytecode caches. Verify the deployed files and ZIP
-  match the working tree, and verify fresh readiness markers and running child
-  processes after a reload. Report any deployment or reload failure explicitly.
+Check the affected public interfaces and real browser behavior. Mutation checks
+must fail the intended behavioral assertion; compiler errors, setup failures and
+timeouts do not count. Keep fixture evidence distinct from real peers, authenticated
+provider behavior and physical-device validation. Package scripts and
+[the browser workflow](.github/workflows/browser.yml) define runnable checks.
+
+# Releases
+
+Publish checked browser assets to the existing Shared Workspace HTTPS origin.
+Preserve its path, manifest identity and storage format unless a migration is part
+of the change. Use isolated profiles and synthetic data for release verification.
+Keep credentials, invitations and workspace content out of public artifacts.
+
+Browser releases update this application only. Toolkit's separate repository owns
+its Windows Downloads copy, ZIP and reload procedure; run that procedure only for
+changes to Toolkit. Native Shared Workspace builds retain their own platform and
+signing checks and are not a requirement for using the website.

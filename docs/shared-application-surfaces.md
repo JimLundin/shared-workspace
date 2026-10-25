@@ -87,11 +87,11 @@ neither result removes the need for a fallback on unsupported engines.
 
 The earlier native application-view path is different: it navigates separate
 WebView2 application views directly. Its
-[Office and VS Code evidence](webview2-ui-investigation.md) remains applicable:
+[Office and VS Code evidence](https://github.com/JimLundin/toolkit/blob/main/docs/webview2-ui-investigation.md) remains applicable:
 Word A and Excel A passed edit/save/reopen, Word B failed persistence, and VS
 Code's workbench loaded while file save/reopen remained unproved. Those results
 do not imply that the website can iframe the same services. The
-[document-surface research](document-app-surfaces.md) also keeps Office's
+[document-surface research](https://github.com/JimLundin/toolkit/blob/main/docs/document-app-surfaces.md) also keeps Office's
 read-only embedding products and CSPP/WOPI rules distinct from normal editing.
 
 ## Verification

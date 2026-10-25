@@ -22,6 +22,7 @@ const button = (text: string, action: string, data: Record<string, unknown> = {}
 const mic = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M8 21h8"/></svg>';
 const shareIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M7 10H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-2"/></svg>';
 const keyboardIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M6 9h1m4 0h1m4 0h1M6 12h1m4 0h1m4 0h1M7 16h10"/></svg>';
+const settingsIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3-.6 2.1-1.8 1-2.1-.5-2 3.4 1.5 1.6v2.1L2.5 14.3l2 3.4 2.1-.5 1.8 1L9 20.3h4l.6-2.1 1.8-1 2.1.5 2-3.4-1.5-1.6v-2.1L19.5 9l-2-3.4-2.1.5-1.8-1L13 3Z"/><circle cx="11" cy="11.7" r="3"/></svg>';
 const plusIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
 const shortId = (value: string): string => value.length > 14 ? value.slice(0, 10)+'…' : value;
 const time = (ms: number): string => new Date(ms).toLocaleString();
@@ -34,7 +35,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
   const frame = document.createElement('div'); frame.className = 'workspace-frame';
   const dialog = document.createElement('dialog'); dialog.className = 'workspace-dialog';
   root.replaceChildren(frame, dialog);
-  type Panel = 'picker' | 'create' | 'capture' | 'connections' | 'share' | 'join' | 'appearance' | 'add' | 'voice-settings';
+  type Panel = 'settings' | 'picker' | 'create' | 'capture' | 'connections' | 'share' | 'join' | 'appearance' | 'add' | 'voice-settings';
   let panel: Panel | null = null, returnFocus: HTMLElement | null = null;
   let returnFocusId = '', returnFocusAction = '', returnFocusArgs = '';
   let editorOpen = true, updateAvailable = false;
@@ -153,11 +154,14 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
     return `<button type="button" class="settings-row" data-action="${action}" aria-label="${escape(label)}"><span>${escape(label)}</span><span class="settings-row-end">${detail?`<span class="settings-row-value">${escape(detail)}</span>`:''}<span class="settings-chevron" aria-hidden="true">›</span></span></button>`;
   }
   function picker(snapshot: Snapshot): string {
-    const selectedAppearance=appearance.get(),appearanceLabel=selectedAppearance[0]!.toUpperCase()+selectedAppearance.slice(1);
     return `${pickerScope ? '<p>Choose which received workspace to open.</p>' : ''}
       <section class="settings-group" aria-labelledby="workspace-group-title"><h3 id="workspace-group-title">Workspaces</h3><div class="workspace-list">${snapshot.workspaces.filter(w => !pickerScope || pickerScope.includes(w.id)).map(w => `<button class="picker-option" type="button" aria-label="${escape(w.title)}" data-action="navigate" data-args="${attr({type:'workspace', id:w.id})}" ${session.state.route.type === 'workspace' && session.state.route.id === w.id ? 'aria-current="true"' : ''}><span class="space-mark" aria-hidden="true">${escape(w.title.slice(0,1).toUpperCase())}</span><span>${escape(w.title)}</span></button>`).join('')}</div></section>
-      <section class="settings-group" aria-labelledby="workspace-actions-title"><h3 id="workspace-actions-title">Add workspace</h3>${settingsRow('Create workspace','create-space')}${settingsRow('Join existing work','join-work')}</section>
-      <section class="settings-group" aria-labelledby="workspace-settings-title"><h3 id="workspace-settings-title">Settings</h3>${settingsRow('Appearance','appearance',appearanceLabel)}${settingsRow('Connections','connections')}${options.connections?settingsRow('OpenAI connection','configure-voice'):''}${options.openAppOptions?settingsRow('App options','app-options'):''}</section>`;
+      <section class="settings-group" aria-labelledby="workspace-actions-title"><h3 id="workspace-actions-title">Add workspace</h3>${settingsRow('Create workspace','create-space')}${settingsRow('Join existing work','join-work')}</section>`;
+  }
+  function settingsPanel(snapshot:Snapshot):string {
+    const selected=appearance.get(),appearanceLabel=selected[0]!.toUpperCase()+selected.slice(1),route=session.state.route;
+    const workspace=route.type==='workspace'?snapshot.workspaces.find(w=>w.id===route.id):null;
+    return `<section class="settings-group" aria-labelledby="device-settings-title"><h3 id="device-settings-title">This device</h3>${settingsRow('Appearance','appearance',appearanceLabel)}${settingsRow('Connections','connections')}${options.openAppOptions?settingsRow('Install and storage','app-options'):''}</section>${options.connections&&workspace?`<section class="settings-group" aria-labelledby="current-workspace-settings-title"><h3 id="current-workspace-settings-title">${escape(workspace.title)}</h3>${settingsRow('OpenAI connection','configure-voice')}</section>`:''}`;
   }
   function appearancePanel():string {
     const selected=appearance.get();
@@ -167,6 +171,13 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
   function addPanel(_snapshot:Snapshot):string {
     const route=session.state.route;if(route.type!=='workspace')return '';
     return `<div class="material-choices">${button('<span>Note</span><small>Capture a thought or write something down</small>','new-note',{workspaceId:route.id},'material-choice')}${surfacePresets.map(preset=>button(`<span>${escape(preset.title)}</span><small>${escape(preset.description)}</small>`,'add-surface',{preset:preset.id,workspaceId:route.id},'material-choice')).join('')}${button('<span>Document or website link</span><small>Bring an existing document into this workspace</small>','add-link',{workspaceId:route.id},'material-choice')}</div>`;
+  }
+  function openVoiceSettings(requested:string|null):void {
+    const pending=connections?.mutation,locked=pending&&pending.type!=='idle'?pending.change.input.workspace_id:keyDraft?connectionWorkspace:null;
+    connectionWorkspace=locked??requested;
+    if(!connectionWorkspace)return;
+    if(locked&&locked!==requested)localMessage='Your unfinished connection change belongs to the workspace shown here. Finish it before configuring another.';
+    openPanel('voice-settings',false);void connections?.refresh(connectionWorkspace);void connections?.refreshPeers(connectionWorkspace);
   }
   function voiceSettings(snapshot:Snapshot):string {
     const id=connectionWorkspace;if(!id||!connections)return '<p>Choose a workspace first.</p>';
@@ -309,12 +320,12 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
     if(!snapshot){frame.innerHTML=`<div class="app-shell"><header class="topbar"><span class="brand">Shared Workspace</span></header><main class="main"><section class="gate"><h1>${state.host.type==='unavailable'?'Open your native workspace':state.host.type==='loading'?'Opening your work…':'Your work could not open'}</h1><p>${state.host.type==='unavailable'?'Open the installed app to use this native interface.':state.host.type==='failed'?escape(state.host.message):'Reading the work saved on this device.'}</p>${state.host.type==='failed'?button('Retry connection','refresh',{},'primary'):''}</section></main></div>`;return}
     const workspaceId = state.route.type === 'workspace' ? state.route.id : null;
     const currentTitle = snapshot.workspaces.find(w => w.id === workspaceId)?.title ?? 'Your work';
-    frame.innerHTML=`<div class="app-shell"><header class="topbar"><div class="workspace-context"><button type="button" id="workspace-picker" data-action="picker" aria-label="Current workspace: ${escape(currentTitle)}" aria-haspopup="dialog"><span>${escape(currentTitle)}</span><span aria-hidden="true">⌄</span></button></div><div class="top-actions">${updateAvailable&&options.openUpdate?'<button type="button" id="workspace-update" data-action="update" aria-label="Update available">Update available</button>':''}${workspaceId?`<button type="button" data-action="share" data-args="${attr({workspaceId})}" class="share-work icon-button" aria-label="Share this workspace">${shareIcon}</button>`:''}</div></header><main class="main">${state.host.type==='failed'?`<div class="notice">Showing the last saved view. ${button('Retry read','refresh')}</div>`:''}${mutationNotice(state)}${snapshot.network.type==='unavailable'?`<div class="notice">Connections are unavailable. You can still save work on this device. ${button('Check connections','connections',{},'quiet')}</div>`:''}<div class="status-message ${!localMessage&&['Saved here.','Waiting for the local save receipt…','Connected. Your shared work is saved here.'].includes(state.message)?'routine-status':''}" role="status" aria-live="polite">${escape(localMessage||state.message)}</div>${state.route.type==='workspace'?workspace(snapshot,state.route.id):home(snapshot)}</main>${workspaceId ? captureDock() : ''}</div>`;
+    frame.innerHTML=`<div class="app-shell"><header class="topbar"><div class="workspace-context"><button type="button" id="workspace-picker" data-action="picker" aria-label="Current workspace: ${escape(currentTitle)}" aria-haspopup="dialog"><span>${escape(currentTitle)}</span><span aria-hidden="true">⌄</span></button></div><div class="top-actions">${updateAvailable&&options.openUpdate?'<button type="button" id="workspace-update" data-action="update" aria-label="Update available"><span class="update-full">Update available</span><span class="update-short" aria-hidden="true">Update</span></button>':''}${workspaceId?`<button type="button" data-action="share" data-args="${attr({workspaceId})}" class="share-work icon-button" aria-label="Share this workspace">${shareIcon}</button>`:''}<button type="button" id="workspace-settings" data-action="settings" class="settings-button icon-button" aria-label="Settings" aria-haspopup="dialog">${settingsIcon}<span>Settings</span></button></div></header><main class="main">${state.host.type==='failed'?`<div class="notice">Showing the last saved view. ${button('Retry read','refresh')}</div>`:''}${mutationNotice(state)}${snapshot.network.type==='unavailable'?`<div class="notice">Connections are unavailable. You can still save work on this device. ${button('Check connections','connections',{},'quiet')}</div>`:''}<div class="status-message ${!localMessage&&['Saved here.','Waiting for the local save receipt…','Connected. Your shared work is saved here.'].includes(state.message)?'routine-status':''}" role="status" aria-live="polite">${escape(localMessage||state.message)}</div>${state.route.type==='workspace'?workspace(snapshot,state.route.id):home(snapshot)}</main>${workspaceId ? captureDock() : ''}</div>`;
     frame.inert=Boolean(panel);if(panel)frame.setAttribute('aria-hidden','true');else frame.removeAttribute('aria-hidden');
     if(panel){
-      const titles: Record<Panel,string> = {picker:'Switch workspace',create:'Create workspace',capture:'Capture',connections:'Connections',share:'Share workspace',join:'Join workspaces',appearance:'Appearance',add:'Add to workspace','voice-settings':'OpenAI connection'};
+      const titles: Record<Panel,string> = {settings:'Settings',picker:'Switch workspace',create:'Create workspace',capture:'Capture',connections:'Connections',share:'Share workspace',join:'Join workspaces',appearance:'Appearance',add:'Add to workspace','voice-settings':'OpenAI connection'};
       dialog.setAttribute('aria-label',titles[panel]); dialog.dataset.panel=panel;
-      dialog.innerHTML=`<header class="dialog-heading"><h2>${titles[panel]}</h2><button type="button" data-action="close-dialog" aria-label="Close dialog">×</button></header><div class="dialog-body">${panel==='picker'?picker(snapshot):panel==='create'?createWorkspaceForm():panel==='capture'?renderCommand(snapshot):panel==='appearance'?appearancePanel():panel==='add'?addPanel(snapshot):panel==='voice-settings'?voiceSettings(snapshot):devices(snapshot)}${mutationNotice(state)}<div class="dialog-status" role="status">${escape(localMessage||((panel==='connections'||panel==='share'||panel==='join')?state.message:''))}</div></div>`;
+      dialog.innerHTML=`<header class="dialog-heading"><h2>${titles[panel]}</h2><button type="button" data-action="close-dialog" aria-label="Close dialog">×</button></header><div class="dialog-body">${panel==='settings'?settingsPanel(snapshot):panel==='picker'?picker(snapshot):panel==='create'?createWorkspaceForm():panel==='capture'?renderCommand(snapshot):panel==='appearance'?appearancePanel():panel==='add'?addPanel(snapshot):panel==='voice-settings'?voiceSettings(snapshot):devices(snapshot)}${mutationNotice(state)}<div class="dialog-status" role="status">${escape(localMessage||((panel==='connections'||panel==='share'||panel==='join')?state.message:''))}</div></div>`;
       if(!dialog.open)dialog.showModal(); dialog.scrollTop=dialogScroll;
     }
     const keyField=byId<HTMLInputElement>('connection-key');if(keyField&&connections?.mutation.type==='idle')keyField.value=keyDraft;
@@ -361,7 +372,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
       case'update':if(historyOwned){afterPanelClose=()=>options.openUpdate?.();closePanel()}else{closePanel();options.openUpdate?.()}break;
       case'app-options':if(historyOwned){afterPanelClose=()=>options.openAppOptions?.();closePanel()}else{closePanel();options.openAppOptions?.()}break;
       case'continue-voice':inputMode='voice';openPanel('capture',false);break;
-      case'configure-voice':{const route=session.state.route;if(!keyDraft)connectionWorkspace=command?.address.workspaceId??(route.type==='workspace'?route.id:null);if(connectionWorkspace){openPanel('voice-settings',false);void connections?.refresh(connectionWorkspace);void connections?.refreshPeers(connectionWorkspace)}break;}
+      case'configure-voice':{const route=session.state.route,routeId=route.type==='workspace'?route.id:null;openVoiceSettings(panel==='capture'?command?.address.workspaceId??routeId:routeId);break;}
       case'refresh-connection':if(connectionWorkspace){await connections?.refresh(connectionWorkspace);await connections?.refreshPeers(connectionWorkspace)}break;
       case'retry-connection':await connections?.retry();break;
       case'review-connection':keyDraft='';await connections?.reviewCurrent();break;
@@ -372,6 +383,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
       case'appearance':openPanel('appearance',false);break;
       case'set-theme':if(['system','light','dark'].includes(String(args.value)))appearance.set(args.value as Appearance);break;
       case'add':openPanel('add',false);break;
+      case'settings':openPanel('settings');break;
       case'picker':pickerScope=null;openPanel('picker');break;
       case'create-space':openPanel('create');break;
       case'connections':openPanel('connections');break;
@@ -407,7 +419,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
       case'dictation-note':captureEditor=null;captureRecovery=false;captureAsNote=true;render();break;
       case'new-command':await voice.cancel();command=null;captureEditor=null;captureRecovery=false;captureAsNote=false;render();if(inputMode==='typing')byId('command-text')?.focus();break;
       case'return-command':if(command)await changeRoute(command.address.workspaceId?{type:'workspace',id:command.address.workspaceId}:{type:'home'});break;
-      case'speak':{inputMode='voice';const snapshot=availableSnapshot();if(!snapshot)break;const scope=command?.address.workspaceId??(session.state.route.type==='workspace'?session.state.route.id:null);if(connections&&voiceMethod==='provider'&&(!scope||connections.current(scope)?.status!=='ready')){connectionWorkspace=scope;if(scope){openPanel('voice-settings',false);void connections.refresh(scope)}return;}if(!command){captureEditor=editorTarget();captureRecovery=false;captureAsNote=false;command={text:'',address:currentAddress(snapshot),source:'typed'}}openPanel('capture',capability.type==='system_dictation');await voice.start(command.address,capability);break}
+      case'speak':{inputMode='voice';const snapshot=availableSnapshot();if(!snapshot)break;const scope=command?.address.workspaceId??(session.state.route.type==='workspace'?session.state.route.id:null);if(connections&&voiceMethod==='provider'&&(!scope||connections.current(scope)?.status!=='ready')){openVoiceSettings(scope);return;}if(!command){captureEditor=editorTarget();captureRecovery=false;captureAsNote=false;command={text:'',address:currentAddress(snapshot),source:'typed'}}openPanel('capture',capability.type==='system_dictation');await voice.start(command.address,capability);break}
       case'stop-voice':await voice.stop();break;
       case'cancel-voice':await voice.cancel();break;
       case'scan':if(!scanning){const epoch=++scanEpoch;scanning=true;scanMessage='';render();try{const ticket=await options.scanner.scan();if(epoch===scanEpoch&&!disposed){disclosures.delete('incoming');joinTicket=ticket;scanMessage='Invitation read. Review it, then choose Join.'}}catch{if(epoch===scanEpoch)scanMessage='No invitation was accepted from the camera. You can paste a ticket instead.'}finally{if(epoch===scanEpoch){scanning=false;render()}}}break;

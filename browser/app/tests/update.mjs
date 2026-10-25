@@ -6,7 +6,7 @@ import { chromium } from 'playwright';
 import { startStaticServer } from './static-server.mjs';
 import { generateWorker } from '../scripts/service-worker.mjs';
 
-async function openOptions(page) { await page.getByRole('button',{name:/Current workspace:/}).click(); await page.getByRole('button',{name:/App options/}).click(); }
+async function openOptions(page) { await page.getByRole('button',{name:'Settings',exact:true}).click(); await page.getByRole('button',{name:'Install and storage',exact:true}).click(); }
 
 const root = new URL('../', import.meta.url).pathname;
 const temporary = await mkdtemp(join(tmpdir(), 'workspace-update-'));
@@ -16,12 +16,23 @@ await writeFile(join(dist, 'assets/previous-build.js'), '/* previous build */');
 await generateWorker(dist);
 const server = await startStaticServer(dist);
 const browser = await chromium.launchPersistentContext(join(temporary, 'profile'), { headless: true, permissions: ['microphone'], args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
-const report = { passed: false, assertions: [], scope: 'Real service-worker discovery through online events and visible timers, explicit update and real BrowserHost editing on a headers-free server.', limits: ['Chromium only.', 'No public update or physical iPhone verification.', 'BFCache eligibility is not asserted: PageTransitionEvents exercise the actual application lifecycle handlers.'] };
+const report = { passed: false, assertions: [], scope: 'Real service-worker discovery through online events and visible timers, explicit update and real BrowserHost editing on a headers-free server.', limits: ['Chromium only.', 'Install events and display-mode observations are controlled test inputs; no actual OS installation or Safari-to-Home-Screen storage migration is claimed.', 'No public update or physical iPhone verification.', 'BFCache eligibility is not asserted: PageTransitionEvents exercise the actual application lifecycle handlers.'] };
 try {
   const context = browser;
   // Withhold one real close acknowledgement, after the host has closed its store.
   // This tests UI recovery at its worker boundary without a fake host/store.
   await context.addInitScript(() => {
+    window.installProofCalls = [];
+    window.addEventListener('beforeinstallprompt', event => { if (!event.installProof) { event.preventDefault(); event.stopImmediatePropagation(); } }, { capture: true });
+    window.offerInstallProof = (id, fails = false) => {
+      const event = new Event('beforeinstallprompt', { cancelable: true }); event.installProof = true;
+      event.prompt = async () => { window.installProofCalls.push(id); if (fails) throw new Error('Synthetic install unavailable'); };
+      event.userChoice = Promise.resolve({ outcome: 'dismissed' }); window.dispatchEvent(event); return event.defaultPrevented;
+    };
+    const matchMedia = window.matchMedia.bind(window), installDisplay = new EventTarget(); let standalone = false;
+    Object.defineProperty(installDisplay, 'matches', { get: () => standalone });
+    window.matchMedia = query => query === '(display-mode: standalone)' ? installDisplay : matchMedia(query);
+    window.setInstallDisplayProof = value => { standalone = value; installDisplay.dispatchEvent(new Event('change')); };
     window.updateCheckCalls = 0;
     const originalUpdate = ServiceWorkerRegistration.prototype.update;
     ServiceWorkerRegistration.prototype.update = function(...args) { window.updateCheckCalls++; return Reflect.apply(originalUpdate, this, args); };
@@ -52,6 +63,32 @@ try {
   assert.equal(await page.locator('#workspace-update').count(), 0);
   assert.ok(await page.evaluate(() => window.updateCheckCalls >= 1));
   report.assertions.push('Startup checks automatically; no top-level update button appears without a ready waiting worker.');
+  await openOptions(page);
+  const installPanel = page.getByRole('dialog', { name: 'Install and storage', exact: true });
+  assert.equal(await installPanel.getByRole('button', { name: 'Install on this device', exact: true }).count(), 0);
+  assert.ok((await installPanel.textContent()).includes('Share → Add to Home Screen'));
+  assert.ok((await installPanel.textContent()).includes('Keep your Safari work'));
+  assert.ok((await installPanel.textContent()).includes('pair it from another connected device'));
+  assert.ok((await installPanel.textContent()).includes('does not add desktop control or continuous background operation'));
+  assert.deepEqual(await page.evaluate(() => [window.offerInstallProof('first'), window.offerInstallProof('second')]), [true, true]);
+  assert.equal(await installPanel.getByRole('button', { name: 'Install on this device', exact: true }).count(), 1);
+  assert.deepEqual(await page.evaluate(() => window.installProofCalls), []);
+  await installPanel.getByRole('button', { name: 'Install on this device', exact: true }).click();
+  assert.deepEqual(await page.evaluate(() => window.installProofCalls), ['second']);
+  assert.equal(await installPanel.getByRole('button', { name: 'Install on this device', exact: true }).count(), 0);
+  assert.equal(await page.locator('#installation-state').textContent(), 'Running in a browser tab.');
+  await page.evaluate(() => window.offerInstallProof('failed', true));
+  await installPanel.getByRole('button', { name: 'Install on this device', exact: true }).click();
+  assert.equal(await page.locator('#installation-state').textContent(), 'The browser did not complete installation. Try its install menu.');
+  await page.evaluate(() => { window.offerInstallProof('already-installed'); window.setInstallDisplayProof(true); });
+  assert.equal(await installPanel.getByRole('button', { name: 'Install on this device', exact: true }).count(), 0);
+  assert.ok((await page.locator('#installation-state').textContent()).startsWith('Running in an app window.'));
+  await page.evaluate(() => window.setInstallDisplayProof(false));
+  await installPanel.getByRole('button', { name: 'Close install and storage', exact: true }).click();
+  assert.equal(await page.locator('#workspace-settings').evaluate(element => element === document.activeElement), true);
+  report.assertions.push('Settings opens install/storage guidance; conditional install events are deduplicated, user-triggered, and do not claim extra device powers or move Safari work.');
+  report.assertions.push('Controlled standalone detection hides redundant install actions; dismissal and failure do not falsely claim an app window, and closing returns focus to Settings.');
+
   await page.getByLabel('Workspace name', { exact: true }).fill('Update check');
   await page.getByRole('button', { name: 'Create workspace', exact: true }).click();
   await page.getByRole('button', { name: 'Add to workspace', exact: true }).click();
@@ -88,11 +125,11 @@ try {
   await page.locator('.note-body').waitFor();
   // Browser options outlive the app's five-second observation refresh.
   await openOptions(page);
-  await page.getByRole('button',{name:'Close app options',exact:true}).focus();
+  await page.getByRole('button',{name:'Close install and storage',exact:true}).focus();
   await page.waitForTimeout(5500);
-  assert.equal(await page.getByRole('button',{name:'Close app options',exact:true}).evaluate(el=>el===document.activeElement),true);
+  assert.equal(await page.getByRole('button',{name:'Close install and storage',exact:true}).evaluate(el=>el===document.activeElement),true);
   await page.keyboard.press('Escape');
-  assert.equal(await page.getByRole('button',{name:/Current workspace:/}).evaluate(el=>el===document.activeElement),true);
+  assert.equal(await page.locator('#workspace-settings').evaluate(el=>el===document.activeElement),true);
   // An unfinished workspace name is input too, even after dismissing its dialog.
   await page.getByRole('button',{name:/Current workspace:/}).click();
   await page.getByRole('button',{name:'Create workspace',exact:true}).click();
@@ -109,13 +146,13 @@ try {
   await page.getByRole('button',{name:'Close dialog'}).click();
   report.assertions.push('Options survive polling and restore focus; update preserves unfinished workspace creation.');
   // Private key input and an unconfirmed real worker write must also block update.
-  await page.getByRole('button',{name:/Current workspace:/}).click();await page.getByRole('button',{name:'OpenAI connection',exact:true}).click();
+  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'OpenAI connection',exact:true}).click();
   const syntheticKey='SYNTHETIC_ONLY_UPDATE_RECOVERY_KEY';await page.getByLabel('OpenAI API key',{exact:true}).fill(syntheticKey);await page.getByRole('button',{name:'Close dialog'}).click();
   await page.getByRole('button',{name:'Update available',exact:true}).click();await page.getByRole('button',{name:'Reload with update',exact:true}).click();assert.ok((await page.getByRole('dialog',{name:'Update application'}).textContent()).includes('unfinished edit'));await page.getByRole('button',{name:'Later',exact:true}).click();
-  await page.getByRole('button',{name:/Current workspace:/}).click();await page.getByRole('button',{name:'OpenAI connection',exact:true}).click();assert.equal(await page.getByLabel('OpenAI API key',{exact:true}).inputValue(),syntheticKey);
+  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'OpenAI connection',exact:true}).click();assert.equal(await page.getByLabel('OpenAI API key',{exact:true}).inputValue(),syntheticKey);
   await page.evaluate(()=>{window.failNextConnectionSave=true});await page.getByRole('button',{name:'Save connection',exact:true}).click();await page.getByRole('button',{name:'Retry connection change',exact:true}).waitFor();await page.getByRole('button',{name:'Close dialog'}).click();
   await page.getByRole('button',{name:'Update available',exact:true}).click();await page.getByRole('button',{name:'Reload with update',exact:true}).click();assert.ok((await page.getByRole('dialog',{name:'Update application'}).textContent()).includes('unfinished edit'));await page.getByRole('button',{name:'Later',exact:true}).click();
-  await page.getByRole('button',{name:/Current workspace:/}).click();await page.getByRole('button',{name:'OpenAI connection',exact:true}).click();await page.getByRole('button',{name:'Retry connection change',exact:true}).click();await page.getByRole('button',{name:'Continue to voice'}).waitFor();await page.getByRole('button',{name:'Close dialog'}).click();
+  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'OpenAI connection',exact:true}).click();await page.getByRole('button',{name:'Retry connection change',exact:true}).click();await page.getByRole('button',{name:'Continue to voice'}).waitFor();await page.getByRole('button',{name:'Close dialog'}).click();
   report.assertions.push('Update preserves private key input and blocks an unconfirmed real connection write until its exact retry completes.');
   await page.getByRole('button', { name: 'Speak', exact: true }).click();
   await page.locator('.voice-stage[data-phase="listening"]').waitFor();
@@ -187,6 +224,10 @@ try {
   await page.evaluate(() => { window.dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })); });
   assert.equal(await page.evaluate(() => window.updateCheckCalls), beforeDispose);
   report.assertions.push('An ordinary departure disposes discovery; timers and later events cannot restart it.');
+  await page.evaluate(() => window.offerInstallProof('after-departure'));
+  assert.equal(await page.getByRole('button', { name: 'Install on this device', exact: true }).count(), 0);
+  assert.ok(!(await page.evaluate(() => window.installProofCalls)).includes('after-departure'));
+  report.assertions.push('Departed-page cleanup also removes install event handling and cannot revive an install action.');
   report.passed = true;
 } catch (error) { report.failure = 'Update acceptance failed.'; await mkdir(join(root, 'artifacts'), { recursive: true }); await writeFile(join(root, 'artifacts/update-diagnostics.txt'), String(error.stack)); process.exitCode = 1; }
 finally {
