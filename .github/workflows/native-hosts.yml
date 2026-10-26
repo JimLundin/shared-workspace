@@ -63,7 +63,7 @@ jobs:
       - name: Exercise independent persistent peer processes
         run: python -B native/checks/process_check.py --binary ${{ github.workspace }}/native/target/release/workspace-peer --source native --evidence native/artifacts/linux-process
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: success()
         with:
           name: workspace-linux-cli-${{ github.sha }}
           path: |

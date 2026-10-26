@@ -25,7 +25,7 @@ struct Call {
 enum Method {
     Snapshot,
     Command {
-        command: Command,
+        command: Box<Command>,
     },
     Invite {
         workspace_ids: Vec<String>,
@@ -94,7 +94,7 @@ async fn main() -> Result<()> {
         let result: Result<Value> = async {
             Ok(match call.request {
                 Method::Snapshot => serde_json::to_value(host.snapshot().await?)?,
-                Method::Command { command } => serde_json::to_value(host.command(command).await?)?,
+                Method::Command { command } => serde_json::to_value(host.command(*command).await?)?,
                 Method::Invite {
                     workspace_ids,
                     ttl_seconds,
