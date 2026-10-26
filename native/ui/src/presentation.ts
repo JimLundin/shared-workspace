@@ -1,4 +1,20 @@
 import type { Route, View } from './session.ts';
+export type LayoutPreferences = Readonly<{ navigation: 'shown' | 'hidden'; inspector: 'shown' | 'hidden'; hand: 'right' | 'left' }>;
+const defaultLayout: LayoutPreferences = Object.freeze({navigation:'shown',inspector:'hidden',hand:'right'});
+export function loadLayoutPreferences(): LayoutPreferences {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem('workspace.layout.v1') ?? 'null');
+    if(!value || typeof value !== 'object')return defaultLayout;
+    return Object.freeze({
+      navigation: 'navigation' in value && value.navigation === 'hidden' ? 'hidden' : 'shown',
+      inspector: 'inspector' in value && value.inspector === 'shown' ? 'shown' : 'hidden',
+      hand: 'hand' in value && value.hand === 'left' ? 'left' : 'right',
+    });
+  } catch { return defaultLayout; }
+}
+export function saveLayoutPreferences(value: LayoutPreferences): void {
+  try { localStorage.setItem('workspace.layout.v1',JSON.stringify(value)); } catch { /* Layout stays usable without browser storage. */ }
+}
 /** Only view arrangement is stored here. Shared records and tickets stay out. */
 export type Presentation = Readonly<{ route: Route; views: Readonly<Record<string, View>> }>;
 export function readPresentation(value: string | null): Presentation | null {

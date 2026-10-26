@@ -4,12 +4,17 @@ import { decodeSnapshot, object, string, number } from '../../../native/ui/src/p
 import { ConnectionVault, type SealedConnection } from './connection-vault.ts';
 import { verifyIdentityStorage } from './identity-storage.ts';
 import {
+  MAX_LOCAL_DRAFT_ROWS, MAX_LOCAL_DRAFT_TOTAL_BYTES, decodeLocalDraft, decodeLocalDraftRemoval,
+  listLocalDrafts, prepareLocalDraft, prepareLocalDraftRemoval, restoreLocalDrafts,
+  type LocalDraft, type LocalDraftJournal, type LocalDraftPlan, type LocalDraftReceipt, type LocalDraftRemoval, type LocalDraftState,
+} from './local-drafts.ts';
+import {
   MAX_CONNECTION_RECORDS, activeConnection, connectionError, connectionFailure, connectionPayload, connectionRecords,
   connectionState, mergeConnections, prepareConnection, publicConnection, removeConnection, setConnection, workspaceId,
   type ConnectionReceipt, type ConnectionState, type PublicConnection, type RemoveConnection, type SetConnection, type SignedConnection,
 } from './connections.ts';
 import {
-  batch, bytes, deviceName, fields, hex, json, parse, randomHex, requireThat, scope, signedOperations,
+  batch, bytes, deviceName, fields, hex, json, parse, randomHex, requireThat, requireMeetingWorkSupport, scope, signedOperations,
   type Batch, type Command, type Contact, type DataSnapshot, type ImportReceipt, type PeerRecord,
   type Receipt, type SignedOperation,
 } from './types.ts';
@@ -30,6 +35,7 @@ export class BrowserStore {
   readonly #sealedConnections = new Map<string, SealedConnection>();
   readonly #peers = new Map<string, PeerRecord>();
   readonly #invitations = new Map<string, Invitation>();
+  #localDrafts: LocalDraftState = restoreLocalDrafts([]);
   #queue: Promise<unknown> = Promise.resolve();
   #closed = false;
   #poisoned = false;
@@ -56,7 +62,14 @@ export class BrowserStore {
         CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, payload TEXT NOT NULL) STRICT;
         CREATE TABLE IF NOT EXISTS peers (id TEXT PRIMARY KEY, payload TEXT NOT NULL) STRICT;
         CREATE TABLE IF NOT EXISTS invitations (token_hash TEXT PRIMARY KEY, workspace_ids TEXT NOT NULL, expires_at_ms INTEGER NOT NULL, accepted_peer TEXT) STRICT;
-        CREATE TABLE IF NOT EXISTS connections (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, nonce TEXT NOT NULL, ciphertext TEXT NOT NULL) STRICT;`);
+        CREATE TABLE IF NOT EXISTS connections (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, nonce TEXT NOT NULL, ciphertext TEXT NOT NULL) STRICT;
+        CREATE TABLE IF NOT EXISTS local_drafts (
+          id TEXT PRIMARY KEY,
+          generation INTEGER NOT NULL CHECK (generation >= 0 AND generation <= 9007199254740991),
+          kind TEXT CHECK (kind IN ('editor', 'capture', 'meeting')),
+          payload TEXT,
+          CHECK ((kind IS NULL AND payload IS NULL) OR (kind IS NOT NULL AND payload IS NOT NULL))
+        ) STRICT;`);
       let identity = await (await db.prepare('SELECT seed, name FROM identity WHERE slot = 1')).get();
       const format = await (await db.prepare('SELECT version FROM identity_format WHERE slot = 1')).get();
       requireThat(format === undefined || (identity !== undefined && object(format).version === 1), 'Stored device identity format is invalid; refusing to rotate identity.');
@@ -165,6 +178,10 @@ export class BrowserStore {
         domain.operations(json(selected));
         store.#invitations.set(invitation.token_hash, invitation);
       }
+      const localSize = object(await (await db.prepare('SELECT COUNT(*) AS record_count, COALESCE(SUM(length(CAST(payload AS BLOB))), 0) AS payload_bytes FROM local_drafts')).get());
+      requireThat(number(localSize.record_count) <= MAX_LOCAL_DRAFT_ROWS && number(localSize.payload_bytes) <= MAX_LOCAL_DRAFT_TOTAL_BYTES,
+        'Retained local input exceeds its storage limit.');
+      store.#localDrafts = restoreLocalDrafts(await (await db.prepare('SELECT id,generation,kind,payload FROM local_drafts ORDER BY id')).all());
       return store;
     } catch (error) {
       domain?.free();
@@ -227,6 +244,33 @@ export class BrowserStore {
       const { network: _, peers: __, ...data } = value;
       return data;
     });
+  }
+
+  /** This journal never enters the signed workspace domain or peer exports. */
+  listLocalDrafts(): Promise<LocalDraftJournal> {
+    return this.#run(() => listLocalDrafts(this.#localDrafts));
+  }
+
+  async upsertLocalDraft(value: LocalDraft): Promise<LocalDraftReceipt> {
+    // Capture the immutable envelope before it waits behind another SQL operation.
+    const input = decodeLocalDraft(value);
+    return this.#run(() => this.#writeLocalDraft(prepareLocalDraft(this.#localDrafts, input)));
+  }
+
+  async removeLocalDraft(value: LocalDraftRemoval): Promise<LocalDraftReceipt> {
+    const input = decodeLocalDraftRemoval(value);
+    return this.#run(() => this.#writeLocalDraft(prepareLocalDraftRemoval(this.#localDrafts, input)));
+  }
+
+  async #writeLocalDraft(plan: LocalDraftPlan): Promise<LocalDraftReceipt> {
+    if (plan.type === 'unchanged') return plan.receipt;
+    const row = plan.record;
+    await this.#apply({ batch_id: null, operations: [] }, async () => {
+      await (await this.#db.prepare('INSERT INTO local_drafts(id,generation,kind,payload) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET generation=excluded.generation,kind=excluded.kind,payload=excluded.payload'))
+        .run(row.id, row.generation, row.type === 'retained' ? row.kind : null, row.type === 'retained' ? row.payload : null);
+    });
+    this.#localDrafts = plan.state;
+    return plan.receipt;
   }
 
   #connectionWork<T>(action: () => T | Promise<T>): Promise<T> {
@@ -393,12 +437,15 @@ export class BrowserStore {
     });
   }
 
-  acceptInvite(tokenHash: string, peer: PeerRecord, now: number): Promise<readonly string[]> {
+  acceptInvite(tokenHash: string, peer: PeerRecord, now: number, work: 1 | undefined): Promise<readonly string[]> {
     return this.#run(async () => {
       hex(tokenHash); number(now);
       requireThat(peer.id !== this.id, 'A host cannot enroll itself.');
       const invitation = this.#invitations.get(tokenHash);
       requireThat(invitation, 'Invitation is unknown.');
+      // Refuse an incompatible transfer before consuming the invitation or granting access.
+      const history = signedOperations(parse(this.#domain.export_for(this.id, json(invitation.workspace_ids))), invitation.workspace_ids);
+      requireMeetingWorkSupport(history, work);
       if (invitation.accepted_peer !== null) {
         requireThat(invitation.accepted_peer === peer.id, 'Invitation was already used by another device.');
         // Same authenticated identity can recover a lost acceptance reply after expiry.

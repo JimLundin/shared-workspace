@@ -20,13 +20,15 @@ export type Batch = Readonly<{ batch_id: string | null; operations: readonly Sig
 export type Ticket = Readonly<{ version: 1; inviter: Contact; nonce: string; workspace_ids: readonly string[]; expires_at_ms: number }>;
 export type RequestBody =
   | Readonly<{ type: 'capabilities' }>
-  | Readonly<{ type: 'pair'; nonce: string }>
+  | Readonly<{ type: 'work_capabilities' }>
+  | Readonly<{ type: 'pair'; nonce: string; work?: 1 }>
   | Readonly<{ type: 'connections_summary'; workspace_ids: readonly string[]; fingerprint: string }>
   | Readonly<{ type: 'connections_sync'; workspace_ids: readonly string[]; records: readonly SignedConnection[] }>
   | Readonly<{ type: 'summary'; workspace_ids: readonly string[]; fingerprint: string; contacts: readonly Contact[] }>
-  | Readonly<{ type: 'sync'; workspace_ids: readonly string[]; operations: readonly SignedOperation[]; contacts: readonly Contact[] }>;
+  | Readonly<{ type: 'sync'; workspace_ids: readonly string[]; operations: readonly SignedOperation[]; contacts: readonly Contact[]; work?: 1 }>;
 export type ReplyBody =
   | Readonly<{ type: 'capabilities'; connections: 1 }>
+  | Readonly<{ type: 'work_capabilities'; work: 1 }>
   | Readonly<{ type: 'connections_current'; workspace_ids: readonly string[] }>
   | Readonly<{ type: 'connections_synced'; workspace_ids: readonly string[]; records: readonly SignedConnection[] }>
   | Readonly<{ type: 'connections_needed' }>
@@ -81,6 +83,20 @@ export function signedOperations(value: unknown, selected?: readonly string[]): 
     requireThat(Array.isArray(op.parents), 'Invalid causal parents.');
     return { version: 1, operation: { id: string(op.id), workspace_id, author: string(op.author), parents: op.parents.map(string), action: op.action }, signature: string(signed.signature) };
   });
+}
+
+/** Transfer-local capability: an earlier probe must not authorize a later client. */
+export function workCapability(value: unknown): 1 | undefined {
+  requireThat(value === undefined || value === 1, 'Unsupported meeting work capability.');
+  return value;
+}
+
+export function requireMeetingWorkSupport(operations: readonly SignedOperation[], work: 1 | undefined): void {
+  const includesWork = operations.some(signed => {
+    const type = object(signed.operation.action).type;
+    return type === 'create_work' || type === 'edit_work' || type === 'publish_meeting_materials';
+  });
+  requireThat(!includesWork || work === 1, 'Update Shared Workspace on the other device to synchronize meeting work.');
 }
 export function importReceipt(value: unknown): ImportReceipt {
   const result = fields(value, ['imported', 'already_present']);

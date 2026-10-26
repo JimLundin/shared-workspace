@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium, webkit } from '../../checks/node_modules/playwright/index.mjs';
 import { startStaticServer } from '../../app/tests/static-server.mjs';
+import { addMaterial, currentWorkspace, openSettings, openWorkspacePicker, pageAction, shareWorkspace } from '../../app/tests/ui-controls.mjs';
 
 const engines = { chromium, webkit };
 const args = process.argv.slice(2);
@@ -28,8 +29,34 @@ let joined = false;
 let profiles;
 let profilesRemoved = false;
 let contextsClosed = false;
+let blockedProviderRequests = 0;
+const harnessFiles = {
+  'browser/host-wasm/tools/check-public-join.mjs': new URL(import.meta.url),
+  'browser/app/tests/ui-controls.mjs': new URL('../../app/tests/ui-controls.mjs', import.meta.url),
+  'browser/app/tests/static-server.mjs': new URL('../../app/tests/static-server.mjs', import.meta.url),
+};
+async function harnessHashes() {
+  return Object.fromEntries(await Promise.all(Object.entries(harnessFiles).map(async ([name, path]) => [name, createHash('sha256').update(await readFile(path)).digest('hex')])));
+}
+const initialHarnessHashes = await harnessHashes();
 const transfers = { initial_note: false, joiner_edit: false, inviter_edit: false };
 function record(name) { assertions.push(name); console.log(JSON.stringify({ passed: name })); }
+// Resolve and observe volatile controls in one page evaluation. A Locator's
+// element handle can be detached by a passive render before its evaluation runs.
+async function controlState(page, selectors) {
+  return page.evaluate(selectors => {
+    for (const selector of selectors) {
+      const controls = [...document.querySelectorAll(selector)].filter(element => element instanceof HTMLElement
+        && element.isConnected && element.getClientRects().length > 0 && getComputedStyle(element).visibility === 'visible');
+      if (!controls.length) continue;
+      const control = controls.length === 1 ? controls[0] : null;
+      const bounds = control?.getBoundingClientRect();
+      return { matches: controls.length, focused: control !== null && document.activeElement === control,
+        width: bounds?.width ?? 0, height: bounds?.height ?? 0 };
+    }
+    return { matches: 0, focused: false, width: 0, height: 0 };
+  }, selectors);
+}
 async function hashes(directory, prefix = '') {
   const result = {};
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -55,6 +82,7 @@ async function start(name, engine, mobile) {
   });
   contexts.push(context);
   context.setDefaultTimeout(20_000);
+  await context.route('https://api.openai.com/**', route => { blockedProviderRequests++; return route.abort('blockedbyclient'); });
   const page = context.pages()[0] ?? await context.newPage();
   page.on('websocket', (socket) => {
     const route = { device: name, origin: new URL(socket.url()).origin, created: true, sent_frames: 0, received_frames: 0, failed: false, closed: false };
@@ -72,7 +100,8 @@ async function ready(page, url, device) {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
   await page.waitForFunction(() => {
     const current = document.querySelector('button[aria-label^="Current workspace:"]');
-    return Boolean((current && current.getBoundingClientRect().width && current.getBoundingClientRect().height)
+    const shell = document.querySelector('.app-shell');
+    return Boolean((current && shell?.getBoundingClientRect().width && shell?.getBoundingClientRect().height)
       || document.querySelector('.boot [role="alert"]'));
   }, undefined, { timeout: 80_000 });
   const alert = page.locator('.boot [role="alert"]');
@@ -97,31 +126,37 @@ async function readInvitation(page) {
   return ticket;
 }
 async function navigate(page, title) {
-  await page.getByRole('button', { name: /^Current workspace:/ }).click();
+  await openWorkspacePicker(page);
   const picker = page.getByRole('dialog', { name: 'Switch workspace', exact: true });
   await picker.getByRole('button', { name: title, exact: true }).click();
   await picker.waitFor({ state: 'hidden' });
-  await page.getByRole('button', { name: 'Current workspace: ' + title, exact: true }).waitFor();
+  await currentWorkspace(page, title);
 }
 async function note(page, content) {
-  await page.getByRole('article').getByText(content, { exact: true }).filter({ visible: true }).first().waitFor({ timeout: 45_000 });
+  await page.getByRole('article').locator('.note-body').getByText(content, { exact: true }).filter({ visible: true }).first().waitFor({ timeout: 45_000 });
 }
 async function openNote(page, title) {
   const open = page.getByRole('button', { name: 'Open ' + title, exact: true });
   if (await open.isVisible()) await open.click();
-  await page.getByRole('button', { name: 'Edit', exact: true }).waitFor();
+  await page.locator('.resource-card.reading').getByRole('heading', { name: title, exact: true }).waitFor();
 }
 async function edit(page, content) {
-  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await pageAction(page, 'Edit');
   await page.getByLabel('Content', { exact: true }).fill(content);
   await page.getByRole('button', { name: 'Save note', exact: true }).click();
   await page.getByLabel('Content', { exact: true }).waitFor({ state: 'hidden' });
   await note(page, content);
 }
 async function currentWork(page, title, hiddenTitle) {
-  await page.getByRole('button', { name: 'Current workspace: ' + title, exact: true }).waitFor();
+  await currentWorkspace(page, title);
+  await page.getByRole('dialog').waitFor({ state: 'hidden' });
   assert.equal(await page.getByRole('dialog').count(), 0, 'Ordinary work must not leave a dialog open.');
-  assert.equal(await page.getByRole('navigation', { name: /workspaces/i }).count(), 0, 'Workspace navigation must only appear on request.');
+  const compact = await page.evaluate(() => innerWidth <= 1000 || matchMedia('(pointer:coarse)').matches);
+  assert.equal(await page.locator('#workspace-navigation').isVisible(), !compact, 'Desktop work must retain leading navigation; compact work opens navigation on request.');
+  if (compact) assert(await page.getByRole('button', { name: 'Open navigation', exact: true }).isVisible(), 'Compact work must retain a visible navigation entry.');
+  const primary = page.locator('.capture-dock').getByRole('button', { name: /^(?:Add|All) material$/ });
+  assert.equal(await primary.count(), 1, 'The current-page primary action must retain its accessible name when only its icon is shown.');
+  assert(await primary.isVisible(), 'The named current-page primary action must be visible.');
   assert.equal(await page.getByRole('button', { name: title, exact: true }).count(), 0, 'The workspace option must disappear when its picker closes.');
   if (hiddenTitle) assert.equal(await page.getByRole('button', { name: hiddenTitle, exact: true }).count(), 0, 'Other workspace choices must not persist beside current work.');
   assert.equal(await page.getByText(/\bToolkit\b/).filter({ visible: true }).count(), 0, 'Product surfaces must not show Toolkit branding.');
@@ -135,7 +170,7 @@ async function modalChecks(page, name, checkRefreshFocus = false) {
   const geometry = await modal.evaluate(element => {
     const rect = element.getBoundingClientRect();
     const points = [[1, 1], [innerWidth - 2, 1], [1, innerHeight - 2], [innerWidth - 2, innerHeight - 2]];
-    const background = document.querySelector('button[aria-label^="Current workspace:"]');
+    const background = document.querySelector('#navigation-toggle');
     background?.focus();
     return {
       native_modal: element.tagName === 'DIALOG' && element.matches(':modal'),
@@ -169,28 +204,29 @@ async function modalChecks(page, name, checkRefreshFocus = false) {
     // The production controller refreshes every five seconds. Observe one real
     // refresh period; no clock, controller or host fixture is substituted here.
     await page.waitForTimeout(5500);
-    assert(await close.evaluate(element => document.activeElement === element), 'Periodic refresh must preserve the focused dialog control.');
+    assert((await controlState(page, ['dialog[open] [aria-label="Close dialog"]'])).focused, 'Periodic refresh must preserve the focused dialog control.');
   }
   observations.push({ stage, engine: page.context().browser().browserType().name(), dialog: name, ...geometry, chrome_focus_transitions: chromeFocusTransitions, refresh_focus_checked: checkRefreshFocus });
 }
 async function pickerChecks(page, title) {
-  const trigger = page.getByRole('button', { name: 'Current workspace: ' + title, exact: true });
-  await trigger.click(); await modalChecks(page, 'Switch workspace', true);
+  await currentWorkspace(page, title);
+  const returnSelectors = ['#workspace-navigation .navigation-row[data-action="picker"]', '#navigation-toggle'];
+  await openWorkspacePicker(page); await modalChecks(page, 'Switch workspace', true);
   await page.keyboard.press('Escape');
   await page.getByRole('dialog', { name: 'Switch workspace', exact: true }).waitFor({ state: 'hidden' });
-  assert(await trigger.evaluate(element => document.activeElement === element), 'Escape must restore focus to the workspace control.');
-  await trigger.click();
+  assert((await controlState(page, returnSelectors)).focused, 'Escape must restore focus to the visible workspace-navigation entry.');
+  await openWorkspacePicker(page);
   await page.getByRole('dialog', { name: 'Switch workspace', exact: true }).waitFor();
   await page.goBack();
   await page.getByRole('dialog', { name: 'Switch workspace', exact: true }).waitFor({ state: 'hidden' });
-  assert(await trigger.evaluate(element => document.activeElement === element), 'Back must close the picker and restore focus.');
+  assert((await controlState(page, returnSelectors)).focused, 'Back must close the picker and restore focus.');
   record('Picker is on demand; its top-layer modal covers the viewport, contains focus, and closes with Escape and Back.');
 }
 async function captureChecks(peer, originalTitle) {
   const { page } = peer;
-  const entry = () => page.getByRole('button', { name: 'Type instead', exact: true });
+  const enter = () => pageAction(page, 'Type instead');
   const capture = page.getByRole('dialog', { name: 'Capture', exact: true });
-  await entry().click(); await modalChecks(page, 'Capture');
+  await enter(); await modalChecks(page, 'Capture');
   const field = page.getByLabel('Your words', { exact: true });
   const submit = capture.locator('#run-command');
   const unsupported = 'Open absent acceptance application';
@@ -198,19 +234,19 @@ async function captureChecks(peer, originalTitle) {
   assert(await submit.isDisabled(), 'An unavailable application must not manufacture an executable command.');
   await capture.getByRole('button', { name: 'Close dialog', exact: true }).click();
   await capture.waitFor({ state: 'hidden' });
-  assert(await entry().evaluate(element => document.activeElement === element), 'Closing capture must restore focus to its dock control.');
-  await entry().click(); assert.equal(await field.inputValue(), unsupported, 'Dismissal must preserve captured text.');
+  assert((await controlState(page, ['.capture-dock [aria-label="Page actions"]'])).focused, 'Closing typed capture must restore focus to its visible Page actions entry.');
+  await enter(); assert.equal(await field.inputValue(), unsupported, 'Dismissal must preserve captured text.');
   const body = 'Acceptance capture remains in its original workspace.';
   const command = body;
   await field.fill(command);
   await page.keyboard.press('Escape'); await capture.waitFor({ state: 'hidden' });
-  await page.getByRole('button', { name: /^Current workspace:/ }).click();
+  await openWorkspacePicker(page);
   await page.getByRole('dialog', { name: 'Switch workspace', exact: true }).getByRole('button', { name: 'Create workspace', exact: true }).click();
   const otherTitle = 'Other acceptance work';
   await page.getByLabel('Workspace name', { exact: true }).fill(otherTitle);
   await page.getByRole('dialog', { name: 'Create workspace', exact: true }).getByRole('button', { name: 'Create workspace', exact: true }).click();
   await currentWork(page, otherTitle, originalTitle);
-  await entry().click();
+  await enter();
   assert.equal(await field.inputValue(), command, 'Navigation must retain the addressed draft.');
   assert(await submit.isDisabled(), 'A draft from another workspace must not execute in the current workspace.');
   await capture.getByRole('button', { name: 'Return to ' + originalTitle, exact: true }).click();
@@ -220,13 +256,13 @@ async function captureChecks(peer, originalTitle) {
   await submit.click();
   await capture.waitFor({ state: 'hidden' });
   await currentWork(page, originalTitle, otherTitle);
-  const allWork = page.getByRole('button', { name: /All work/ });
-  if (await allWork.isVisible()) await allWork.click();
+  const allWork = page.locator('.capture-dock').getByRole('button', { name: 'All material', exact: true });
+  if (await page.locator('.resource-card.reading').count()) await allWork.click();
   await note(page, body);
   await navigate(page, otherTitle);
   assert.equal(await page.getByText(body, { exact: true }).filter({ visible: true }).count(), 0, 'The capture must not appear in the workspace visited afterward.');
   await navigate(page, originalTitle);
-  await page.getByRole('button', { name: 'Share this workspace', exact: true }).click();
+  await shareWorkspace(page);
   const sharing = page.getByRole('dialog', { name: 'Share workspace', exact: true });
   assert(await sharing.getByRole('checkbox', { name: originalTitle, exact: true }).isChecked(), 'Sharing must select the current workspace.');
   assert(!await sharing.getByRole('checkbox', { name: otherTitle, exact: true }).isChecked(), 'Sharing must not silently include other workspaces.');
@@ -235,28 +271,26 @@ async function captureChecks(peer, originalTitle) {
   record('Typed capture survives dismissal and workspace changes, executes only at its original address, and sharing retains explicit scope.');
   if (peer.mobile) {
     await page.setViewportSize({ width: 390, height: 460 });
-    await entry().click(); await modalChecks(page, 'Capture');
+    await enter(); await modalChecks(page, 'Capture');
     assert(await field.evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize) >= 16), 'Phone text entry must not trigger small-font input zoom.');
     await field.fill('Remember a draft in a reduced viewport');
     await capture.getByRole('button', { name: 'Close dialog', exact: true }).click();
     await capture.waitFor({ state: 'hidden' });
     await page.setViewportSize({ width: 844, height: 390 });
     await currentWork(page, originalTitle, otherTitle);
-    await entry().click(); await modalChecks(page, 'Capture');
+    await enter(); await modalChecks(page, 'Capture');
     await page.keyboard.press('Escape'); await capture.waitFor({ state: 'hidden' });
     await page.setViewportSize({ width: 390, height: 900 });
     record('Narrow, reduced-height and landscape layouts keep work and capture dialogs reachable; this is not physical keyboard evidence.');
   }
 }
 async function settingsChecks(page, workspaceTitle) {
-  const gear = page.getByRole('button', { name: 'Settings', exact: true });
-  await gear.waitFor();
-  assert.equal(await gear.getAttribute('id'), 'workspace-settings', 'Settings must have its dedicated top-level control.');
-  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const returnSelectors = ['#workspace-settings', '#navigation-toggle'];
+  await pageAction(page, 'Edit');
   const content = page.getByLabel('Content', { exact: true });
   const draft = 'Unsaved draft retained while Settings adapts to the window.';
   await content.fill(draft);
-  await gear.click();
+  await openSettings(page);
   const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
   await settings.getByRole('button', { name: 'Appearance', exact: true }).waitFor();
   assert(await settings.getByRole('button', { name: 'Connections', exact: true }).isVisible());
@@ -266,30 +300,31 @@ async function settingsChecks(page, workspaceTitle) {
     const focusedControl = settings.getByRole('button', { name: 'Appearance', exact: true });
     await focusedControl.focus();
     await page.setViewportSize(size);
-    assert(await focusedControl.evaluate(element => document.activeElement === element), 'Resizing must preserve the active Settings control.');
+    assert((await controlState(page, ['dialog[open][aria-label="Settings"] [aria-label="Appearance"]'])).focused, 'Resizing must preserve the active Settings control.');
     assert.equal(await content.inputValue(), draft, 'Resizing an open Settings dialog must retain the underlying unsaved draft.');
     assert.equal(await page.locator('#workspace-picker').getAttribute('aria-label'), 'Current workspace: ' + workspaceTitle, 'Resizing Settings must preserve workspace context.');
     await modalChecks(page, 'Settings');
-    const bounds = await page.locator('#workspace-settings').boundingBox();
-    assert(bounds && bounds.width >= 44 && bounds.height >= 44, 'The Settings target must remain at least 44 by 44 pixels.');
+    const bounds = await controlState(page, returnSelectors);
+    const minimumTarget = await page.evaluate(() => matchMedia('(pointer:coarse)').matches ? 44 : 32);
+    assert(bounds.matches === 1 && bounds.width >= minimumTarget && bounds.height >= minimumTarget, 'The visible Settings/navigation entry must remain reachable at the size appropriate for its input.');
     observations.push({ stage, engine: page.context().browser().browserType().name(), settings_viewport: size, draft_retained: true, focused_control_retained: true });
   }
   await page.goBack();
   await settings.waitFor({ state: 'hidden' });
-  assert(await gear.evaluate(element => document.activeElement === element), 'Back must close Settings and restore focus to its gear.');
+  assert((await controlState(page, returnSelectors)).focused, 'Back must close Settings and restore focus to its visible navigation entry.');
   assert.equal(await content.inputValue(), draft, 'Closing Settings must retain the unsaved edit.');
-  await gear.click(); await settings.waitFor();
+  await openSettings(page); await settings.waitFor();
   await page.keyboard.press('Escape'); await settings.waitFor({ state: 'hidden' });
-  assert(await gear.evaluate(element => document.activeElement === element), 'Escape must restore focus to the Settings gear.');
+  assert((await controlState(page, returnSelectors)).focused, 'Escape must restore focus to the visible Settings/navigation entry.');
   await page.getByRole('button', { name: 'Discard local edit', exact: true }).click();
   await content.waitFor({ state: 'hidden' });
-  await page.getByRole('button', { name: /^Current workspace:/ }).click();
+  await openWorkspacePicker(page);
   const picker = page.getByRole('dialog', { name: 'Switch workspace', exact: true });
   assert.equal(await picker.getByRole('button', { name: 'Appearance', exact: true }).count(), 0, 'Workspace switching must not mix in device settings.');
   await picker.getByRole('button', { name: 'Close dialog', exact: true }).click();
   await picker.waitFor({ state: 'hidden' });
   await page.setViewportSize({ width: 390, height: 900 });
-  record('Dedicated Settings covers the viewport, restores Back/Escape focus, and retains an unsaved draft across 1024/540/390-pixel windows.');
+  record('Settings opens from navigation, restores Back/Escape focus to a visible entry, and retains an unsaved draft across 1024/540/390-pixel windows.');
 }
 try {
   assert(engines[inviterEngine] && engines[joinerEngine], 'Choose chromium or webkit for each participant.');
@@ -307,24 +342,23 @@ try {
   await inviter.page.getByLabel('Workspace name', { exact: true }).fill(title);
   await inviter.page.getByRole('button', { name: 'Create workspace', exact: true }).click();
   await currentWork(inviter.page, title);
-  record('Fresh startup provides Create and Join; created work opens without a mode choice or persistent workspace navigation.');
+  record('Fresh startup provides Create and Join; work opens with leading desktop navigation and on-demand compact navigation.');
   stage = 'create-note';
   const initialContent = 'Public smoke: initial note retained.';
   const joinerContent = 'Public smoke: revision from the joining device.';
   const inviterContent = 'Public smoke: revision returned by the inviting device.';
-  await inviter.page.getByRole('button', { name: 'Add to workspace', exact: true }).click();
-  await inviter.page.getByRole('dialog', { name: 'Add to workspace', exact: true }).locator('[data-action="new-note"]').click();
+  await addMaterial(inviter.page);
+  await inviter.page.getByRole('dialog', { name: 'Add to workspace', exact: true }).getByRole('button', { name: /^Note / }).click();
   const noteTitle = 'Public smoke note';
   await inviter.page.getByLabel('Title', { exact: true }).fill(noteTitle);
   await inviter.page.getByLabel('Content', { exact: true }).fill(initialContent);
   await inviter.page.getByRole('button', { name: 'Save note', exact: true }).click();
   await inviter.page.getByLabel('Content', { exact: true }).waitFor({ state: 'hidden' });
   await note(inviter.page, initialContent);
-  await inviter.page.getByRole('button', { name: 'Open ' + noteTitle, exact: true }).click();
-  await inviter.page.getByRole('button', { name: 'Edit', exact: true }).waitFor();
+  await openNote(inviter.page, noteTitle);
   await pickerChecks(inviter.page, title);
   stage = 'create-invitation';
-  await inviter.page.getByRole('button', { name: 'Share this workspace' }).click();
+  await shareWorkspace(inviter.page);
   await modalChecks(inviter.page, 'Share workspace');
   assert(await inviter.page.getByRole('dialog', { name: 'Share workspace', exact: true }).getByRole('checkbox', { name: title, exact: true }).isChecked(), 'Share must explicitly select the intended workspace.');
   await inviter.page.getByRole('button', { name: 'Create invitation', exact: true }).click();
@@ -346,14 +380,14 @@ try {
   await joiner.page.getByLabel('Invitation to join', { exact: true }).waitFor({ state: 'attached' });
   const loadedInvitation = await joiner.page.getByLabel('Invitation to join', { exact: true }).inputValue();
   assert(loadedInvitation === ticket || loadedInvitation === encoded, 'Displayed invitation must retain the same token');
-  assert.equal(await joiner.page.getByRole('button', { name: 'Current workspace: ' + title, exact: true }).count(), 0, 'Opening an invitation must not automatically join.');
+  assert.equal(await joiner.page.getByRole('button', { name: 'Current workspace: ' + title, exact: true, includeHidden: true }).count(), 0, 'Opening an invitation must not automatically join.');
   observations.push({ stage, ticket_preserved: true, inviter_visible: await inviter.page.evaluate(() => document.visibilityState) });
   stage = 'join-selected-workspaces';
   const started = Date.now();
   assert(await inviter.page.evaluate(() => document.visibilityState === 'visible'), 'The inviting page must stay visible during Join.');
   await joiner.page.getByRole('button', { name: 'Join selected workspaces', exact: true }).click();
   try {
-    await joiner.page.getByRole('button', { name: 'Current workspace: ' + title, exact: true }).waitFor({ timeout: 45_000 });
+    await joiner.page.getByRole('button', { name: 'Current workspace: ' + title, exact: true, includeHidden: true }).waitFor({ state: 'attached', timeout: 45_000 });
     await joiner.page.getByRole('dialog', { name: 'Join workspaces', exact: true }).waitFor({ state: 'hidden' });
     joined = true;
   } finally {
@@ -390,6 +424,7 @@ try {
   record('Reload resumes the current workspace and retained note, ready for direct reading and editing.');
   stage = 'settings-and-draft-resize';
   await settingsChecks(joiner.page, title);
+  assert.equal(blockedProviderRequests, 0, 'These public UI checks must not request provider execution.');
   if (dist) assert.deepEqual(await hashes(resolve(dist)), servedAssets, 'Served build files must remain unchanged during acceptance.');
   observations.push({ stage: 'complete', joined, ...transfers });
 } catch (error) {
@@ -406,10 +441,15 @@ try {
   try { if (server) { await server.close(); serverClosed = true; } }
   catch { serverClosed = false; }
   if (!contextsClosed || !profilesRemoved || !serverClosed) failure ??= { stage: 'cleanup', message: 'Temporary browser cleanup did not complete.' };
+  const finalHarnessHashes = await harnessHashes();
+  const harnessUnchanged = JSON.stringify(initialHarnessHashes) === JSON.stringify(finalHarnessHashes);
+  if (!harnessUnchanged) failure ??= { stage: 'cleanup', message: 'Acceptance harness sources changed during this run.' };
   const report = {
     passed: !failure, target: (() => { try { const url = new URL(target); return url.origin + url.pathname; } catch { return '[invalid target]'; } })(), timestamp: new Date().toISOString(), observations,
     joined, transfers, assertions, join_status: joinStatus, relay_routes: routes,
-    harness_sha256: createHash('sha256').update(await readFile(new URL(import.meta.url))).digest('hex'),
+    harness_sha256: finalHarnessHashes['browser/host-wasm/tools/check-public-join.mjs'],
+    harness_hashes: initialHarnessHashes, final_harness_hashes: finalHarnessHashes, harness_unchanged: harnessUnchanged,
+    blocked_provider_requests: blockedProviderRequests,
     ...(servedAssets ? { served_assets: servedAssets } : {}),
     cleanup: { contexts_closed: contextsClosed, profiles_removed: profilesRemoved, static_server_closed: serverClosed },
     scope: 'Served production UI, separate browser engines and fresh temporary persistent profiles, real Iroh pairing and bidirectional note edits, current-work/modal/capture journeys; Linux WebKit with resized viewports is not physical iPhone touch, keyboard, or microphone evidence. No screenshots, traces, profiles, databases, seeds, or invitation values are exported.',

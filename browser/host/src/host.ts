@@ -1,8 +1,12 @@
 import { decodeInvite, decodeReceipt, decodeSnapshot, decodeSync, decodeJoinStage, object, string, type JoinStage } from '../../../native/ui/src/protocol.ts';
 import type { Command, HostOptions, Invite, Receipt, Snapshot, SyncReport } from './types.ts';
 import { decodeConnectionPeers, decodeConnectionReceipt, decodeConnectionState, type ConnectionPeer, type ConnectionReceipt, type ConnectionState, type SetConnection, type RemoveConnection, type Transcription } from './connections.ts';
+import { decodeMeetingRequest, decodePreparedMeeting, type MeetingRequest, type PreparedMeeting } from '../../../native/ui/src/meeting-preparation.ts';
+import { decodeLocalDraftJournal, decodeLocalDraftReceipt, type LocalDraft, type LocalDraftRemoval, type LocalDraftJournal, type LocalDraftReceipt } from './local-drafts.ts';
 export type { Command, HostOptions, Invite, Receipt, Snapshot, SyncReport } from './types.ts';
 export type { ConnectionPeer, ConnectionReceipt, ConnectionState, SetConnection, RemoveConnection, Transcription } from './connections.ts';
+export type { MeetingRequest, PreparedMeeting } from '../../../native/ui/src/meeting-preparation.ts';
+export type { LocalDraft, LocalDraftRemoval, LocalDraftJournal, LocalDraftReceipt } from './local-drafts.ts';
 
 type Pending = Readonly<{ resolve: (value: unknown) => void; reject: (reason: unknown) => void; progress?: (stage: JoinStage) => void }>;
 
@@ -84,6 +88,27 @@ export class BrowserHost {
   async connectionPeers(workspaceId: string): Promise<readonly ConnectionPeer[]> { return decodeConnectionPeers(await this.#call('connection_peers', workspaceId)); }
   async setConnection(input: SetConnection): Promise<ConnectionReceipt> { return decodeConnectionReceipt(await this.#call('set_connection', input)); }
   async removeConnection(input: RemoveConnection): Promise<ConnectionReceipt> { return decodeConnectionReceipt(await this.#call('remove_connection', input)); }
+  async listLocalDrafts(): Promise<LocalDraftJournal> { return decodeLocalDraftJournal(await this.#call('list_local_drafts')); }
+  async upsertLocalDraft(input: LocalDraft): Promise<LocalDraftReceipt> { return decodeLocalDraftReceipt(await this.#call('upsert_local_draft', input)); }
+  async removeLocalDraft(input: LocalDraftRemoval): Promise<LocalDraftReceipt> { return decodeLocalDraftReceipt(await this.#call('remove_local_draft', input)); }
+  async prepareMeeting(value: MeetingRequest, signal?: AbortSignal): Promise<PreparedMeeting> {
+    if (this.#closed) throw new Error('Browser host is closed.');
+    if (signal?.aborted) throw new Error('Preparation was cancelled.');
+    const input = decodeMeetingRequest(value), id = crypto.randomUUID();
+    const cancel = () => {
+      this.#pending.get(id)?.reject(new Error('Preparation was cancelled.'));
+      this.#pending.delete(id);
+      if (!this.#closed) this.#worker.postMessage({ id: crypto.randomUUID(), method: 'cancel_preparation', value: id });
+    };
+    signal?.addEventListener('abort', cancel, { once: true });
+    try {
+      return decodePreparedMeeting(await new Promise<unknown>((resolve, reject) => {
+        this.#pending.set(id, { resolve, reject });
+        try { this.#worker.postMessage({ id, method: 'prepare_meeting', value: input }); }
+        catch { this.#pending.delete(id); reject(new Error('The preparation could not reach the workspace host.')); }
+      }));
+    } finally { signal?.removeEventListener('abort', cancel); }
+  }
   async transcribe(input: Transcription, signal?: AbortSignal): Promise<string> {
     if (this.#closed) throw new Error('Browser host is closed.');
     if (signal?.aborted) throw new Error('Transcription was cancelled.');

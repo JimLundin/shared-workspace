@@ -4,15 +4,23 @@ on:
   push:
     paths:
       - 'browser/**'
-      - 'native/core/src/model.rs'
+      - 'native/core/src/**'
+      - 'native/core/tests/**'
+      - 'native/core/scripts/**'
       - 'native/core/Cargo.toml'
+      - 'native/Cargo.toml'
+      - 'native/Cargo.lock'
       - 'native/ui/**'
       - '.github/workflows/browser.yml'
   pull_request:
     paths:
       - 'browser/**'
-      - 'native/core/src/model.rs'
+      - 'native/core/src/**'
+      - 'native/core/tests/**'
+      - 'native/core/scripts/**'
       - 'native/core/Cargo.toml'
+      - 'native/Cargo.toml'
+      - 'native/Cargo.lock'
       - 'native/ui/**'
       - '.github/workflows/browser.yml'
   workflow_dispatch:
@@ -38,6 +46,8 @@ jobs:
       CI: 'true'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -58,8 +68,10 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             browser/host-wasm/target
-          key: browser-wasm-${{ runner.os }}-${{ hashFiles('browser/host-wasm/Cargo.lock') }}
-          restore-keys: browser-wasm-${{ runner.os }}-
+          key: browser-work-${{ runner.os }}-${{ hashFiles('browser/host-wasm/Cargo.lock', 'native/Cargo.lock') }}
+          restore-keys: |
+            browser-work-${{ runner.os }}-
+            browser-wasm-${{ runner.os }}-
       - name: Install WebAssembly build tools
         run: |
           sudo apt-get update -qq
@@ -71,6 +83,10 @@ jobs:
           cargo test --manifest-path browser/host-wasm/Cargo.toml --locked --lib
           RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo clippy --manifest-path browser/host-wasm/Cargo.toml --locked --target wasm32-unknown-unknown -- -D warnings
           bash browser/host-wasm/build.sh
+      - name: Check native work publication and provenance
+        run: cargo test --manifest-path native/Cargo.toml --locked -p workspace-core --test work --test surfaces
+      - name: Detect native work authority and evidence regressions
+        run: python3 native/core/scripts/work-mutations.py --report browser/checks/evidence/ci-core-work-mutations.json
       - name: Install pinned web dependencies
         run: |
           npm --prefix native/ui ci --ignore-scripts
@@ -95,9 +111,18 @@ jobs:
       - name: Detect credential and recording regressions
         run: |
           node browser/host/tests/mutate-connections.mjs --report browser/checks/evidence/ci-connection-mutations.json
+          node native/ui/scripts/check-mutations.mjs browser/checks/evidence/ci-ui-session-mutations.json
           node browser/app/tests/provider-voice-mutations.mjs
           cp /tmp/provider-voice-mutation-evidence.json browser/checks/evidence/ci-provider-voice-mutations.json
           cp /tmp/provider-voice-capture-chromium-evidence.json browser/checks/evidence/ci-provider-voice-capture.json
+      - name: Detect work preparation and recovery regressions
+        run: |
+          node browser/host/tests/meeting-generation.mutations.mjs browser/checks/evidence/ci-meeting-generation-mutations.json
+          node native/ui/scripts/work-mutations.mjs browser/checks/evidence/ci-work-controller-mutations.json
+      - name: Continue meeting work across real browser peers
+        run: node browser/checks/work-acceptance.mjs --evidence browser/checks/evidence/ci-work-continuity
+      - name: Preserve compatibility with the previous browser host
+        run: node browser/checks/work-compatibility.mjs --target-cache "$HOST_WASM_TARGET_DIR" --evidence browser/checks/evidence/ci-work-compatibility
       - name: Exercise real persistent browser peers
         run: node browser/checks/check.mjs --evidence browser/checks/evidence/ci-acceptance
       - name: Verify credential migration and workspace-scoped exchange

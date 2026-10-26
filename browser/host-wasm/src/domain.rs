@@ -781,7 +781,7 @@ fn command_matches(command: &Command, action: &Action) -> bool {
                 ..
             },
         ) => ar == br && aw == bw,
-        _ => false,
+        _ => model::work_command_matches(command, action),
     }
 }
 
@@ -1276,5 +1276,54 @@ mod tests {
         .unwrap();
         assert!(repeat["batch_id"].is_null());
         assert!(repeat["operations"].as_array().unwrap().is_empty());
+    }
+    #[test]
+    fn meeting_publication_is_invisible_until_commit_and_reopens_with_exact_request() {
+        let mut owner = domain(1);
+        let source =
+            json!({"workspace_id":"work","resource_id":"transcript","revision_id":"source"});
+        let cite = json!({"source":source,"quote":"Alice agreed to send the brief."});
+        for request in [
+            workspace("work"),
+            json!({"type":"create_resource","operation_id":"source","workspace_id":"work","resource_id":"transcript","title":"Transcript","body":"Alice agreed to send the brief."}),
+            json!({"type":"create_work","operation_id":"request","workspace_id":"work","resource_id":"meeting","title":"Meeting","outcome":"Prepare follow-up","sources":[source]}),
+            json!({"type":"edit_work","operation_id":"begin","workspace_id":"work","resource_id":"meeting","expected_heads":["request"],"change":{"type":"begin_preparation","run_id":"run","started_at_ms":1234}}),
+        ] {
+            let batch = prepare(&mut owner, request);
+            commit(&mut owner, &batch);
+        }
+        let publish = json!({"type":"publish_meeting_materials","operation_id":"publish","workspace_id":"work","resource_id":"meeting","expected_heads":["begin"],"run_id":"run","notes":{"resource_id":"notes","title":"Notes","body":"The brief will be sent.","citations":[cite]},"actions":[],"follow_up":{"resource_id":"follow-up","title":"Unsent follow-up","body":"Please send the brief.","citations":[cite]}});
+        let before = snapshot(&owner);
+        let pending = prepare(&mut owner, publish.clone());
+        assert_eq!(pending["operations"].as_array().unwrap().len(), 1);
+        assert_eq!(snapshot(&owner), before, "PREMATURE_PUBLICATION");
+        commit(&mut owner, &pending);
+        let after = snapshot(&owner);
+        assert_eq!(after.operation_count, before.operation_count + 1);
+        assert_eq!(
+            after.resources.len(),
+            before.resources.len() + 2,
+            "PARTIAL_PUBLICATION"
+        );
+        let requests = owner.state.requests.values().cloned().collect::<Vec<_>>();
+        let mut reopened = Domain::new(
+            &hex::encode([1; 32]),
+            "Test device",
+            &serde_json::to_string(&owner.state.operations).unwrap(),
+            &serde_json::to_string(&requests).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(snapshot(&reopened), after);
+        assert_eq!(
+            prepare(&mut reopened, publish.clone())["receipt"]["replayed"],
+            true
+        );
+        let mut changed = publish;
+        changed["follow_up"]["body"] = json!("Different result, same identity");
+        assert_eq!(
+            prepare(&mut reopened, changed)["receipt"]["type"],
+            "rejected"
+        );
+        assert_eq!(snapshot(&reopened), after);
     }
 }

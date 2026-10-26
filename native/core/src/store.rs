@@ -734,6 +734,6 @@ fn command_matches(command: &Command, action: &Action) -> bool {
                 ..
             },
         ) => ar == br && aw == bw,
-        _ => false,
+        _ => model::work_command_matches(command, action),
     }
 }

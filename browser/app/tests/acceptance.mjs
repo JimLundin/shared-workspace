@@ -5,13 +5,15 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { chromium } from 'playwright';
 import { startStaticServer } from './static-server.mjs';
+import { addMaterial, closePanel, currentWorkspace, openSettings, openWorkspacePicker, pageAction, shareWorkspace } from './ui-controls.mjs';
 
 const directory = new URL('../', import.meta.url).pathname;
 const server = await startStaticServer(join(directory, 'dist'));
 const profiles = await mkdtemp(join(tmpdir(), 'workspace-ui-'));
 const contexts = new Set(); const assertions = []; const diagnostics = []; const secrets = new Set();
+let blockedProviderRequests = 0;
 function scrub(value) { let result = String(value); for (const secret of secrets) result = result.replaceAll(secret, '[invitation redacted]'); return result.replace(/(?:workspace-browser-v1|w2)\.[A-Za-z0-9_-]+/g, '[invitation redacted]'); }
-const report = { passed: false, started_at: new Date().toISOString(), assertions,
+const report = { passed: false, started_at: new Date().toISOString(), assertions, browser_lifetimes: [],
   scope: 'Built production UI with real BrowserHost, Turso OPFS and Iroh peers; headers-free static /shared-workspace/ origin.',
   limits: ['Desktop Chromium with phone viewport; no physical iPhone result.', 'Browser speech adapter tested separately; no microphone recognition claim.', 'No public deployment from this test.'] };
 let stage = 'setup';
@@ -25,6 +27,8 @@ async function eventually(work, label, timeout = 60000) {
 async function start(name, width = 1280, offline = false) {
   const context = await chromium.launchPersistentContext(join(profiles, name), { headless: true, viewport: { width, height: 900 }, offline });
   contexts.add(context); context.setDefaultTimeout(20000);
+  report.browser_lifetimes.push({ profile: name, engine: 'chromium', version: context.browser().version(), viewport: { width, height: 900 }, offline });
+  await context.route('https://api.openai.com/**', route => { blockedProviderRequests++; return route.abort('blockedbyclient'); });
   const page = context.pages()[0];
   page.on('pageerror', error => diagnostics.push({ stage, error: error.message.slice(0, 250) }));
   page.on('console', message => { if (message.type() === 'error') diagnostics.push({ stage, error: message.text().slice(0, 250) }); });
@@ -36,15 +40,14 @@ async function ready(page, path = server.url) {
   assert.equal(await page.evaluate(() => crossOriginIsolated), true);
 }
 async function nav(page, title) {
-  if(await page.locator('dialog[open]').count())await page.getByRole('button',{name:'Close dialog',exact:true}).click();
-  await page.getByRole('button',{name:/Current workspace:/}).click();
-  try {await page.getByRole('dialog').getByRole('button',{name:title,exact:true}).click();}
+  await openWorkspacePicker(page);
+  try {await page.getByRole('dialog').getByRole('button',{name:title,exact:true}).click();await page.locator('dialog[open]').waitFor({state:'hidden'});await currentWorkspace(page,title);}
   catch(error){diagnostics.push({stage,ui:await page.evaluate(()=>({history:history.state,dialogs:Array.from(document.querySelectorAll('dialog')).map(el=>({name:el.getAttribute('aria-label'),open:el.open})),buttons:Array.from(document.querySelectorAll('button')).map(el=>({text:el.textContent,action:el.dataset.action}))}))});throw error}
 }
 
 async function edit(page, body) {
   await focus(page);
-  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await pageAction(page, 'Edit');
   await page.getByLabel('Content', { exact: true }).fill(body);
   await page.getByRole('button', { name: 'Save note', exact: true }).click();
   await eventually(() => page.locator('.editor').count().then(count => count === 0), 'Save did not return a receipt.');
@@ -62,8 +65,8 @@ try {
   const desktopIdentity = await identity(desktop.page); assert.ok(desktopIdentity);
   await desktop.page.getByLabel('Workspace name', { exact: true }).fill('Launch work');
   await desktop.page.getByRole('button', { name: 'Create workspace', exact: true }).click();
-  await desktop.page.getByRole('button', { name: 'Current workspace: Launch work', exact: true }).waitFor();
-  await desktop.page.getByRole('button', { name: 'Add to workspace', exact: true }).click();
+  await currentWorkspace(desktop.page, 'Launch work');
+  await addMaterial(desktop.page);
   await desktop.page.getByRole('dialog').getByRole('button', { name: /^Note / }).click();
   await desktop.page.getByLabel('Title', { exact: true }).fill('Launch brief');
   await desktop.page.getByLabel('Content', { exact: true }).fill('The launch starts with three pilot teams.');
@@ -72,12 +75,12 @@ try {
   record('Workspace and note created through UI receive real durable host receipts.');
   await mkdir(join(directory, 'artifacts'), { recursive: true });
   await desktop.page.screenshot({ path: join(directory, 'artifacts/desktop.png') });
-  await desktop.page.getByRole('button',{name:'Settings',exact:true}).click();await desktop.page.getByRole('button',{name:'Appearance',exact:true}).click();await desktop.page.getByRole('button',{name:'Dark',exact:true}).click();
+  await openSettings(desktop.page);await desktop.page.getByRole('button',{name:'Appearance',exact:true}).click();await desktop.page.getByRole('button',{name:'Dark',exact:true}).click();
   await desktop.page.emulateMedia({colorScheme:'dark'});await desktop.page.emulateMedia({colorScheme:'light'});assert.equal(await desktop.page.locator('html').getAttribute('data-theme'),'dark');
   await desktop.page.getByRole('button',{name:'Light',exact:true}).click();await desktop.page.emulateMedia({colorScheme:'dark'});assert.equal(await desktop.page.locator('html').getAttribute('data-theme'),'light');await desktop.page.getByRole('button',{name:'Close dialog'}).click();
   record('Production startup theme observer cannot override explicit Light or Dark after an OS preference change.');
   step('pairing');
-  await desktop.page.getByRole('button', { name: 'Share this workspace' }).click();
+  await shareWorkspace(desktop.page);
   await desktop.page.getByRole('button', { name: 'Create invitation', exact: true }).click();
   await desktop.page.getByLabel('Pairing ticket', { exact: true }).waitFor({ state: 'attached', timeout: 60000 });
   assert.equal(await desktop.page.getByLabel('Pairing ticket', { exact: true }).isVisible(), false);
@@ -101,7 +104,8 @@ try {
     observer.observe(document.getElementById('app'), { childList: true, subtree: true });
   });
   await phone.page.getByRole('button', { name: 'Join selected workspaces', exact: true }).click();
-  await phone.page.getByRole('button', { name: 'Current workspace: Launch work', exact: true }).waitFor({ timeout: 90000 });
+  await phone.page.getByRole('button', { name: 'Current workspace: Launch work', exact: true, includeHidden: true }).waitFor({ state: 'attached', timeout: 90000 });
+  await phone.page.locator('dialog[open]').waitFor({ state: 'hidden' });
   assert.equal(await phone.page.locator('dialog[open]').count(),0);
   const stages = await phone.page.evaluate(() => window.observedJoinLabels);
   for (const label of ['Checking invitation', 'Connecting this device', 'Contacting the inviting device', 'Saving work on this device']) assert.ok(stages.includes(label));
@@ -114,29 +118,31 @@ try {
   await edit(desktop.page, 'Desktop revision returned.'); await note(phone.page, 'Desktop revision returned.');
   record('Notes edited from each production UI converge across isolated real browser hosts.');
   // A command keeps its captured address even after opening another workspace.
-  await phone.page.getByRole('button',{name:/Current workspace:/}).click();
+  await openWorkspacePicker(phone.page);
   await phone.page.getByRole('button',{name:'Create workspace',exact:true}).click();
   await phone.page.getByLabel('Workspace name',{exact:true}).fill('Private');
   await phone.page.getByRole('button',{name:'Create workspace',exact:true}).click();
   await phone.page.getByRole('dialog').waitFor({state:'hidden'});
-  await phone.page.getByRole('button',{name:'Current workspace: Private',exact:true}).waitFor();
+  await currentWorkspace(phone.page,'Private');
   await nav(phone.page,'Launch work');
-  await phone.page.getByRole('button', { name: 'Type instead', exact: true }).click();
+  await pageAction(phone.page, 'Type instead');
   await phone.page.getByLabel('Your words', { exact: true }).fill('Remember a separate task');
-  await phone.page.getByRole('button',{name:'Close dialog'}).click();
+  await closePanel(phone.page);
   await nav(phone.page,'Private');
   await phone.page.getByRole('button',{name:'Review capture',exact:true}).click();
   assert.equal(await phone.page.locator('#run-command').isDisabled(), true);
   await phone.page.getByRole('button', { name: 'Return to Launch work' }).click();
   assert.equal(await phone.page.locator('#run-command').isDisabled(), false);
   await phone.page.getByRole('button', { name: 'New capture' }).click();
-  await phone.page.getByRole('button',{name:'Close dialog'}).click();
+  await closePanel(phone.page);
   const width = await phone.page.evaluate(() => ({ viewport: innerWidth, content: document.documentElement.scrollWidth }));
   assert.ok(width.content <= width.viewport);
+  assert.equal(await phone.page.locator('#workspace-navigation').isVisible(), false);
+  assert.equal(await phone.page.getByRole('button', { name: 'Open navigation', exact: true }).isVisible(), true);
   await phone.page.screenshot({ path: join(directory, 'artifacts/phone.png') });
-  record('Phone material fits viewport, picker is on demand, and capture keeps its original workspace across navigation.');
+  record('Phone material fits viewport, navigation opens on demand, and capture keeps its original workspace across navigation.');
   step('stale-editor');
-  await phone.page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await focus(phone.page); await pageAction(phone.page, 'Edit');
   await phone.page.getByLabel('Content', { exact: true }).fill('Unsaved phone edit.');
   await edit(desktop.page, 'Concurrent desktop edit.');
   await phone.page.getByRole('heading', { name: 'Edit note', exact: true }).click();
@@ -164,6 +170,7 @@ try {
   assert.ok(!js.some(source => /plugin:workspace-voice|__TAURI_INTERNALS__|plugin:barcode-scanner/.test(source)));
   record('Production browser bundle contains no native bridge or native speech/scanner calls.');
   report.asset_hash = createHash('sha256').update(await readFile(join(directory, 'dist/sw.js'))).digest('hex');
+  assert.equal(blockedProviderRequests, 0, 'These UI checks must not request provider execution.');
   report.passed = true;
 } catch (error) {
   report.failure = { stage, message: 'An acceptance expectation failed. Redacted diagnostics are in ignored local artifacts.' };
@@ -172,6 +179,7 @@ try {
 } finally {
   await Promise.all([...contexts].map(context => context.close())); await server.close();
   report.finished_at = new Date().toISOString();
+  report.blocked_provider_requests = blockedProviderRequests;
   await mkdir(join(directory, 'evidence'), { recursive: true }); await mkdir(join(directory, 'artifacts'), { recursive: true });
   await writeFile(join(directory, 'evidence/production-ui.json'), JSON.stringify(report, null, 2) + '\n');
   await writeFile(join(directory, 'artifacts/diagnostics.json'), scrub(JSON.stringify(diagnostics, null, 2)) + '\n');

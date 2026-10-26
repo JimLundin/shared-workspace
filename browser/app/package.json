@@ -8,7 +8,7 @@
     "check": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
     "test": "node --experimental-strip-types --test src/*.test.ts",
-    "test:built": "node tests/acceptance.mjs && node tests/update.mjs",
+    "test:built": "node tests/acceptance.mjs && node tests/update.mjs && node tests/meeting.mjs",
     "test:update-mutations": "node tests/update-discovery-mutations.mjs evidence/update-discovery-mutations.json"
   },
   "dependencies": {

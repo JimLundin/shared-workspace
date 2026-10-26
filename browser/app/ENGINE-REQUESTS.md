@@ -3,6 +3,12 @@
 25 October 2026. These requests define follow-up contracts for the engine owner.
 They are not capabilities claimed by the current UI or changes to its Host protocol.
 
+26 October implementation status: [meeting work continuity](../../docs/work-continuity-implementation.md)
+now implements section 2's private host-retained input and exact submission recovery,
+plus a bounded work/preparation/result contract. Its follow-up is editable unsent
+shared text. Portable execution capabilities, remote external actions and an
+Outlook item remain follow-up work; the requests below retain their original scope.
+
 The implemented surface uses the real host for workspaces, notes, references,
 version reconciliation and scoped peer joining. Native and browser clients share
 presentation. The phone displays the same material with one reading/editing context;
@@ -33,10 +39,11 @@ spaces. `saving_workspace` must never be treated as the committed receipt.
 
 ## 2. Retain addressed drafts through suspension and restart
 
-The UI keeps editor drafts and capture in memory, including original workspace,
+The original experiment kept editor drafts and capture in memory, including original workspace,
 resource and observed revision heads. Navigating does not retarget them; cancelling
 speech fences late results. Browser update is blocked while input is unfinished.
-Tab termination can still lose unsubmitted input.
+That original limitation is addressed by the local-only Turso journal described in
+the implementation guide above.
 
 Request: host-owned draft operations with immutable captured address, draft identity,
 text, source and observed heads. A save receipt identifies the committed operation
@@ -127,9 +134,9 @@ Typed application/document/code revisions now share the host's history, conflict
 and receipt contract. Office and VS Code open externally; CodeMirror is an actual
 editor in the workspace. Sharing a URL does not share the vendor account or files.
 
-The next engine integration still needs host-retained drafts (including an editor
-field and selection), portable resource capabilities and correlated execution from
-section 4. Supply a causally ordered settings observation or read-after-write token
+Host-retained editor fields, selection and exact pending submissions are now
+implemented. The next engine integration still needs portable resource capabilities
+and correlated external execution from section 4. Supply a causally ordered settings observation or read-after-write token
 if connection receipts and subscriptions can arrive out of order. The UI currently
 fences pending reads and retains an observation completed after a write began; it
 cannot infer ancestry between two opaque connection versions. An acknowledged

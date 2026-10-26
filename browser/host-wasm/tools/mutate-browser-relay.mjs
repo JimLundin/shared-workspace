@@ -15,6 +15,7 @@ const crate=resolve(scratch,'browser/host-wasm');await mkdir(crate,{recursive:tr
 for(const path of ['Cargo.toml','Cargo.lock','build.sh','src'])await cp(resolve(root,path),resolve(crate,path),{recursive:true});
 await mkdir(resolve(scratch,'native/core/src'),{recursive:true});
 await cp(resolve(repository,'native/core/src/model.rs'),resolve(scratch,'native/core/src/model.rs'));
+await cp(resolve(repository,'native/core/src/work.rs'),resolve(scratch,'native/core/src/work.rs'));
 await writeFile(resolve(crate,'src/browser_relay.rs'),source.replace(marker,"domain.strip_suffix('\\0')"));
 for(const path of ['Cargo.toml','Cargo.lock']){
   const text=await readFile(resolve(crate,path),'utf8');

@@ -1,6 +1,6 @@
 import type { Host } from './host.ts';
 import type { Command, Invite, Receipt, Resource, Snapshot, JoinStage, Surface } from './protocol.ts';
-import { isNoteRevision } from './protocol.ts';
+import { isNoteRevision, isSurfaceRevision, decodeSurface } from './protocol.ts';
 import { advanceJoinStage, joinFailure } from './pairing.ts';
 export type Route = Readonly<{ type: 'home' }> | Readonly<{ type: 'devices' }> | Readonly<{ type: 'workspace'; id: string }>;
 export type View = Readonly<{ mode: 'canvas' | 'focus' | 'overview'; focused: string | null; closed: readonly string[]; order: readonly string[] }>;
@@ -15,6 +15,39 @@ export const snapshotOf = (s: State): Snapshot | null => s.host.type === 'ready'
 export const sameHeads = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
 export const titleOf = (r: Resource): string => r.heads.length === 1 ? r.heads[0]!.title : `${r.heads.length} versions to review`;
 export function errorText(error: unknown): string { return error instanceof Error ? error.message : typeof error === 'string' ? error : 'The native host did not return a usable result.'; }
+export function decodeEditor(value:unknown):Editor|null {
+  if(value===null)return null;
+  if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Invalid retained editor');
+  const e=value as Record<string,unknown>;
+  const text=(value:unknown):string=>{if(typeof value!=='string'||new TextEncoder().encode(value).length>4_000_000)throw new Error('Invalid retained editor text');return value;};
+  const id=(value:unknown):string=>{if(typeof value!=='string'||!/^[a-zA-Z0-9_-]{1,128}$/.test(value))throw new Error('Invalid retained editor identity');return value;};
+  const existing=e.type==='existing'||e.type==='surface_existing',surface=e.type==='surface_new'||e.type==='surface_existing';
+  if(!['new','existing','surface_new','surface_existing'].includes(String(e.type)))throw new Error('Unknown retained editor');
+  const fields=['draftId','type','workspaceId','title',surface?'surface':'body',...(existing?['resourceId','baseHeads']:[])];
+  if(Object.keys(e).length!==fields.length||fields.some(field=>!(field in e)))throw new Error('Invalid retained editor fields');
+  const base={draftId:id(e.draftId),workspaceId:id(e.workspaceId),title:text(e.title)};
+  // Drafts can contain incomplete URLs or oversized code. Validate the shape without
+  // imposing publication rules; saving still validates the final external command.
+  const draftSurface=():Surface=>{
+    if(!e.surface||typeof e.surface!=='object'||Array.isArray(e.surface))throw new Error('Invalid retained surface');
+    const raw=e.surface as Record<string,unknown>,code=raw.type==='code_document';
+    const content=text(raw[code?'text':'url']);
+    const checked=decodeSurface({...raw,...(code?{text:''}:{url:'https://example.invalid/'})});
+    return checked.type==='code_document'?Object.freeze({...checked,text:content}):Object.freeze({...checked,url:content});
+  };
+  if(e.type==='new')return Object.freeze({...base,type:'new',body:text(e.body)});
+  if(e.type==='surface_new')return Object.freeze({...base,type:'surface_new',surface:draftSurface()});
+  if(!Array.isArray(e.baseHeads)||!e.baseHeads.length||e.baseHeads.length>1024)throw new Error('Invalid retained editor revisions');
+  const baseHeads=Object.freeze(e.baseHeads.map(id));if(new Set(baseHeads).size!==baseHeads.length)throw new Error('Duplicate retained editor revision');
+  const addressed={...base,resourceId:id(e.resourceId),baseHeads};
+  return e.type==='existing'?Object.freeze({...addressed,type:'existing',body:text(e.body)}):Object.freeze({...addressed,type:'surface_existing',surface:draftSurface()});
+}
+export function splitTranscript(text:string,limit=128*1024):readonly string[] {
+  if(!Number.isSafeInteger(limit)||limit<4)throw new Error('A text chunk must accommodate a Unicode code point.');
+  const parts:string[]=[];let part='',bytes=0;
+  for(const char of text){const point=char.codePointAt(0)!;const size=point<128?1:point<2048?2:point<65536?3:4;if(bytes+size>limit){parts.push(part);part='';bytes=0;}part+=char;bytes+=size;}
+  if(part)parts.push(part);return Object.freeze(parts);
+}
 
 function commandMatchesEditor(command:Command,editor:Editor):boolean {
   if(command.type==='create_resource'&&editor.type==='new')return command.workspace_id===editor.workspaceId&&command.title===editor.title.trim()&&command.body===editor.body;
@@ -32,6 +65,7 @@ export class WorkspaceSession {
   private refreshEpoch = 0;
   private pairingEpoch = 0;
   private disposed = false;
+  private retention:((editor:Editor|null,pending:Command|null)=>Promise<void>)|null=null;
   state: State;
   constructor(host: Host, id: () => string = () => crypto.randomUUID()) {
     this.host = host; this.id = id;
@@ -42,6 +76,8 @@ export class WorkspaceSession {
   dispose(): void { this.disposed = true; this.refreshEpoch++; this.pairingEpoch++; this.listeners.clear(); }
   snapshot(): Snapshot | null { return snapshotOf(this.state); }
   view(): View { return this.state.route.type === 'workspace' ? this.state.views[this.state.route.id] ?? emptyView() : emptyView(); }
+  retainWith(retain:(editor:Editor|null,pending:Command|null)=>Promise<void>):void {this.retention=retain;}
+  restoreInput(editor:Editor|null,pending:Command|null):void {if(this.state.editor||this.state.mutation.type!=='idle')return;this.update({editor,mutation:pending?{type:'uncertain',command:pending,message:'An earlier save needs its exact receipt checked.'}:{type:'idle'}});}
   restoreViews(views: Readonly<Record<string, View>>): void { this.update({ views }); }
   navigate(route: Route): void {
     if (route.type === 'workspace' && !this.snapshot()?.workspaces.some(w => w.id === route.id)) { this.update({ message: 'This workspace is unavailable on this device.' }); return; }
@@ -63,6 +99,7 @@ export class WorkspaceSession {
     const resource = this.snapshot()?.resources.find(r => r.id === resourceId); if (!resource) return;
     const revision = revisionId ? resource.heads.find(h => h.id === revisionId) : resource.heads.length === 1 ? resource.heads[0] : undefined;
     if (!revision) { this.update({ message: 'Open the note and choose a version to begin reconciliation.' }); return; }
+    if(!isNoteRevision(revision)&&!isSurfaceRevision(revision)){this.update({message:'Open this work to change its outcome or actions.'});return;}
     this.update({ editor: isNoteRevision(revision) ? { draftId:this.id(), type: 'existing', workspaceId: resource.workspace_id, resourceId, baseHeads: resource.heads.map(h => h.id), title: revision.title, body: revision.body } : {draftId:this.id(),type:'surface_existing',workspaceId:resource.workspace_id,resourceId,baseHeads:resource.heads.map(h=>h.id),title:revision.title,surface:revision.surface} });
   }
   updateEditor(field: 'title' | 'body', value: string): void { if (this.state.editor && (field==='title'||this.state.editor.type==='new'||this.state.editor.type==='existing')) this.update({ editor: { ...this.state.editor, [field]: value } }, 'ui', false); }
@@ -80,12 +117,14 @@ export class WorkspaceSession {
     const route: Route = currentRoute.type === 'workspace' && !snapshot.workspaces.some(w => w.id === currentRoute.id) ? { type: 'home' } : currentRoute;
     this.update({ host: { type: 'ready', snapshot }, route }, 'data');
   }
-  async submit(command: Command): Promise<void> {
-    if (!this.host.available || this.disposed || this.state.mutation.type === 'sending') return;
-    if (this.state.mutation.type === 'uncertain' && this.state.mutation.command !== command) { this.update({ message: 'Retry the unconfirmed change before starting another save.' }); return; }
+  async submit(command: Command): Promise<Receipt | null> {
+    if (!this.host.available || this.disposed || this.state.mutation.type === 'sending') return null;
+    if (this.state.mutation.type === 'uncertain' && this.state.mutation.command !== command) { this.update({ message: 'Retry the unconfirmed change before starting another save.' }); return null; }
     this.refreshEpoch++; this.update({ mutation: { type: 'sending', command }, message: 'Waiting for the local save receipt…' }, 'operation');
+    let sent=false;
     try {
-      const receipt = await this.host.command(command); if (this.disposed) return;
+      await this.retention?.(this.state.editor,command);if(this.disposed)return null;sent=true;
+      const receipt = await this.host.command(command); if (this.disposed) return null;
       if (receipt.type === 'applied') {
         if (receipt.operation_id !== command.operation_id || receipt.workspace_id !== command.workspace_id) throw new Error('The native receipt does not identify this change.');
         const editor = this.state.editor;
@@ -101,7 +140,9 @@ export class WorkspaceSession {
         if ((command.type !== 'edit_resource' && command.type !== 'edit_surface') || receipt.resource_id !== command.resource_id || !sameHeads(receipt.expected_heads, command.expected_heads)) throw new Error('The native conflict does not identify this edit.');
         this.update({ mutation: { type: 'conflict', command, receipt }, message: 'Another revision arrived. Your edit is retained; compare before saving again.' }, 'operation'); await this.refresh();
       }
-    } catch (error) { this.update({ mutation: { type: 'uncertain', command, message: errorText(error) }, message: 'No save receipt was received. Retry this same change to learn its outcome.' }, 'operation'); }
+      // A correlated receipt remains evidence even when a newer UI read is pending.
+      return receipt;
+    } catch (error) { this.update(sent?{ mutation: { type: 'uncertain', command, message: errorText(error) }, message: 'No save receipt was received. Retry this same change to learn its outcome.' }:{mutation:{type:'idle'},message:'The input could not be retained on this device. No request was sent; keep this window open and try again.'}, 'operation'); return null; }
   }
   async retry(): Promise<void> { const pending = this.state.mutation; if (pending.type === 'uncertain') await this.submit(pending.command); }
   async createWorkspace(title: string): Promise<void> { if (!title.trim()) return; await this.submit({ type: 'create_workspace', operation_id: this.id(), workspace_id: this.id(), title: title.trim() }); }
@@ -115,6 +156,7 @@ export class WorkspaceSession {
   }
   async useVersion(resourceId: string, revisionId: string, reviewedHeads: readonly string[]): Promise<void> {
     const resource = this.snapshot()?.resources.find(r => r.id === resourceId), revision = resource?.heads.find(h => h.id === revisionId); if (!resource || !revision) return;
+    if(!isNoteRevision(revision)&&!isSurfaceRevision(revision)){this.update({message:'Review this work through its outcome and action controls.'});return;}
     await this.submit(isNoteRevision(revision)?{ type: 'edit_resource', operation_id: this.id(), workspace_id: resource.workspace_id, resource_id: resource.id, expected_heads: [...reviewedHeads], title: revision.title, body: revision.body }:{type:'edit_surface',operation_id:this.id(),workspace_id:resource.workspace_id,resource_id:resource.id,expected_heads:[...reviewedHeads],title:revision.title,surface:revision.surface});
   }
   async placement(type: 'add_placement' | 'remove_placement', workspaceId: string, resourceId: string, sourceWorkspaceId: string): Promise<void> { await this.submit({ type, operation_id: this.id(), workspace_id: workspaceId, resource_id: resourceId, source_workspace_id: sourceWorkspaceId }); }

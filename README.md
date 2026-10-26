@@ -5,9 +5,11 @@ An experiment in work that continues across applications and devices. Open the
 and keep a local copy of the workspaces they share with you.
 
 A piece of work is the product's organizing idea: an outcome, its material,
-decisions and actual results. The current application implements shared material,
-dictation and editing. Cross-application agent execution is the
-[next proof](docs/work-continuity-thesis.md), not an implemented browser capability.
+decisions and actual results. The first [work-continuity workflow](docs/work-continuity-implementation.md)
+turns pinned meeting transcripts into cited notes, assigned actions and editable
+unsent follow-up text. The request, results and human corrections retain their
+identity between devices. Cross-application execution remains the
+[next proof](docs/work-continuity-thesis.md).
 
 ## Use the app
 
@@ -21,6 +23,9 @@ Safari's; keep the existing copy until the installed host has received your work
 See [installation capabilities and limits](docs/pwa-installation.md).
 
 The interface prioritizes voice, with editable transcripts and optional typing.
+Choose **+ → Meeting work** to import recordings' transcripts, dictate an outcome,
+and explicitly prepare its material using the workspace's OpenAI connection.
+Private drafts and unknown saves recover locally after reopening the browser.
 Workspace notes and code documents retain revisions and conflicts. CodeMirror is
 an actual embedded editor; Office and VS Code links open externally under the
 [application surface contract](docs/shared-application-surfaces.md).
@@ -61,7 +66,7 @@ The earlier combined repository remains available in Git history.
 Start with [browser build instructions](browser/app/README.md). The
 [browser workflow](.github/workflows/browser.yml) defines the pinned build tools
 and checks. Tests cover real Turso storage, Iroh exchange, scope, conflicts,
-provider capture, UI behavior and update recovery; targeted mutations check that
+provider capture/preparation, work continuity, UI behavior and update recovery; targeted mutations check that
 behavioral assertions detect regressions.
 
 The user has confirmed iPhone joining and browser speech. New layout, installed-app

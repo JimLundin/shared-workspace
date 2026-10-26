@@ -69,7 +69,7 @@ async function files(directory) {
 }
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 async function fingerprints() {
-  const paths = ['browser/checks/pairing-diagnose.mjs', 'browser/checks/page.ts', 'browser/checks/index.html', 'browser/checks/package-lock.json', 'browser/host/package-lock.json', 'browser/host-wasm/Cargo.lock', 'native/core/src/model.rs', 'native/ui/src/protocol.ts', 'browser/app/src/invitation.ts', 'browser/app/package-lock.json'];
+  const paths = ['browser/checks/pairing-diagnose.mjs', 'browser/checks/page.ts', 'browser/checks/index.html', 'browser/checks/package-lock.json', 'browser/host/package-lock.json', 'browser/host-wasm/Cargo.lock', 'native/core/src/model.rs', 'native/core/src/work.rs', 'native/ui/src/protocol.ts', 'native/ui/src/meeting-preparation.ts', 'browser/app/src/invitation.ts', 'browser/app/package-lock.json'];
   for (const root of ['browser/host/src', 'browser/host-wasm/src', 'browser/host-wasm/pkg']) for (const path of await files(join(source, root))) paths.push(relative(source, path));
   return Object.fromEntries(await Promise.all(paths.sort().map(async path => [path, hash(await readFile(join(source, path)))])));
 }

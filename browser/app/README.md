@@ -2,8 +2,10 @@
 
 The browser application mounts the existing responsive canvas UI against the
 real `BrowserHost`. Opening the website creates/opens this browser's durable
-host. There are no sample workspaces or fallback stores. Desktop shows a canvas;
-phone widths show a work list with a focused note. View arrangement stays local.
+host. There are no sample workspaces or fallback stores. Desktop has leading
+work/material navigation, an attached page toolbar and optional inspector;
+touch devices keep navigation separate from lower page/voice actions. View
+arrangement and preferred hand stay local.
 
 Create a workspace and note, then choose **Share this workspace**. Select the
 workspaces to include: your phone can share several, while a guest can receive
@@ -23,15 +25,18 @@ Connecting devices grants only the workspaces selected in that invitation.
 It does not automatically share other or newly created workspaces. The inviting
 peer must be reachable.
 
-Speech is optional and starts explicitly. The browser's provider may process
-audio online. The transcript remains editable and requires **Run command**.
-Typing/paste and keyboard dictation remain available. Supported commands are
-bounded workspace/note/navigation actions; general agent execution is not wired.
-See [engine requests](BACKEND-REQUESTS.md) for the next real workflow slice.
+Voice is the primary input and starts explicitly. Workspace OpenAI dictation
+uploads audio when recording stops; the transcript remains editable before use.
+Optional typing and device speech remain available. **+ → Meeting work** retains
+a requested outcome and pinned transcripts, then explicitly prepares cited notes,
+actions and unsent follow-up text. Owner/deadline corrections support the same
+captured dictation flow. See [the implemented workflow](../../docs/work-continuity-implementation.md)
+for recovery, bounds and what is shared. General application execution still needs
+the contracts in [engine requests](BACKEND-REQUESTS.md).
 
 ## Build and check
 
-From the repository root, with Node 24, Rust and wasm-bindgen installed:
+From the repository root, with Node 24, Rust, wasm-bindgen and OpenSSL installed:
 
 ```sh
 bash browser/host-wasm/build.sh
@@ -41,7 +46,7 @@ npm --prefix browser/app ci
 npm --prefix browser/app run check
 npm --prefix browser/app test
 npm --prefix browser/app run build
-npm --prefix browser/app exec -- playwright install chromium
+npm --prefix browser/app exec -- playwright install chromium webkit
 npm --prefix browser/app run test:built
 ```
 
@@ -83,15 +88,35 @@ of unsaved input, explicit reload and old-client asset recovery. It also withhol
 one real host close acknowledgement and verifies the explicit reload/recovery
 action reopens committed work.
 
-Results: [production UI](evidence/production-ui.json), [updates](evidence/update.json).
-Seven unit tests cover invitation handling and browser speech lifecycle, including
+A third gate runs the served meeting workflow once each in Chromium and WebKit:
+import three transcripts, create work, explicitly prepare cited material, open
+a pinned citation, correct an owner/deadline, edit the unsent follow-up, then
+reopen the persistent profile in a new offline browser process. It uses the real
+renderer, worker, Turso journal and Work commands. A local TLS provider fixture
+accepts only a synthetic credential and returns a controlled Responses payload;
+it forwards no provider traffic and rejects other proxy destinations. This
+transport fixture also captures service-worker/worker requests that WebKit can
+send outside Playwright route interception. Its temporary certificate exception
+is confined to isolated test profiles, which are removed with the certificate
+and closed servers. Reports retain provider acceptance/rejection counts and
+SHA-256 hashes of every emitted asset before and after the checks.
+
+Run this gate separately with `node browser/app/tests/meeting.mjs`. Optional
+`--dist`, `--evidence` and `--engine chromium|webkit|both` select the artifact,
+report directory and engines; the default and `test:built` run both engines.
+
+Results: [production UI](evidence/production-ui.json), [updates](evidence/update.json),
+[meeting workflow](evidence/meeting.json).
+Unit tests cover invitation handling and browser speech lifecycle, including
 cancelled-session fencing and captured addresses. Native UI regressions remain
 in `native/ui`. Screenshots and redacted diagnostics are local ignored artifacts.
 The icon PNGs are checked in; `node scripts/icons.mjs` regenerates them from SVG.
 
-These checks establish Chromium behavior, including phone-sized layouts. They
-do not establish physical iPhone safe areas, software keyboard, microphone
-recognition, Safari compatibility or Home Screen identity continuity. Browser
+These checks establish Chromium behavior and the meeting workflow in WebKit,
+including phone-sized layouts. The controlled meeting response does not establish
+authenticated provider behavior or live model quality. They do not establish
+physical iPhone safe areas, software keyboard, microphone recognition, complete
+Safari compatibility or Home Screen identity continuity. Browser
 storage persistence is conditional, peer activity resumes in the foreground,
 and no continuous phone background execution is promised. Installation is
 optional; supported browsers offer an install action. Safari users use Share →

@@ -1,8 +1,43 @@
 use serde::{Deserialize, Serialize};
+#[path = "work.rs"]
+mod work;
+pub(crate) use work::command_matches as work_command_matches;
+// Native exports remain public even when this model is embedded privately in WASM.
+#[allow(unused_imports)]
+pub use work::{
+    ActionDeadline, ActionOwner, EvidenceBasis, EvidenceCitation, MeetingAction, MeetingFollowUp,
+    MeetingMaterial, MeetingMaterialInput, MeetingWorkState, SourceReference, Work, WorkChange,
+    WorkRevision, WorkRun,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    CreateWork {
+        operation_id: String,
+        workspace_id: String,
+        resource_id: String,
+        title: String,
+        outcome: String,
+        sources: Vec<SourceReference>,
+    },
+    EditWork {
+        operation_id: String,
+        workspace_id: String,
+        resource_id: String,
+        expected_heads: Vec<String>,
+        change: WorkChange,
+    },
+    PublishMeetingMaterials {
+        operation_id: String,
+        workspace_id: String,
+        resource_id: String,
+        expected_heads: Vec<String>,
+        run_id: String,
+        notes: MeetingMaterialInput,
+        actions: Vec<MeetingAction>,
+        follow_up: MeetingMaterialInput,
+    },
     CreateWorkspace {
         operation_id: String,
         workspace_id: String,
@@ -141,6 +176,7 @@ pub struct SurfaceRevision {
 pub enum Revision {
     Note(NoteRevision),
     Surface(SurfaceRevision),
+    Work(Box<WorkRevision>),
 }
 
 impl Revision {
@@ -148,6 +184,7 @@ impl Revision {
         match self {
             Self::Note(revision) => &revision.id,
             Self::Surface(revision) => &revision.id,
+            Self::Work(revision) => &revision.id,
         }
     }
 
@@ -155,6 +192,7 @@ impl Revision {
         match self {
             Self::Note(revision) => &revision.parents,
             Self::Surface(revision) => &revision.parents,
+            Self::Work(revision) => &revision.parents,
         }
     }
 }
@@ -198,6 +236,25 @@ pub struct Snapshot {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
+    CreateWork {
+        resource_id: String,
+        title: String,
+        outcome: String,
+        sources: Vec<SourceReference>,
+    },
+    EditWork {
+        resource_id: String,
+        expected_heads: Vec<String>,
+        change: WorkChange,
+    },
+    PublishMeetingMaterials {
+        resource_id: String,
+        expected_heads: Vec<String>,
+        run_id: String,
+        notes: MeetingMaterialInput,
+        actions: Vec<MeetingAction>,
+        follow_up: MeetingMaterialInput,
+    },
     CreateWorkspace {
         title: String,
     },
@@ -366,6 +423,21 @@ fn validate_list(values: &[String], maximum: usize) -> Result<()> {
 impl Command {
     pub fn identity(&self) -> (&str, &str) {
         match self {
+            Self::CreateWork {
+                operation_id,
+                workspace_id,
+                ..
+            }
+            | Self::EditWork {
+                operation_id,
+                workspace_id,
+                ..
+            }
+            | Self::PublishMeetingMaterials {
+                operation_id,
+                workspace_id,
+                ..
+            } => (operation_id, workspace_id),
             Self::CreateWorkspace {
                 operation_id,
                 workspace_id,
@@ -408,6 +480,35 @@ impl Command {
         validate_id(id)?;
         validate_id(workspace)?;
         match self {
+            Self::CreateWork {
+                resource_id,
+                title,
+                outcome,
+                sources,
+                ..
+            } => work::validate_create(resource_id, title, outcome, sources)?,
+            Self::EditWork {
+                resource_id,
+                expected_heads,
+                change,
+                ..
+            } => work::validate_change(resource_id, expected_heads, change)?,
+            Self::PublishMeetingMaterials {
+                resource_id,
+                expected_heads,
+                run_id,
+                notes,
+                actions,
+                follow_up,
+                ..
+            } => work::validate_publish(
+                resource_id,
+                expected_heads,
+                run_id,
+                notes,
+                actions,
+                follow_up,
+            )?,
             Self::CreateWorkspace { title, .. } => validate_title(title)?,
             Self::CreateResource {
                 resource_id,
@@ -517,6 +618,32 @@ impl SignedOperation {
             &Signature::from_bytes(&signature_bytes),
         )?;
         match &op.action {
+            Action::CreateWork {
+                resource_id,
+                title,
+                outcome,
+                sources,
+            } => work::validate_create(resource_id, title, outcome, sources)?,
+            Action::EditWork {
+                resource_id,
+                expected_heads,
+                change,
+            } => work::validate_change(resource_id, expected_heads, change)?,
+            Action::PublishMeetingMaterials {
+                resource_id,
+                expected_heads,
+                run_id,
+                notes,
+                actions,
+                follow_up,
+            } => work::validate_publish(
+                resource_id,
+                expected_heads,
+                run_id,
+                notes,
+                actions,
+                follow_up,
+            )?,
             Action::CreateWorkspace { title } => validate_title(title)?,
             Action::GrantMember { member_id } => {
                 validate_device(member_id)?;
@@ -655,13 +782,12 @@ fn edit_resource(
     let same_kind = resource.history.iter().all(|known| {
         matches!(
             (known, &revision),
-            (Revision::Note(_), Revision::Note(_)) | (Revision::Surface(_), Revision::Surface(_))
+            (Revision::Note(_), Revision::Note(_))
+                | (Revision::Surface(_), Revision::Surface(_))
+                | (Revision::Work(_), Revision::Work(_))
         )
     });
-    ensure!(
-        same_kind,
-        "an edit cannot change a note into an application surface or the reverse"
-    );
+    ensure!(same_kind, "an edit cannot change the resource payload kind");
     let known = resource
         .history
         .iter()
@@ -762,6 +888,22 @@ pub(crate) fn project(operations: &[SignedOperation]) -> Result<Projection> {
             }
         }
         match &op.action {
+            Action::CreateWork {
+                resource_id,
+                title,
+                outcome,
+                sources,
+            } => {
+                work::project_create(&mut result, op, &past, resource_id, title, outcome, sources)?
+            }
+            Action::EditWork {
+                resource_id,
+                expected_heads,
+                change,
+            } => work::project_edit(&mut result, op, &past, resource_id, expected_heads, change)?,
+            Action::PublishMeetingMaterials { .. } => {
+                work::project_publish(&mut result, op, &past)?
+            }
             Action::CreateWorkspace { .. } => {}
             Action::GrantMember { member_id } => {
                 let members = &mut result.workspaces.get_mut(&op.workspace_id).unwrap().members;
@@ -874,7 +1016,18 @@ pub(crate) fn project(operations: &[SignedOperation]) -> Result<Projection> {
                 for add in observed_adds {
                     ensure!(past.contains(add), "removal names an unobserved placement");
                     let matches = match &done[add].operation.action {
-                        Action::CreateResource {
+                        Action::PublishMeetingMaterials {
+                            notes, follow_up, ..
+                        } => {
+                            (resource_id == &notes.resource_id
+                                || resource_id == &follow_up.resource_id)
+                                && source_workspace_id == &op.workspace_id
+                        }
+                        Action::CreateWork {
+                            resource_id: origin,
+                            ..
+                        }
+                        | Action::CreateResource {
                             resource_id: origin,
                             ..
                         }
@@ -984,6 +1137,18 @@ pub(crate) fn prepare_command(
         }
     };
     let action = match command {
+        Command::CreateWork {
+            resource_id,
+            title,
+            outcome,
+            sources,
+            ..
+        } => Action::CreateWork {
+            resource_id: resource_id.clone(),
+            title: title.clone(),
+            outcome: outcome.clone(),
+            sources: sources.clone(),
+        },
         Command::CreateWorkspace { title, .. } => Action::CreateWorkspace {
             title: title.clone(),
         },
@@ -1007,7 +1172,17 @@ pub(crate) fn prepare_command(
             title: title.clone(),
             surface: surface.clone(),
         },
-        Command::EditResource {
+        Command::EditWork {
+            resource_id,
+            expected_heads,
+            ..
+        }
+        | Command::PublishMeetingMaterials {
+            resource_id,
+            expected_heads,
+            ..
+        }
+        | Command::EditResource {
             resource_id,
             expected_heads,
             ..
@@ -1036,6 +1211,25 @@ pub(crate) fn prepare_command(
                 }));
             }
             match command {
+                Command::EditWork { change, .. } => Action::EditWork {
+                    resource_id: resource_id.clone(),
+                    expected_heads: expected,
+                    change: change.clone(),
+                },
+                Command::PublishMeetingMaterials {
+                    run_id,
+                    notes,
+                    actions,
+                    follow_up,
+                    ..
+                } => Action::PublishMeetingMaterials {
+                    resource_id: resource_id.clone(),
+                    expected_heads: expected,
+                    run_id: run_id.clone(),
+                    notes: notes.clone(),
+                    actions: actions.clone(),
+                    follow_up: follow_up.clone(),
+                },
                 Command::EditResource { title, body, .. } => Action::EditResource {
                     resource_id: resource_id.clone(),
                     expected_heads: expected,

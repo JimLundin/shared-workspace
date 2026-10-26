@@ -21,6 +21,7 @@ for (const path of ['Cargo.toml', 'Cargo.lock', 'build.sh', 'src', 'tools/check-
 }
 await mkdir(resolve(scratch, 'native/core/src'), { recursive: true });
 await cp(resolve(root, '../../native/core/src/model.rs'), resolve(scratch, 'native/core/src/model.rs'));
+await cp(resolve(root, '../../native/core/src/work.rs'), resolve(scratch, 'native/core/src/work.rs'));
 await mkdir(resolve(scratch, 'browser/iroh-probe'), { recursive: true });
 await symlink(resolve(root, '../iroh-probe/node_modules'), resolve(scratch, 'browser/iroh-probe/node_modules'), 'dir');
 await writeFile(resolve(crate, 'src/transport.rs'), source.replace(site,

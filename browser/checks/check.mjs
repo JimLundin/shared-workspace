@@ -58,7 +58,7 @@ async function files(directory) {
 }
 async function sourceHashes() {
   const roots = ['browser/host/src', 'browser/host-wasm/src', 'browser/host-wasm/pkg'];
-  const paths = ['browser/host/package.json', 'browser/host/package-lock.json', 'browser/host-wasm/Cargo.toml', 'browser/host-wasm/Cargo.lock', 'browser/host-wasm/build.sh', 'native/core/src/model.rs', 'native/ui/src/protocol.ts'];
+  const paths = ['browser/host/package.json', 'browser/host/package-lock.json', 'browser/host-wasm/Cargo.toml', 'browser/host-wasm/Cargo.lock', 'browser/host-wasm/build.sh', 'native/core/src/model.rs', 'native/core/src/work.rs', 'native/ui/src/protocol.ts', 'native/ui/src/meeting-preparation.ts'];
   for (const root of roots) for (const path of await files(join(source, root))) paths.push(relative(source, path));
   for (const entry of ['check.mjs', 'page.ts', 'index.html', 'package.json', 'package-lock.json', 'tsconfig.json']) paths.push(relative(source, join(checks, entry)));
   return Object.fromEntries(await Promise.all(paths.sort().map(async (path) => [path, hash(await readFile(join(source, path)))])));

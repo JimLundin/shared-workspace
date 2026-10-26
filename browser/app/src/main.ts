@@ -41,11 +41,17 @@ function openBrowserDialog(panel: HTMLDialogElement): void {
   panel.showModal();
 }
 function closeBrowserDialog(): void { if (modalHistory) { modalHistory = false; history.back(); } }
+function focusAppControl(selectors: readonly string[]): void {
+  for (const selector of selectors) {
+    const control = root.querySelector<HTMLButtonElement>(selector);
+    if (control && !control.disabled && control.getClientRects().length > 0) { control.focus(); return; }
+  }
+}
 window.addEventListener('popstate', () => { if(updateClosing){history.pushState({...history.state,browserDialog:true},'');modalHistory=true;document.querySelector<HTMLDialogElement>('.browser-notice')?.querySelector('button')?.focus();return}if (!modalHistory) return; modalHistory = false; optionsDialog.close(); document.querySelector<HTMLDialogElement>('.browser-notice')?.close(); });
 optionsDialog.addEventListener('close', () => {
   if (document.querySelector('.browser-notice[open]')) return;
   closeBrowserDialog();
-  (root.querySelector<HTMLButtonElement>('#workspace-settings') ?? root.querySelector<HTMLButtonElement>('#workspace-picker'))?.focus();
+  focusAppControl(['#workspace-settings', '#navigation-toggle', '#workspace-picker']);
 });
 let waitingRegistration: ServiceWorkerRegistration | null = null;
 function offerUpdate(registration: ServiceWorkerRegistration | null): void {
@@ -53,7 +59,7 @@ function offerUpdate(registration: ServiceWorkerRegistration | null): void {
   app?.setUpdateAvailable(registration !== null);
 }
 function focusUpdateAction(): void {
-  (root.querySelector<HTMLButtonElement>('[data-action="update"]') ?? root.querySelector<HTMLButtonElement>('#workspace-picker'))?.focus();
+  focusAppControl(['[data-action="update"]', '#navigation-toggle', '#workspace-picker']);
 }
 function openUpdate(): void {
   if (updateClosing) return;
@@ -160,7 +166,7 @@ async function start(): Promise<void> {
   const host = await BrowserHost.open({ deviceName: 'Web browser', baseUrl: base, startPaused: document.hidden });
   closeHost = () => host.close();
   app = mountApp(root, {
-    host, connections:host, voice: new ProviderVoice({locale:'',captureContext:()=>{if(!app)throw new Error('Workspace is opening');return app.voiceContext()},transcribe:(audio,{signal,locale,context})=>host.transcribe({workspace_id:context.workspaceId,connection_version:context.connectionVersion,audio,locale},signal)}),fallbackVoice:new BrowserVoice(), openAppOptions: () => openBrowserDialog(optionsDialog), openUpdate, invitationUrl: ticket => invitationLink(base, ticket),
+    host, connections:host, meetings:host, drafts:host, voice: new ProviderVoice({locale:'',captureContext:()=>{if(!app)throw new Error('Workspace is opening');return app.voiceContext()},transcribe:(audio,{signal,locale,context})=>host.transcribe({workspace_id:context.workspaceId,connection_version:context.connectionVersion,audio,locale},signal)}),fallbackVoice:new BrowserVoice(), openAppOptions: () => openBrowserDialog(optionsDialog), openUpdate, invitationUrl: ticket => invitationLink(base, ticket),
     ...(typeof navigator.share === 'function' ? { shareInvitation: async (url: string): Promise<'shared' | 'cancelled'> => {
       try { await navigator.share({ title: 'Shared workspaces', url }); return 'shared'; }
       catch (error) { if (error instanceof DOMException && error.name === 'AbortError') return 'cancelled'; throw error; }

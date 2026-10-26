@@ -30,13 +30,13 @@ test('read started while save is pending cannot overwrite its confirmed receipt'
   const save=session.remove('work');port.read=()=>observation.promise;const read=session.refresh('work');const sent=port.writes[0]!;
   const removed:ConnectionState={status:'removed',workspace_id:'work',version:'c'.repeat(64),provider:'openai'};
   receipt.resolve({operation_id:sent.operation_id,replayed:false,state:removed});await save;observation.resolve(ready());await read;
-  assert.deepEqual(session.current('work'),removed);assert.equal(session.mutation.type,'idle');
+  assert.deepEqual(session.current('work'),removed,'LATE_READ_OVERWROTE_RECEIPT');assert.equal(session.mutation.type,'idle');
 });
 test('receipt correlation rejects another operation or workspace without dropping retry material',async()=>{
   for(const mismatch of ['operation','workspace']){
     const port=new Port(),session=new ConnectionSession(port,()=>{});await session.refresh('work');
     port.write=async input=>({operation_id:mismatch==='operation'?'d'.repeat(64):input.operation_id,replayed:false,state:ready(mismatch==='workspace'?'private':'work')});
-    await session.set('work','synthetic-key');assert.equal(session.mutation.type,'uncertain');assert.deepEqual(session.current('work'),ready());
+    await session.set('work','synthetic-key');assert.equal(session.mutation.type,'uncertain','UNRELATED_CONNECTION_RECEIPT_ACCEPTED');assert.deepEqual(session.current('work'),ready());
   }
 });
 test('a replay receipt may observe a newer setting and remains correlated by operation identity',async()=>{
@@ -56,10 +56,10 @@ test('disposed settings ignore late reads and confirmations',async()=>{
 test('late save acknowledgement preserves a newer removal already observed during the save',async()=>{
   const port=new Port(),session=new ConnectionSession(port,()=>{});await session.refresh('work');const pending=deferred<ConnectionReceipt>();port.write=()=>pending.promise;const save=session.set('work','synthetic-key');
   const removed:ConnectionState={status:'removed',workspace_id:'work',version:'c'.repeat(64),provider:'openai'};port.read=async()=>removed;await session.refresh('work');
-  pending.resolve({operation_id:port.writes[0]!.operation_id,replayed:false,state:ready()});await save;assert.deepEqual(session.current('work'),removed);assert.equal(session.mutation.type,'idle');
+  pending.resolve({operation_id:port.writes[0]!.operation_id,replayed:false,state:ready()});await save;assert.deepEqual(session.current('work'),removed,'LATE_RECEIPT_OVERWROTE_REMOVAL');assert.equal(session.mutation.type,'idle');
 });
 test('late settings review cannot clear a pending retry or enable overlapping writes',async()=>{
   const port=new Port(),session=new ConnectionSession(port,()=>{});await session.refresh('work');port.write=async()=>{throw new Error('Lost receipt')};await session.set('work','synthetic-key');
   const observation=deferred<ConnectionState>(),response=deferred<ConnectionReceipt>();port.read=()=>observation.promise;const review=session.reviewCurrent();port.write=()=>response.promise;const retry=session.retry();observation.resolve(ready());await review;
-  assert.equal(session.mutation.type,'saving');await session.set('work','another-key');assert.equal(port.writes.length,2);response.resolve({operation_id:port.writes[1]!.operation_id,replayed:true,state:ready()});await retry;assert.equal(session.mutation.type,'idle');
+  assert.equal(session.mutation.type,'saving','LATE_REVIEW_CLEARED_RETRY');await session.set('work','another-key');assert.equal(port.writes.length,2);response.resolve({operation_id:port.writes[1]!.operation_id,replayed:true,state:ready()});await retry;assert.equal(session.mutation.type,'idle');
 });

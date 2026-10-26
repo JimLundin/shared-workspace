@@ -1,15 +1,18 @@
 import init, { BrowserEndpoint } from '../../host-wasm/pkg/browser_workspace_host.js';
-import { object, string, number, type JoinStage } from '../../../native/ui/src/protocol.ts';
+import { object, string, number, isNoteRevision, isWorkRevision, type JoinStage } from '../../../native/ui/src/protocol.ts';
+import { decodeMeetingRequest, type MeetingRequest, type PreparedMeeting } from '../../../native/ui/src/meeting-preparation.ts';
 import { BrowserStore } from './store.ts';
 import { encodeTicket, decodeTicket } from './invitation.ts';
 import { connectionError, connectionRecords, type ConnectionPeer, type ConnectionReceipt, type ConnectionState, type RemoveConnection, type SetConnection, type Transcription } from './connections.ts';
 import { transcribe } from './transcription.ts';
+import { generateMeeting } from './meeting-generation.ts';
+import type { LocalDraft, LocalDraftRemoval, LocalDraftJournal, LocalDraftReceipt } from './local-drafts.ts';
 import {
   MAX_MESSAGE_BYTES, MAX_SCOPE, bytes, fields, hashNonce, hex, json, parse,
-  randomHex, requireThat, safeError, sameScope, scope, signedOperations,
+  randomHex, requireThat, requireMeetingWorkSupport, safeError, sameScope, scope, signedOperations, workCapability,
   type Command, type Contact, type Envelope, type HostOptions, type Invite, type Peer,
   type PeerRecord, type PeerState, type Receipt, type ReplyBody, type RequestBody,
-  type Snapshot, type SyncReport, type Ticket,
+  type Snapshot, type SyncReport, type Ticket, type SignedOperation,
 } from './types.ts';
 
 function contactFromRecord(peer: PeerRecord): Contact {
@@ -38,6 +41,7 @@ export class HostOwner {
   readonly #observations = new Map<string, PeerState>();
   readonly #uploads = new Set<AbortController>();
   readonly #connectionObservations = new Map<string, Map<string, ConnectionPeer['status']>>();
+  readonly #workspacesWithWork = new Set<string>();
 
   private constructor(store: BrowserStore, options: HostOptions) {
     this.#store = store;
@@ -49,6 +53,7 @@ export class HostOwner {
     await init();
     const store = await BrowserStore.open(options.databaseName ?? 'shared-workspaces.db', options.deviceName ?? 'Browser host');
     const owner = new HostOwner(store, options);
+    await owner.snapshot(); // Initialize feature history once; idle sync uses cached workspace flags.
     await owner.#maintain();
     owner.#timer = setInterval(() => owner.#wake(), 5000);
     return owner;
@@ -136,6 +141,10 @@ export class HostOwner {
   async #replyBody(value: unknown): Promise<ReplyBody> {
     const result = object(value);
     switch (result.type) {
+      case 'work_capabilities':
+        fields(result, ['type', 'work']);
+        requireThat(result.work === 1, 'Unsupported meeting work capability.');
+        return { type: 'work_capabilities', work: 1 };
       case 'capabilities':
         fields(result, ['type', 'connections']);
         requireThat(result.connections === 1, 'Unsupported connection capability.');
@@ -198,6 +207,9 @@ export class HostOwner {
     const body = object(request.body);
     const peer = await this.#store.contact(request.contact);
     switch (body.type) {
+      case 'work_capabilities':
+        fields(body, ['type']);
+        return { type: 'work_capabilities', work: 1 };
       case 'capabilities':
         fields(body, ['type']);
         return { type: 'capabilities', connections: 1 };
@@ -218,9 +230,12 @@ export class HostOwner {
         return { type: 'connections_synced', workspace_ids: selected, records: await this.#store.exportConnections(peerId, selected) };
       }
       case 'pair': {
-        fields(body, ['type', 'nonce']);
-        const selected = await this.#store.acceptInvite(await hashNonce(hex(body.nonce)), peer, Date.now());
-        return { type: 'paired', workspace_ids: selected, operations: await this.#store.exportFor(peerId, selected), contacts: await this.#store.sharedContacts(selected) };
+        fields(body, ['type', 'nonce', ...('work' in body ? ['work'] : [])]);
+        const work = workCapability(body.work);
+        const selected = await this.#store.acceptInvite(await hashNonce(hex(body.nonce)), peer, Date.now(), work);
+        const operations = await this.#store.exportFor(peerId, selected);
+        requireMeetingWorkSupport(operations, work);
+        return { type: 'paired', workspace_ids: selected, operations, contacts: await this.#store.sharedContacts(selected) };
       }
       case 'summary': {
         fields(body, ['type', 'workspace_ids', 'fingerprint', 'contacts']);
@@ -233,15 +248,20 @@ export class HostOwner {
         return { type: 'current', workspace_ids: selected, contacts: await this.#store.sharedContacts(selected) };
       }
       case 'sync': {
-        fields(body, ['type', 'workspace_ids', 'operations', 'contacts']);
+        fields(body, ['type', 'workspace_ids', 'operations', 'contacts', ...('work' in body ? ['work'] : [])]);
+        const work = workCapability(body.work);
         const selected = scope(body.workspace_ids), operations = signedOperations(body.operations, selected);
+        requireMeetingWorkSupport(operations, work);
         const contacts = await this.#contacts(body.contacts);
         // A newly granted member may carry its grant while the inviter is offline.
         await this.#store.import(peerId, operations);
+        this.#rememberWork(operations);
         await this.#authorize(peerId, selected);
         await this.#store.savePeer(peer);
         await this.#retain(selected, contacts);
-        return { type: 'synced', workspace_ids: selected, operations: await this.#store.exportFor(peerId, selected), contacts: await this.#store.sharedContacts(selected) };
+        const outgoing = await this.#store.exportFor(peerId, selected);
+        requireMeetingWorkSupport(outgoing, work);
+        return { type: 'synced', workspace_ids: selected, operations: outgoing, contacts: await this.#store.sharedContacts(selected) };
       }
       default: throw new Error('Unknown peer request.');
     }
@@ -253,12 +273,25 @@ export class HostOwner {
 
   async snapshot(): Promise<Snapshot> {
     const network: Snapshot['network'] = this.#closed ? { type: 'closed' } : !this.#foreground ? { type: 'paused' } : this.#endpoint ? { type: 'active' } : { type: 'unavailable', detail: this.#networkError ?? 'Connecting to the peer network.' };
-    return { ...await this.#store.snapshot(), network, peers: await this.#peerStatuses() };
+    const snapshot = await this.#store.snapshot();
+    for (const resource of snapshot.resources) if ([...resource.heads, ...resource.history].some(isWorkRevision)) this.#workspacesWithWork.add(resource.workspace_id);
+    return { ...snapshot, network, peers: await this.#peerStatuses() };
+  }
+
+  #rememberWork(operations: readonly SignedOperation[]): void {
+    // Call only after complete signed-operation import validation.
+    for (const signed of operations) {
+      const kind = object(signed.operation.action).type;
+      if (kind === 'create_work' || kind === 'edit_work' || kind === 'publish_meeting_materials') this.#workspacesWithWork.add(signed.operation.workspace_id);
+    }
   }
 
   async command(command: Command): Promise<Receipt> {
     requireThat(!this.#closed, 'Browser host is closed.');
     const receipt = await this.#store.command(command);
+    if (receipt.type === 'applied' && (command.type === 'create_work' || command.type === 'edit_work' || command.type === 'publish_meeting_materials')) {
+      this.#workspacesWithWork.add(receipt.workspace_id);
+    }
     this.#wake();
     return receipt;
   }
@@ -311,6 +344,39 @@ export class HostOwner {
     finally { signal.removeEventListener('abort', cancel); this.#uploads.delete(controller); }
   }
 
+  listLocalDrafts(): Promise<LocalDraftJournal> { return this.#store.listLocalDrafts(); }
+  upsertLocalDraft(input: LocalDraft): Promise<LocalDraftReceipt> { return this.#store.upsertLocalDraft(input); }
+  removeLocalDraft(input: LocalDraftRemoval): Promise<LocalDraftReceipt> { return this.#store.removeLocalDraft(input); }
+
+  async prepareMeeting(value: MeetingRequest, signal: AbortSignal): Promise<PreparedMeeting> {
+    if (this.#closed) throw connectionError('The workspace host is closed.');
+    const input = decodeMeetingRequest(value), controller = new AbortController();
+    const cancel = () => controller.abort();
+    signal.addEventListener('abort', cancel, { once: true });
+    if (signal.aborted) controller.abort();
+    this.#uploads.add(controller);
+    try {
+      const snapshot = await this.snapshot();
+      requireThat(!controller.signal.aborted && !this.#closed, 'Preparation was cancelled.');
+      const resource = snapshot.resources.find(resource => resource.id === input.resource_id && resource.workspace_id === input.workspace_id);
+      requireThat(resource && resource.heads.length === 1, 'Review the work versions before preparing material.');
+      const revision = resource.heads[0]!;
+      requireThat(isWorkRevision(revision) && revision.id === input.revision_id && revision.work.state.type === 'preparing', 'The captured work changed before preparation.');
+      requireThat(revision.work.state.run.id === input.run_id && revision.work.state.run.originating_device === this.#store.id,
+        'This preparation belongs to another run or device.');
+      const sources = revision.work.sources.map(source => {
+        requireThat(source.workspace_id === input.workspace_id, 'A transcript belongs to another workspace.');
+        const resource = snapshot.resources.find(resource => resource.id === source.resource_id && resource.workspace_id === source.workspace_id);
+        const revision = [...(resource?.heads ?? []), ...(resource?.history ?? [])].find(revision => revision.id === source.revision_id);
+        requireThat(revision && isNoteRevision(revision), 'A captured transcript revision is unavailable.');
+        return Object.freeze({ source, text: revision.body });
+      });
+      return await generateMeeting({ workspace_id: input.workspace_id, connection_version: input.connection_version,
+        outcome: revision.work.outcome, sources },
+        (workspace, version) => this.#store.connectionCredential(workspace, version), controller.signal);
+    } finally { signal.removeEventListener('abort', cancel); this.#uploads.delete(controller); }
+  }
+
   async invite(workspaceIds: readonly string[]): Promise<Invite> {
     const endpoint = this.#client(), selected = scope(workspaceIds);
     const nonce = randomHex(), expiry = Date.now() + 900_000;
@@ -329,7 +395,8 @@ export class HostOwner {
     const nonce = hex(decoded.nonce);
     number(decoded.expires_at_ms);
     requireThat(inviter.id !== this.#store.id, 'A host cannot join itself.');
-    const reply = await this.#exchange(inviter, { type: 'pair', nonce }, progress);
+    const work = await this.#peerWorkCapability(inviter);
+    const reply = await this.#exchange(inviter, { type: 'pair', nonce, ...(work === 1 ? { work } : {}) }, progress);
     requireThat(reply.body.type === 'paired', 'Invitation could not be accepted; it may be expired or already used.');
     requireThat(sameScope(reply.body.workspace_ids, selected), 'Pairing reply changed the selected workspaces.');
     progress?.('saving_workspace');
@@ -347,6 +414,9 @@ export class HostOwner {
     for (let start = 0; start < all.length; start += MAX_SCOPE) {
       this.#client();
       const selected = all.slice(start, start + MAX_SCOPE);
+      const work = await this.#peerWorkCapability(peer);
+      requireThat(work === 1 || !selected.some(workspaceId => this.#workspacesWithWork.has(workspaceId)),
+        'Update Shared Workspace on the other device to synchronize meeting work.');
       const contacts = await this.#store.sharedContacts(selected);
       const summary = await this.#exchange(peer, { type: 'summary', workspace_ids: selected, fingerprint: await this.#store.fingerprint(selected), contacts });
       if (summary.body.type === 'current') {
@@ -357,15 +427,26 @@ export class HostOwner {
         continue;
       }
       requireThat(summary.body.type === 'need_sync' || summary.body.type === 'rejected', 'Invalid synchronization summary.');
-      const reply = await this.#exchange(peer, { type: 'sync', workspace_ids: selected, operations: await this.#store.exportFor(peer.id, selected), contacts });
+      const operations = await this.#store.exportFor(peer.id, selected);
+      requireMeetingWorkSupport(operations, work);
+      const reply = await this.#exchange(peer, { type: 'sync', workspace_ids: selected, operations, contacts,
+        ...(work === 1 ? { work } : {}) });
       requireThat(reply.body.type === 'synced', 'Peer could not complete synchronization.');
       requireThat(sameScope(reply.body.workspace_ids, selected), 'Sync reply changed the selected workspaces.');
       imported += (await this.#store.import(peer.id, reply.body.operations)).imported;
+      this.#rememberWork(reply.body.operations);
       await this.#store.savePeer(await this.#store.contact(reply.contact));
       await this.#retain(selected, reply.body.contacts);
       await this.#syncConnections(peer, selected);
     }
     return imported;
+  }
+
+  async #peerWorkCapability(peer: PeerRecord): Promise<1 | undefined> {
+    const capability = await this.#exchange(peer, { type: 'work_capabilities' });
+    if (capability.body.type === 'rejected') return undefined;
+    requireThat(capability.body.type === 'work_capabilities', 'Invalid meeting work capability reply.');
+    return capability.body.work;
   }
 
   async #syncConnections(peer: PeerRecord, selected: readonly string[]): Promise<void> {

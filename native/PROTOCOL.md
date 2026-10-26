@@ -72,6 +72,13 @@ the editor can be corrected and resubmitted. A thrown storage/commit error or a
 lost reply remains uncertain and must not be relabelled as rejection. Retrying
 an uncertain intended change retains its original operation identity and payload.
 
+## Meeting work
+
+The additive [meeting-work contract](../docs/meeting-work-contract.md) defines
+`create_work`, `edit_work`, and atomic `publish_meeting_materials`, typed work
+revisions, pinned transcript evidence and user corrections. Existing clients must
+upgrade before importing work actions; the note/surface wire shapes remain intact.
+
 ## Snapshot
 
 `HostSnapshot` contains the Store snapshot fields plus network/peer observations:

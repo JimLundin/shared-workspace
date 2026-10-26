@@ -1,27 +1,29 @@
 import {test,expect,type Page} from '@playwright/test';
+async function openPicker(page:Page){const picker=page.locator('#workspace-picker');if(await picker.isVisible())await picker.click();else{await page.locator('#navigation-toggle').click();await page.getByRole('dialog').getByRole('button',{name:'Workspaces',exact:true}).click();}}
+async function openSettings(page:Page){const settings=page.locator('#workspace-settings');if(await settings.isVisible())await settings.click();else{await page.locator('#navigation-toggle').click();await page.getByRole('dialog').getByRole('button',{name:'Settings',exact:true}).click();}}
+async function addMaterial(page:Page){const add=page.locator('.capture-dock [data-action=add]');if(await add.isVisible())await add.click();else{await page.getByRole('button',{name:'Page actions',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Add to workspace',exact:true}).click();}}
+async function typeInput(page:Page){const type=page.getByRole('dialog').getByRole('button',{name:'Type instead',exact:true});if(!await type.isVisible())await page.getByRole('button',{name:'Page actions',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Type instead',exact:true}).click();}
+async function settingsReturn(page:Page){await expect(await page.locator('#workspace-settings').isVisible()?page.locator('#workspace-settings'):page.locator('#navigation-toggle')).toBeFocused();}
+
 async function createWorkspace(page:Page,title='Launch work',first=true){
   if(first)await page.goto('/tests/host.html');
-  else {await page.getByRole('button',{name:/Current workspace:/}).click();await page.getByRole('button',{name:'Create workspace',exact:true}).click()}
+  else {await openPicker(page);await page.getByRole('button',{name:'Create workspace',exact:true}).click()}
   await page.getByLabel('Workspace name',{exact:true}).fill(title);
   await page.getByRole('button',{name:'Create workspace',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Current workspace: '+title})).toBeVisible();
+  await expect(page.locator('#workspace-picker')).toHaveAttribute('aria-label','Current workspace: '+title);
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
-async function startNote(page:Page){await page.getByRole('button',{name:'Add to workspace',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:/^Note /}).click()}
+async function startNote(page:Page){await addMaterial(page);await page.getByRole('dialog').getByRole('button',{name:/^Note /}).click()}
 async function createNote(page:Page,title='Launch brief',body='The launch starts with three pilot teams.'){
   await startNote(page);
   await page.getByLabel('Title',{exact:true}).fill(title);await page.getByLabel('Content',{exact:true}).fill(body);
   await page.getByRole('button',{name:'Save note',exact:true}).click();
   await expect(page.locator('.editor')).toHaveCount(0);await expect(page.getByRole('button',{name:'Open '+title,exact:true})).toBeVisible();
 }
-async function switchTo(page:Page,title:string){await page.getByRole('button',{name:/Current workspace:/}).click();await page.getByRole('dialog').getByRole('button',{name:title,exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0)}
+async function switchTo(page:Page,title:string){await openPicker(page);await page.getByRole('dialog').getByRole('button',{name:title,exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0)}
 async function openNote(page:Page,title='Launch brief'){await page.getByRole('button',{name:'Open '+title,exact:true}).click()}
-async function share(page:Page){
-  const share=page.getByRole('button',{name:'Share this workspace',exact:true});
-  if(!await share.isVisible())await page.getByRole('button',{name:'Connections',exact:true}).click();
-  await share.click();
-}
-async function openJoin(page:Page){await page.getByRole('button',{name:/Current workspace:/}).click();await page.getByRole('button',{name:'Join existing work',exact:true}).click()}
+async function share(page:Page){await openPicker(page);await page.getByRole('dialog').getByRole('button',{name:'Share this workspace',exact:true}).click();}
+async function openJoin(page:Page){await openPicker(page);await page.getByRole('button',{name:'Join existing work',exact:true}).click()}
 
 test('new user can create or join and browser without native host never invents records',async({page})=>{
   await page.goto('/');await expect(page.getByRole('heading',{name:'Open your native workspace'})).toBeVisible();await expect(page.getByRole('button',{name:'Create workspace',exact:true})).toHaveCount(0);
@@ -41,7 +43,7 @@ test('phone shows material and only displays workspace picker on request',async(
 });
 
 test('local close/reopen sends no mutation and uncertain retry uses exact change',async({page})=>{
-  await createWorkspace(page);await createNote(page);await openNote(page);await page.getByText('Organize & history',{exact:true}).click();
+  await createWorkspace(page);await createNote(page);await openNote(page);await page.locator('.main summary').filter({hasText:'Organize & history'}).click();
   const count=await page.evaluate(()=>window.fixture.commands().length);
   await page.getByRole('button',{name:'Close local view Launch brief',exact:true}).click();await expect(page.locator('article.resource-card')).toHaveCount(0);expect(await page.evaluate(()=>window.fixture.commands().length)).toBe(count);
   await page.getByRole('button',{name:'Reopen views',exact:true}).click();await openNote(page);
@@ -64,11 +66,11 @@ test('known rejection and network loss retain editable input with honest local s
 
 test('typed capture keeps workspace across navigation and failed receipt retry cannot duplicate it',async({page})=>{
   await createWorkspace(page);await createWorkspace(page,'Private',false);await switchTo(page,'Launch work');
-  await page.getByRole('button',{name:'Type instead',exact:true}).click();await page.getByLabel('Your words',{exact:true}).fill('Remember the pilot decision');await page.getByRole('button',{name:'Close dialog'}).click();await switchTo(page,'Private');
+  await typeInput(page);await page.getByLabel('Your words',{exact:true}).fill('Remember the pilot decision');await page.getByRole('button',{name:'Close dialog'}).click();await switchTo(page,'Private');
   await page.getByRole('button',{name:'Review capture',exact:false}).click();await expect(page.getByLabel('Your words',{exact:true})).toHaveValue('Remember the pilot decision');await expect(page.locator('#run-command')).toBeDisabled();await page.getByRole('button',{name:'Return to Launch work'}).click();
   await page.evaluate(()=>window.fixture.loseReceipt());await page.locator('#run-command').click();await page.getByRole('dialog').getByRole('button',{name:'Retry this change'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
   const commands=await page.evaluate(()=>window.fixture.commands());expect(commands.at(-1)).toEqual(commands.at(-2));expect(await page.evaluate(()=>window.fixture.resources().length)).toBe(1);
-  await page.getByRole('button',{name:'Type instead',exact:false}).click();await expect(page.getByLabel('Your words')).toHaveValue('');
+  await typeInput(page);await expect(page.getByLabel('Your words')).toHaveValue('');
 });
 
 test('voice transcript stays addressed and cancelled late speech cannot overwrite newer input',async({page})=>{
@@ -100,7 +102,7 @@ test('phone join shows real stages, retry retains ticket, committed join opens r
   await page.setViewportSize({width:390,height:844});await createWorkspace(page);await openJoin(page);await page.getByRole('button',{name:'Scan invitation QR'}).click();expect(await page.evaluate(()=>window.fixture.joins())).toBe(0);await expect(page.getByLabel('Invitation to join')).toBeHidden();
   await page.evaluate(()=>window.fixture.holdNextJoin());await page.getByRole('button',{name:'Join selected workspaces',exact:true}).click();await expect(page.locator('.join-progress')).toContainText('Waiting for a confirmed exchange');await page.evaluate(()=>window.fixture.joinStage('connecting_relay'));await expect(page.locator('[aria-current="step"]')).toHaveText('Connecting this device');await page.evaluate(()=>window.fixture.failHeldJoin());
   await expect(page.getByRole('alert')).toContainText('relay connection');await expect(page.getByRole('alert')).not.toContainText('may have accepted');await expect(page.getByRole('alert')).not.toContainText('Untrusted remote');
-  await page.evaluate(()=>window.fixture.holdNextJoin());await page.getByRole('button',{name:'Try joining again',exact:true}).click();await page.evaluate(()=>window.fixture.joinStage('saving_workspace'));await expect(page.getByRole('button',{name:'Joining…',exact:true})).toBeDisabled();await page.evaluate(()=>window.fixture.finishJoin(['Received work']));await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByRole('button',{name:'Current workspace: Received work'})).toBeVisible();
+  await page.evaluate(()=>window.fixture.holdNextJoin());await page.getByRole('button',{name:'Try joining again',exact:true}).click();await page.evaluate(()=>window.fixture.joinStage('saving_workspace'));await expect(page.getByRole('button',{name:'Joining…',exact:true})).toBeDisabled();await page.evaluate(()=>window.fixture.finishJoin(['Received work']));await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('#workspace-picker')).toHaveAttribute('aria-label','Current workspace: Received work');
   const attempts=await page.evaluate(()=>window.fixture.joinTickets());expect(attempts).toHaveLength(2);expect(attempts[0]).toBe(attempts[1]);
 });
 
@@ -113,7 +115,7 @@ test('multiple joined spaces offer only received work, repeated grant asks inste
 test('dialogs are top layer, trap focus, preserve background scroll and restore focus on Escape/Back',async({page})=>{
   await page.setViewportSize({width:390,height:620});await createWorkspace(page);for(let i=0;i<3;i++)await createNote(page,'Note '+i,'Text');
   await page.locator('.main').evaluate(el=>el.scrollTop=180);const scroll=await page.locator('.main').evaluate(el=>el.scrollTop);
-  const trigger=page.getByRole('button',{name:/Current workspace:/});await trigger.click();await expect(page.locator('dialog:modal')).toHaveCount(1);await page.locator('[data-action=add]').evaluate(el=>(el as HTMLElement).focus());expect(await page.evaluate(()=>!!document.activeElement?.closest('dialog'))).toBe(true);
+  const trigger=page.locator('#navigation-toggle');await trigger.click();await expect(page.locator('dialog:modal')).toHaveCount(1);await page.locator('[data-action=add]').evaluate(el=>(el as HTMLElement).focus());expect(await page.evaluate(()=>!!document.activeElement?.closest('dialog'))).toBe(true);
   const close=page.getByRole('button',{name:'Close dialog'});await close.focus();await page.evaluate(()=>window.fixture.refresh());await expect(close).toBeFocused();
   for(let i=0;i<12;i++)await page.keyboard.press('Tab');expect(await page.evaluate(()=>!!document.activeElement?.closest('dialog'))).toBe(true);
   await page.keyboard.press('Escape');await expect(trigger).toBeFocused();expect(await page.locator('.main').evaluate(el=>el.scrollTop)).toBe(scroll);
@@ -125,9 +127,9 @@ test('long titles, large text and keyboard-like narrow/landscape viewports remai
   await page.evaluate(()=>document.documentElement.style.fontSize='20px');
   for(const viewport of [{width:320,height:568},{width:740,height:340},{width:390,height:380}]){
     await page.setViewportSize(viewport);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-    await page.getByRole('button',{name:/Current workspace:/}).click();await expect(page.getByRole('button',{name:'Close dialog'})).toBeInViewport();await page.getByRole('button',{name:'Close dialog'}).click();
+    await openPicker(page);await expect(page.getByRole('button',{name:'Close dialog'})).toBeInViewport();await page.getByRole('button',{name:'Close dialog'}).click();
   }
-  await page.getByRole('button',{name:'Type instead'}).click();await page.getByLabel('Your words').fill('Remember a thought');await page.locator('#run-command').click();await expect(page.getByRole('dialog')).toHaveCount(0);
+  await typeInput(page);await page.getByLabel('Your words').fill('Remember a thought');await page.locator('#run-command').click();await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
 test('opening from a scrolled list starts reader at title and polling preserves reader position',async({page})=>{
@@ -137,7 +139,7 @@ test('opening from a scrolled list starts reader at title and polling preserves 
 });
 
 test('editing a reference opens the same resource immediately in its original workspace',async({page})=>{
-  await createWorkspace(page);await createNote(page);await createWorkspace(page,'Private',false);await switchTo(page,'Launch work');await openNote(page);await page.getByText('Organize & history',{exact:true}).click();await page.getByRole('button',{name:'Add reference',exact:true}).click();await switchTo(page,'Private');await openNote(page);
+  await createWorkspace(page);await createNote(page);await createWorkspace(page,'Private',false);await switchTo(page,'Launch work');await openNote(page);await page.locator('.main summary').filter({hasText:'Organize & history'}).click();await page.getByRole('button',{name:'Add reference',exact:true}).click();await switchTo(page,'Private');await openNote(page);
   await page.getByRole('button',{name:'Edit',exact:true}).click();await expect(page.getByLabel('Content',{exact:true})).toHaveValue('The launch starts with three pilot teams.');await expect(page.getByRole('button',{name:'Current workspace: Launch work'})).toBeVisible();await page.getByLabel('Content',{exact:true}).fill('Edited through a reference');await page.getByRole('button',{name:'Save note',exact:true}).click();await switchTo(page,'Private');await expect(page.locator('.note-body')).toHaveText('Edited through a reference');
   const resources=await page.evaluate(()=>window.fixture.resources());expect(resources).toHaveLength(1);
 });
@@ -149,10 +151,10 @@ test('system dictation focuses the input before handing control to Windows',asyn
 
 test('themes persist locally and explicit selection survives system color changes',async({page})=>{
   await page.emulateMedia({colorScheme:'light'});await createWorkspace(page);
-  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Appearance',exact:true}).click();await page.getByRole('button',{name:'Dark',exact:true}).click();
+  await openSettings(page);await page.getByRole('button',{name:'Appearance',exact:true}).click();await page.getByRole('button',{name:'Dark',exact:true}).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme','dark');await page.emulateMedia({colorScheme:'dark'});await page.emulateMedia({colorScheme:'light'});await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
   await page.getByRole('button',{name:'Close dialog'}).click();await page.evaluate(()=>window.fixture.restart());await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
-  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Appearance',exact:true}).click();await page.getByRole('button',{name:'Light',exact:true}).click();await page.emulateMedia({colorScheme:'dark'});await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+  await openSettings(page);await page.getByRole('button',{name:'Appearance',exact:true}).click();await page.getByRole('button',{name:'Light',exact:true}).click();await page.emulateMedia({colorScheme:'dark'});await expect(page.locator('html')).toHaveAttribute('data-theme','light');
   await page.getByRole('button',{name:'System',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
 });
 
@@ -167,22 +169,22 @@ test('provider setup and exact retry keep keys out of the interface, free speech
   await expect(page.getByRole('dialog',{name:'OpenAI connection',exact:true})).toBeVisible();const key='synthetic-only-connection-key';await page.getByLabel('OpenAI API key',{exact:true}).fill(key);await page.evaluate(()=>window.fixture.loseConnectionReceipt());await page.getByRole('button',{name:'Save connection',exact:true}).click();expect(await page.evaluate(()=>window.fixture.hasUnsubmittedInput())).toBe(true);await page.getByRole('button',{name:'Retry connection change',exact:true}).click();expect(await page.evaluate(()=>window.fixture.hasUnsubmittedInput())).toBe(false);
   await expect(page.getByLabel('Replace API key',{exact:true})).toHaveValue('');const writes=await page.evaluate(()=>window.fixture.connectionWrites());expect(writes).toHaveLength(2);expect(writes[0]).toEqual(writes[1]);expect(await page.locator('body').innerHTML()).not.toContain(key);expect(JSON.stringify(await page.evaluate(()=>window.fixture.resources()))).not.toContain(key);
   await page.getByRole('button',{name:'Continue to voice'}).click();await page.getByRole('button',{name:'Start speaking'}).click();await expect(page.locator('#command-text')).toHaveCount(0);await page.getByRole('button',{name:'Stop recording',exact:true}).click();await expect(page.locator('.voice-stage h3')).toHaveText('Transcribing');expect(await page.evaluate(()=>window.fixture.hasUnsubmittedInput())).toBe(true);await page.evaluate(()=>window.fixture.finishSpeech('A thought without a command prefix.'));await expect(page.getByRole('button',{name:'Save as note',exact:true})).toBeFocused();expect((await page.locator('#command-text').boundingBox())!.y).toBeLessThan(320);const saveBounds=(await page.locator('#run-command').boundingBox())!;expect(saveBounds.y+saveBounds.height).toBeLessThan(650);await page.getByRole('button',{name:'Save as note',exact:true}).click();
-  await expect(page.locator('.note-body')).toHaveText('A thought without a command prefix.');await page.getByRole('button',{name:'Share this workspace'}).click();await expect(page.getByRole('dialog')).toContainText('saved OpenAI connections');
+  await expect(page.locator('.note-body')).toHaveText('A thought without a command prefix.');await share(page);await expect(page.getByRole('dialog')).toContainText('saved OpenAI connections');
 });
 
 test('code document edits use a retained editor and Office opens through an honest external action',async({page})=>{
-  await createWorkspace(page);await page.getByRole('button',{name:'Add to workspace',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:/^Code document /}).click();await page.getByLabel('Title',{exact:true}).fill('example.ts');await page.getByLabel('Language',{exact:true}).selectOption('typescript');await page.getByRole('textbox',{name:'Code content'}).fill('const example = 1;');await page.evaluate(()=>window.fixture.refresh());await expect(page.getByRole('textbox',{name:'Code content'})).toHaveText('const example = 1;');
+  await createWorkspace(page);await addMaterial(page);await page.getByRole('dialog').getByRole('button',{name:/^Code document /}).click();await page.getByLabel('Title',{exact:true}).fill('example.ts');await page.getByLabel('Language',{exact:true}).selectOption('typescript');await page.getByRole('textbox',{name:'Code content'}).fill('const example = 1;');await page.evaluate(()=>window.fixture.refresh());await expect(page.getByRole('textbox',{name:'Code content'})).toHaveText('const example = 1;');
   await page.getByRole('button',{name:'Save document',exact:true}).click();await expect(page.getByRole('heading',{name:'example.ts',exact:true})).toBeVisible();await page.getByRole('button',{name:'Edit',exact:true}).click();await page.getByRole('textbox',{name:'Code content'}).fill('const example = 2;');await page.getByRole('button',{name:'Save document',exact:true}).click();
   const resources=await page.evaluate(()=>window.fixture.resources());expect(resources).toHaveLength(1);const head=resources[0]?.heads[0];expect(head&&'surface' in head&&head.surface.type==='code_document'?head.surface.text:null).toBe('const example = 2;');
-  await page.getByRole('button',{name:'Add to workspace',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:/^Word /}).click();await expect(page.getByRole('link',{name:'Open Word ↗'})).toHaveAttribute('href','https://word.cloud.microsoft/');await expect(page.locator('iframe')).toHaveCount(0);await expect(page.locator('.application-paper')).toContainText('browser tab');
+  await addMaterial(page);await page.getByRole('dialog').getByRole('button',{name:/^Word /}).click();await expect(page.getByRole('link',{name:'Open Word ↗'})).toHaveAttribute('href','https://word.cloud.microsoft/');await expect(page.locator('iframe')).toHaveCount(0);await expect(page.locator('.application-paper')).toContainText('browser tab');
 });
 
 
 test('plus picker preserves an unfinished draft and voice app capture recovers a lost receipt',async({page})=>{
   await createWorkspace(page);await startNote(page);await page.getByLabel('Title',{exact:true}).fill('Keep me');await page.getByLabel('Content',{exact:true}).fill('An unfinished idea');await page.getByRole('button',{name:'Keep draft & go back'}).click();
-  await page.getByRole('button',{name:'Add to workspace',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:/^Code document /}).click();await expect(page.getByLabel('Content',{exact:true})).toHaveValue('An unfinished idea');await page.getByRole('button',{name:'Discard local edit',exact:true}).click();
+  await addMaterial(page);await page.getByRole('dialog').getByRole('button',{name:/^Code document /}).click();await expect(page.getByLabel('Content',{exact:true})).toHaveValue('An unfinished idea');await page.getByRole('button',{name:'Discard local edit',exact:true}).click();
   await page.getByRole('button',{name:'Speak',exact:true}).click();await page.evaluate(()=>window.fixture.speech('Open Word'));await page.getByRole('button',{name:'Stop recording',exact:true}).click();await page.evaluate(()=>window.fixture.loseReceipt());await page.locator('#run-command').click();await page.getByRole('dialog').getByRole('button',{name:'Retry this change'}).click();
-  await expect(page.getByRole('link',{name:'Open Word ↗'})).toBeVisible();expect(await page.evaluate(()=>window.fixture.resources().length)).toBe(1);await page.getByRole('button',{name:'← All work',exact:true}).click();await page.getByRole('button',{name:'Speak',exact:true}).click();await expect(page.locator('.capture-address')).toHaveText('Launch work');
+  await expect(page.getByRole('link',{name:'Open Word ↗'})).toBeVisible();expect(await page.evaluate(()=>window.fixture.resources().length)).toBe(1);await page.locator('.capture-dock').getByRole('button',{name:'All material',exact:true}).click();await page.getByRole('button',{name:'Speak',exact:true}).click();await expect(page.locator('.capture-address')).toHaveText('Launch work');
 });
 
 test('dictation cannot insert into a replacement draft and can recover as a separate note',async({page})=>{
@@ -193,7 +195,7 @@ test('dictation cannot insert into a replacement draft and can recover as a sepa
 
 
 test('code dictation replaces the captured selection and retains its editor',async({page})=>{
-  await createWorkspace(page);await page.getByRole('button',{name:'Add to workspace'}).click();await page.getByRole('dialog').getByRole('button',{name:/^Code document /}).click();await page.getByRole('textbox',{name:'Code content'}).fill('const draft = 1;');await page.getByRole('textbox',{name:'Code content'}).press('Control+Home');for(let index=0;index<6;index++)await page.keyboard.press('Shift+ArrowRight');
+  await createWorkspace(page);await addMaterial(page);await page.getByRole('dialog').getByRole('button',{name:/^Code document /}).click();await page.getByRole('textbox',{name:'Code content'}).fill('const draft = 1;');await page.getByRole('textbox',{name:'Code content'}).press('Control+Home');for(let index=0;index<6;index++)await page.keyboard.press('Shift+ArrowRight');
   await page.getByRole('button',{name:'Speak',exact:true}).click();await page.evaluate(()=>window.fixture.speech('let '));await page.getByRole('button',{name:'Stop recording'}).click();await page.getByRole('button',{name:'Insert into draft'}).click();await expect(page.getByRole('textbox',{name:'Code content'})).toHaveText('let draft = 1;');expect(await page.evaluate(()=>window.fixture.resources().length)).toBe(0);
 });
 
@@ -211,8 +213,8 @@ test('update is conditional at the top level, preserves drafts and guards empty 
 });
 
 test('Settings has its own destination while workspace switching stays focused',async({page})=>{
-  await createWorkspace(page);await page.getByRole('button',{name:/Current workspace:/}).click();await expect(page.getByRole('dialog').getByRole('button',{name:'Create workspace',exact:true})).toBeVisible();await expect(page.getByRole('dialog').getByRole('button',{name:'Appearance',exact:true})).toHaveCount(0);await expect(page.getByRole('dialog').getByRole('button',{name:'Connections',exact:true})).toHaveCount(0);
-  await page.getByRole('button',{name:'Close dialog'}).click();await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.getByRole('dialog',{name:'Settings',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Appearance',exact:true})).toBeVisible();await expect(page.getByRole('dialog').getByRole('button',{name:'Create workspace',exact:true})).toHaveCount(0);await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'Settings',exact:true})).toBeFocused();
+  await createWorkspace(page);await openPicker(page);await expect(page.getByRole('dialog').getByRole('button',{name:'Create workspace',exact:true})).toBeVisible();await expect(page.getByRole('dialog').getByRole('button',{name:'Appearance',exact:true})).toHaveCount(0);await expect(page.getByRole('dialog').getByRole('button',{name:'Connections',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Close dialog'}).click();await openSettings(page);await expect(page.getByRole('dialog',{name:'Settings',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Appearance',exact:true})).toBeVisible();await expect(page.getByRole('dialog').getByRole('button',{name:'Create workspace',exact:true})).toHaveCount(0);await page.keyboard.press('Escape');await settingsReturn(page);
 });
 
 test('live resize retains the editor and Settings across desktop, split-window, phone and landscape sizes',async({page})=>{
@@ -220,25 +222,25 @@ test('live resize retains the editor and Settings across desktop, split-window, 
   const sizes=[{width:1440,height:900},{width:1024,height:768},{width:744,height:1133},{width:540,height:720},{width:320,height:568},{width:844,height:390}];
   // Capture the post-update element: the update announcement may legitimately render.
   const retained=await page.getByLabel('Content',{exact:true}).elementHandle();
-  for(const size of sizes){await page.setViewportSize(size);await expect(page.getByLabel('Content',{exact:true})).toHaveValue('An unfinished draft stays put during resizing.');expect(await retained!.evaluate(node=>node===document.getElementById('note-body'))).toBe(true);const bounds=await page.evaluate(()=>({width:document.documentElement.scrollWidth,viewport:innerWidth,targets:Array.from(document.querySelectorAll('.topbar button,.capture-dock button')).map(el=>{const b=el.getBoundingClientRect();return {width:b.width,height:b.height,left:b.left,right:b.right}})}));expect(bounds.width).toBeLessThanOrEqual(bounds.viewport);for(const target of bounds.targets){expect(target.width).toBeGreaterThanOrEqual(44);expect(target.height).toBeGreaterThanOrEqual(44);expect(target.left).toBeGreaterThanOrEqual(0);expect(target.right).toBeLessThanOrEqual(size.width)}}
-  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Appearance',exact:true}).focus();
+  for(const size of sizes){await page.setViewportSize(size);await expect(page.getByLabel('Content',{exact:true})).toHaveValue('An unfinished draft stays put during resizing.');expect(await retained!.evaluate(node=>node===document.getElementById('note-body'))).toBe(true);const bounds=await page.evaluate(()=>({width:document.documentElement.scrollWidth,viewport:innerWidth,targets:Array.from(document.querySelectorAll('.topbar button,.capture-dock button')).map(el=>{const b=el.getBoundingClientRect();return {width:b.width,height:b.height,left:b.left,right:b.right}})}));expect(bounds.width).toBeLessThanOrEqual(bounds.viewport);for(const target of bounds.targets){expect(target.width).toBeGreaterThanOrEqual(32);expect(target.height).toBeGreaterThanOrEqual(32);expect(target.left).toBeGreaterThanOrEqual(0);expect(target.right).toBeLessThanOrEqual(size.width)}}
+  await openSettings(page);await page.getByRole('button',{name:'Appearance',exact:true}).focus();
   for(const size of sizes){await page.setViewportSize(size);await expect(page.getByRole('dialog',{name:'Settings',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Appearance',exact:true})).toBeFocused();const box=(await page.getByRole('dialog').boundingBox())!;expect(box.x).toBeGreaterThanOrEqual(0);expect(box.y).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(size.width);expect(box.y+box.height).toBeLessThanOrEqual(size.height)}
-  await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'Settings',exact:true})).toBeFocused();await expect(page.getByLabel('Content',{exact:true})).toHaveValue('An unfinished draft stays put during resizing.');await editor?.dispose();await retained?.dispose();
+  await page.keyboard.press('Escape');await settingsReturn(page);await expect(page.getByLabel('Content',{exact:true})).toHaveValue('An unfinished draft stays put during resizing.');await editor?.dispose();await retained?.dispose();
 });
 
 test('glass preferences provide solid readable controls and preserve keyboard access',async({page})=>{
-  await createWorkspace(page);await createNote(page);await expect(page.locator('.topbar')).toHaveCSS('backdrop-filter',/blur/);await expect(page.locator('.resource-card')).toHaveCSS('backdrop-filter','none');
-  const cdp=await page.context().newCDPSession(page);await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-transparency',value:'reduce'},{name:'prefers-reduced-motion',value:'reduce'}]});expect(await page.evaluate(()=>matchMedia('(prefers-reduced-transparency: reduce)').matches)).toBe(true);await expect(page.locator('.topbar')).toHaveCSS('backdrop-filter','none');await expect(page.locator('.capture-dock')).toHaveCSS('backdrop-filter','none');await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCSS('backdrop-filter','none');await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'Settings',exact:true})).toBeFocused();
-  await cdp.send('Emulation.setEmulatedMedia',{features:[]});await page.emulateMedia({contrast:'more',reducedMotion:'reduce'});await expect(page.locator('.topbar')).toHaveCSS('backdrop-filter','none');await expect(page.locator('.topbar')).toHaveCSS('border-top-width','2px');await page.emulateMedia({forcedColors:'active'});await expect(page.locator('.topbar')).toHaveCSS('backdrop-filter','none');await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.getByRole('button',{name:'Appearance',exact:true})).toBeVisible();await cdp.detach();
+  await createWorkspace(page);await createNote(page);await expect(page.locator('.topbar')).toHaveCSS('backdrop-filter','none');await expect(page.locator('.resource-card')).toHaveCSS('backdrop-filter','none');
+  const cdp=await page.context().newCDPSession(page);await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-transparency',value:'reduce'},{name:'prefers-reduced-motion',value:'reduce'}]});expect(await page.evaluate(()=>matchMedia('(prefers-reduced-transparency: reduce)').matches)).toBe(true);await expect(page.locator('.topbar')).toHaveCSS('backdrop-filter','none');await expect(page.locator('.capture-dock')).toHaveCSS('backdrop-filter','none');await openSettings(page);await expect(page.getByRole('dialog')).toHaveCSS('backdrop-filter','none');await page.keyboard.press('Escape');await settingsReturn(page);
+  await cdp.send('Emulation.setEmulatedMedia',{features:[]});await page.emulateMedia({contrast:'more',reducedMotion:'reduce'});await expect(page.locator('.topbar')).toHaveCSS('backdrop-filter','none');await expect(page.locator('.topbar')).toHaveCSS('border-top-width','2px');await page.emulateMedia({forcedColors:'active'});await expect(page.locator('.topbar')).toHaveCSS('backdrop-filter','none');await openSettings(page);await expect(page.getByRole('button',{name:'Appearance',exact:true})).toBeVisible();await cdp.detach();
 });
 
 test('touch Settings navigation survives a tablet split-window resize',async({browser,baseURL})=>{
-  const context=await browser.newContext({...(baseURL?{baseURL}:{}),viewport:{width:1024,height:768},isMobile:true,hasTouch:true});try{const page=await context.newPage();await createWorkspace(page);await page.getByRole('button',{name:'Settings',exact:true}).tap();await page.setViewportSize({width:540,height:720});await expect(page.getByRole('dialog',{name:'Settings',exact:true})).toBeVisible();await page.getByRole('button',{name:'Appearance',exact:true}).tap();await page.getByRole('button',{name:'Dark',exact:true}).tap();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');await page.getByRole('button',{name:'Close dialog'}).tap();await expect(page.getByRole('button',{name:'Settings',exact:true})).toBeFocused();expect(await page.evaluate(()=>matchMedia('(pointer: coarse)').matches)).toBe(true)}finally{await context.close()}
+  const context=await browser.newContext({...(baseURL?{baseURL}:{}),viewport:{width:1024,height:768},isMobile:true,hasTouch:true});try{const page=await context.newPage();await createWorkspace(page);await openSettings(page);await page.setViewportSize({width:540,height:720});await expect(page.getByRole('dialog',{name:'Settings',exact:true})).toBeVisible();await page.getByRole('button',{name:'Appearance',exact:true}).tap();await page.getByRole('button',{name:'Dark',exact:true}).tap();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');await page.getByRole('button',{name:'Close dialog'}).tap();await settingsReturn(page);expect(await page.evaluate(()=>matchMedia('(pointer: coarse)').matches)).toBe(true)}finally{await context.close()}
 });
 
 
 test('Settings addresses the named workspace and retains separately scoped key input',async({page})=>{
-  await page.goto('/tests/host.html?provider');await page.getByLabel('Workspace name',{exact:true}).fill('Work');await page.getByRole('button',{name:'Create workspace',exact:true}).click();await page.getByRole('button',{name:'Type instead',exact:true}).click();await page.getByLabel('Your words').fill('Keep this idea in Work');await page.getByRole('button',{name:'Close dialog'}).click();await createWorkspace(page,'Private',false);
-  await page.getByRole('button',{name:'Settings',exact:true}).click();await expect(page.getByRole('heading',{name:'Private',exact:true})).toBeVisible();await page.getByRole('button',{name:'OpenAI connection',exact:true}).click();await expect(page.locator('.voice-settings .capture-address')).toHaveText('Private');await page.getByLabel('OpenAI API key').fill('SYNTHETIC_ONLY_UNSUBMITTED_KEY');await page.getByRole('button',{name:'Close dialog'}).click();await switchTo(page,'Work');
-  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'OpenAI connection',exact:true}).click();await expect(page.locator('.voice-settings .capture-address')).toHaveText('Private');await expect(page.getByLabel('OpenAI API key')).toHaveValue('SYNTHETIC_ONLY_UNSUBMITTED_KEY');await expect(page.getByRole('dialog')).toContainText('unfinished connection change belongs');expect(await page.evaluate(()=>window.fixture.connectionWrites().length)).toBe(0);await page.getByRole('button',{name:'Close dialog'}).click();await page.getByRole('button',{name:'Review capture'}).click();await page.getByRole('button',{name:'Record again'}).click();await expect(page.locator('.voice-settings .capture-address')).toHaveText('Private');await expect(page.getByLabel('OpenAI API key')).toHaveValue('SYNTHETIC_ONLY_UNSUBMITTED_KEY');
+  await page.goto('/tests/host.html?provider');await page.getByLabel('Workspace name',{exact:true}).fill('Work');await page.getByRole('button',{name:'Create workspace',exact:true}).click();await typeInput(page);await page.getByLabel('Your words').fill('Keep this idea in Work');await page.getByRole('button',{name:'Close dialog'}).click();await createWorkspace(page,'Private',false);
+  await openSettings(page);await expect(page.getByRole('heading',{name:'Private',exact:true})).toBeVisible();await page.getByRole('button',{name:'OpenAI',exact:true}).click();await expect(page.locator('.voice-settings .capture-address')).toHaveText('Private');await page.getByLabel('OpenAI API key').fill('SYNTHETIC_ONLY_UNSUBMITTED_KEY');await page.getByRole('button',{name:'Close dialog'}).click();await switchTo(page,'Work');
+  await openSettings(page);await page.getByRole('button',{name:'OpenAI',exact:true}).click();await expect(page.locator('.voice-settings .capture-address')).toHaveText('Private');await expect(page.getByLabel('OpenAI API key')).toHaveValue('SYNTHETIC_ONLY_UNSUBMITTED_KEY');await expect(page.getByRole('dialog')).toContainText('unfinished connection change belongs');expect(await page.evaluate(()=>window.fixture.connectionWrites().length)).toBe(0);await page.getByRole('button',{name:'Close dialog'}).click();await page.getByRole('button',{name:'Review capture'}).click();await page.getByRole('button',{name:'Record again'}).click();await expect(page.locator('.voice-settings .capture-address')).toHaveText('Private');await expect(page.getByLabel('OpenAI API key')).toHaveValue('SYNTHETIC_ONLY_UNSUBMITTED_KEY');
 });

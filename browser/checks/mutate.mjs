@@ -73,7 +73,7 @@ try {
   for (const path of ['browser/checks', 'browser/host', 'browser/host-wasm']) {
     await cp(join(source, path), join(copied, path), { recursive: true, filter: path => !ignored.has(basename(path)) });
   }
-  for (const path of ['native/core/src/model.rs', 'native/ui/src/protocol.ts']) {
+  for (const path of ['native/core/src/model.rs', 'native/core/src/work.rs', 'native/ui/src/protocol.ts', 'native/ui/src/meeting-preparation.ts']) {
     await mkdir(dirname(join(copied, path)), { recursive: true });
     await cp(join(source, path), join(copied, path));
   }

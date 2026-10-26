@@ -16,7 +16,8 @@ const snapshot = await host.snapshot();
 
 `BrowserHost` matches the native UI's `Host` interface: `available`, `snapshot`,
 `command`, `invite`, `join`, and `sync`. It adds `setForeground(boolean)` and
-`close()`. Command, receipt, snapshot, and peer-status contracts reuse
+`close()`, the scoped OpenAI connection/transcription methods, `prepareMeeting`,
+and local input-journal methods. Command, receipt, snapshot, and peer-status contracts reuse
 `native/ui/src/protocol.ts`, which is a pure decoder module and imports no Tauri
 runtime. The UI owns voice interaction and browser visibility events.
 
@@ -43,6 +44,15 @@ runtime. The UI owns voice interaction and browser visibility events.
   operations until reopened; it never turns such an error into a definitive
   command rejection. Reopening reconstructs state from durable rows. An
   interrupted response can therefore be retried with the same operation identity.
+- Meeting work uses the [typed work contract](../../docs/meeting-work-contract.md).
+  One signed publication action commits its notes, follow-up text, and ready work
+  revision atomically. `prepareMeeting` resolves pinned transcripts and the
+  exact connection version in the worker; it returns reviewable material and
+  does not save resources or send mail itself.
+- Private input has a separate local-only `STRICT` journal. Ordered generations
+  and deletion tombstones fence delayed writes. It is excluded from signed
+  history, peer exports, snapshots and connection exchange. The owning UI validates
+  its retained typed payload before replaying a pending command.
 - The storage promise queue never waits for network I/O. Peer requests may wait
   on storage, but cannot hold its queue across a relay connection or response.
 
@@ -92,6 +102,14 @@ retries reachable peers. Explicit pause/resume intent is fenced against older
 background work; it closes and frees retired endpoints. Browser suspension still
 stops execution, so this is not an always-running mobile daemon.
 
+Meeting work is negotiated using the scope-free `work_capabilities` probe. A
+supported peer returns `{ type: 'work_capabilities', work: 1 }`; the next pair or
+sync request explicitly includes `work: 1`. Incoming requests validate that
+declaration before exporting any work history. An incompatible invitation is
+refused before its membership grant is committed. Previous clients can still
+exchange note/surface-only workspaces through the original request shape. Support
+is declared for each transfer rather than retained indefinitely for a device.
+
 ## Building and validation
 
 Build `browser/host-wasm` first, then install this package and run `npm run check`.
@@ -121,8 +139,11 @@ step.
   storage, uninstalling an app, or profile loss can remove data and identity.
   Replication helps only for content already copied to another peer. There is no
   identity backup or restoration flow yet.
-- The seed is unencrypted in OPFS and accessible to code at the same origin.
-  There is no Keychain/DPAPI, OS credential vault, or device-bound key protection.
+- The seed and workspace credentials are encrypted using a separately retained
+  non-extractable IndexedDB device key. Startup migrates and verifies current-file
+  cleanup for older plaintext identities before networking. This protects a
+  database export, not compromised same-origin code or a browser profile; see the
+  [connection contract](CONNECTIONS-CONTRACT.md).
 - Turso's 250 MiB initial shared linear-memory setting is a wrapper default,
   not a resident-RAM minimum. The [runtime audit](../storage-probe/memory-audit-20261025/README.md)
   measured the database separately from this host and tested a smaller wrapper.
@@ -131,5 +152,6 @@ step.
   package pending broader device testing and a supported configuration path.
 - Relays provide routing, not authority. Availability outside the current
   browser session depends on browser lifecycle and connectivity. Native desktop
-  controls, Office embedding, voice processing, and UI features are separate
-  integrations.
+  controls and Office embedding require separate integrations. The current
+  worker supports OpenAI dictation and bounded meeting preparation, with no
+  generic remote application execution.

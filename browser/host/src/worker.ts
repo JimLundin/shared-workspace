@@ -3,6 +3,8 @@ import { object, string, type JoinStage } from '../../../native/ui/src/protocol.
 import { requireThat, safeError, type Command, type HostOptions } from './types.ts';
 import type { HostOwner } from './owner.ts';
 import { connectionFailure, type SetConnection, type RemoveConnection, type Transcription } from './connections.ts';
+import { decodeMeetingRequest } from '../../../native/ui/src/meeting-preparation.ts';
+import { decodeLocalDraft, decodeLocalDraftRemoval } from './local-drafts.ts';
 
 declare const self: DedicatedWorkerGlobalScope;
 let owner: HostOwner | undefined;
@@ -43,6 +45,9 @@ async function dispatch(method: string, value: unknown, progress: (stage: JoinSt
   }
   requireThat(owner, 'Browser host is not open.');
   switch (method) {
+    case 'list_local_drafts': return owner.listLocalDrafts();
+    case 'upsert_local_draft': return owner.upsertLocalDraft(decodeLocalDraft(value));
+    case 'remove_local_draft': return owner.removeLocalDraft(decodeLocalDraftRemoval(value));
     case 'connection': return owner.connection(string(value));
     case 'connection_peers': return owner.connectionPeers(string(value));
     case 'set_connection': return owner.setConnection(value as SetConnection);
@@ -54,6 +59,13 @@ async function dispatch(method: string, value: unknown, progress: (stage: JoinSt
       finally { uploads.delete(id); }
     }
     case 'cancel_transcription': uploads.get(string(value))?.abort(); return;
+    case 'prepare_meeting': {
+      const controller = new AbortController();
+      uploads.set(id, controller);
+      try { return await owner.prepareMeeting(decodeMeetingRequest(value), controller.signal); }
+      finally { uploads.delete(id); }
+    }
+    case 'cancel_preparation': uploads.get(string(value))?.abort(); return;
     case 'snapshot': return owner.snapshot();
     case 'command': return owner.command(value as Command); // Rust validates the command at the typed boundary.
     case 'invite':
@@ -80,6 +92,6 @@ self.addEventListener('message', (event: MessageEvent<unknown>) => {
   const message = object(event.data), id = string(message.id), method = string(message.method);
   void dispatch(method, message.value, stage => self.postMessage({ id, type: 'join_progress', stage }), id).then(
     value => self.postMessage({ id, ok: true, value }),
-    error => self.postMessage({ id, ok: false, error: ['connection', 'connection_peers', 'set_connection', 'remove_connection', 'transcribe', 'cancel_transcription'].includes(method) ? connectionFailure(error) : safeError(error) }),
+    error => self.postMessage({ id, ok: false, error: ['connection', 'connection_peers', 'set_connection', 'remove_connection', 'transcribe', 'cancel_transcription', 'prepare_meeting', 'cancel_preparation'].includes(method) ? connectionFailure(error) : safeError(error) }),
   );
 });

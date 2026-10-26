@@ -72,7 +72,7 @@ test('provider capture negotiates Safari MP4 and does not report success before 
   await f.voice.stop('other'); assert.equal(capture.stopped, 0);
   await f.voice.stop('capture'); await f.voice.stop('capture');
   assert.equal(capture.stopped, 1); assert.ok(capture.released > 0);
-  assert.equal(requests.length, 0); assert.equal(f.events.some(event => event.type === 'stopped'), false);
+  assert.equal(requests.length, 0, 'AUDIO_UPLOADED_BEFORE_FINAL_CHUNK'); assert.equal(f.events.some(event => event.type === 'stopped'), false);
   capture.finish();
   assert.equal(requests.length, 1); assert.equal(requests[0]!.audio.type, 'audio/mp4');
   assert.equal(await requests[0]!.audio.text(), 'first chunk final audio chunk');
@@ -94,14 +94,14 @@ test('workspace and connection are copied before microphone permission resolves'
   snapshot.workspaceId = 'different'; snapshot.connectionVersion = 'c'.repeat(64);
   const capture = new Capture(); pending.resolve(capture); await started;
   await voice.stop('s'); capture.finish(); await flush();
-  assert.deepEqual(requests[0]?.context, { workspaceId: 'original', connectionVersion: 'b'.repeat(64) });
+  assert.deepEqual(requests[0]?.context, { workspaceId: 'original', connectionVersion: 'b'.repeat(64) }, 'CAPTURE_CONTEXT_RETARGETED');
   assert.equal(requests[0]?.locale, 'sv-SE'); assert.equal(Object.isFrozen(requests[0]?.context), true);
 });
 
 test('default transcription language is automatic rather than the browser interface language', async () => {
   const platform = new Platform(); const locales: string[] = [];
   const voice = new ProviderVoice({ captureContext: context, transcribe: async (_audio, options) => { locales.push(options.locale); return 'Hej'; } }, platform);
-  assert.deepEqual(await voice.capability(), { type: 'provider_transcription', locale: '', provider_label: 'OpenAI' });
+  assert.deepEqual(await voice.capability(), { type: 'provider_transcription', locale: '', provider_label: 'OpenAI' }, 'AUTOMATIC_TRANSCRIPTION_LANGUAGE_REPLACED');
   await voice.start('s', () => {}); await voice.stop('s'); platform.captures[0]!.finish(); await flush();
   assert.deepEqual(locales, ['']);
 });
@@ -111,7 +111,7 @@ test('cancelling a pending permission request releases its late microphone witho
   const started = f.start('old'); await f.voice.cancel('old');
   f.platform.next = undefined; await f.start('new');
   const late = new Capture(); pending.resolve(late); await started;
-  assert.equal(late.started, false); assert.equal(late.released, 1);
+  assert.equal(late.started, false); assert.equal(late.released, 1, 'LATE_MICROPHONE_NOT_RELEASED');
   assert.equal(f.events.at(-1)?.session_id, 'new');
   await f.voice.cancel('new');
 });
@@ -129,11 +129,11 @@ test('cancel aborts provider work and fences a late result after a new session s
   const f = fixture(async (_audio, { signal }) => { signals.push(signal); return result.promise; });
   await f.start('old'); const old = f.platform.captures[0]!;
   await f.voice.stop('old'); old.finish(); assert.equal(signals[0]?.aborted, false);
-  await f.voice.cancel('old'); assert.equal(signals[0]?.aborted, true);
+  await f.voice.cancel('old'); assert.equal(signals[0]?.aborted, true, 'PROVIDER_UPLOAD_NOT_ABORTED');
   await f.start('new'); const count = f.events.length;
   result.resolve('Late text from a different workspace'); await flush();
   old.handlers?.failed(); old.handlers?.stopped();
-  assert.equal(f.events.length, count); await f.voice.cancel('new');
+  assert.equal(f.events.length, count, 'CANCELLED_TRANSCRIPT_PUBLISHED'); await f.voice.cancel('new');
 });
 
 test('duration stops microphone capture and provider timeout aborts without inventing a transcript', async () => {
@@ -162,7 +162,7 @@ test('oversized recording is rejected and never uploaded, including late final c
   await f.start(); const capture = f.platform.captures[0]!;
   capture.handlers?.data(new Blob([new Uint8Array(PROVIDER_VOICE_LIMITS.audioBytes + 1)]));
   capture.finish(); await flush();
-  assert.equal(requests, 0); assert.ok(capture.released > 0);
+  assert.equal(requests, 0, 'OVERSIZED_RECORDING_UPLOADED'); assert.ok(capture.released > 0);
   assert.equal(f.events.at(-1)?.type, 'error');
 });
 
@@ -193,7 +193,7 @@ test('empty and oversized provider output are errors rather than partial or succ
   for (const text of ['   ', 'x'.repeat(PROVIDER_VOICE_LIMITS.transcriptCharacters + 1)]) {
     const f = fixture(async () => text); await f.start();
     await f.voice.stop('capture'); f.platform.captures[0]!.finish(); await flush();
-    assert.equal(f.events.at(-1)?.type, 'error'); assert.equal(f.events.some(event => event.type === 'transcript'), false);
+    assert.equal(f.events.at(-1)?.type, 'error', 'INVALID_PROVIDER_TRANSCRIPT_ACCEPTED'); assert.equal(f.events.some(event => event.type === 'transcript'), false);
   }
 });
 

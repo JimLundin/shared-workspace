@@ -1,5 +1,12 @@
 # Engine requests from the browser UI experiments
 
+26 October implementation status: [meeting work continuity](../../docs/work-continuity-implementation.md)
+implements the bounded note-to-draft experiment proposed below, with addressed
+retained input, actor-bound preparation and cited results shared through signed
+operations. Provider preparation runs on the explicitly initiating host. General
+remote execution, external application control and automatic reassignment remain
+proposed capabilities.
+
 The current UI uses real `BrowserHost.snapshot/command/invite/join/sync`, durable
 operation receipts, retained resource revisions and foreground lifecycle. This
 supports shared notes/workspaces. General agent execution and native application

@@ -50,7 +50,7 @@ async function files(directory) {
   return paths.sort();
 }
 async function sourceHashes() {
-  const paths = ['native/core/src/model.rs', 'native/ui/src/protocol.ts', 'browser/checks/page.ts', 'browser/checks/index.html', 'browser/checks/surface-acceptance.mjs', 'browser/host-wasm/Cargo.toml', 'browser/host-wasm/Cargo.lock'];
+  const paths = ['native/core/src/model.rs', 'native/core/src/work.rs', 'native/ui/src/protocol.ts', 'native/ui/src/meeting-preparation.ts', 'browser/checks/page.ts', 'browser/checks/index.html', 'browser/checks/surface-acceptance.mjs', 'browser/host-wasm/Cargo.toml', 'browser/host-wasm/Cargo.lock'];
   for (const path of ['browser/host/src', 'browser/host-wasm/src', 'browser/host-wasm/pkg']) {
     for (const file of await files(join(source, path))) paths.push(relative(source, file));
   }

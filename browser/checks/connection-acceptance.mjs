@@ -40,7 +40,7 @@ async function files(root) {
 }
 async function fingerprint() {
   const roots = ['browser/host/src', 'browser/host-wasm/src', 'browser/host-wasm/pkg'];
-  const paths = ['browser/checks/page.ts', 'browser/checks/connection-acceptance.mjs', 'browser/host/package-lock.json', 'native/ui/src/protocol.ts'];
+  const paths = ['browser/checks/page.ts', 'browser/checks/connection-acceptance.mjs', 'browser/host/package-lock.json', 'native/core/src/model.rs', 'native/core/src/work.rs', 'native/ui/src/protocol.ts', 'native/ui/src/meeting-preparation.ts'];
   for (const root of roots) for (const path of await files(join(source, root))) paths.push(relative(source, path));
   return Object.fromEntries(await Promise.all(paths.sort().map(async name => [name, hash(await readFile(join(source, name)))])));
 }
