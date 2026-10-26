@@ -172,6 +172,63 @@ test('provider setup and exact retry keep keys out of the interface, free speech
   await expect(page.locator('.note-body')).toHaveText('A thought without a command prefix.');await share(page);await expect(page.getByRole('dialog')).toContainText('saved OpenAI connections');
 });
 
+test('dictation review focus survives completion during Stop activation and later renders',async({page})=>{
+  await page.goto('/tests/host.html?provider');
+  await page.getByLabel('Workspace name',{exact:true}).fill('Work');await page.getByRole('button',{name:'Create workspace',exact:true}).click();
+  await page.getByRole('button',{name:'Speak',exact:true}).click();await page.getByLabel('OpenAI API key',{exact:true}).fill('synthetic-only-connection-key');await page.getByRole('button',{name:'Save connection',exact:true}).click();
+  await page.getByRole('button',{name:'Continue to voice',exact:true}).click();await page.getByRole('button',{name:'Start speaking',exact:true}).click();
+  await page.evaluate(()=>document.addEventListener('click',event=>{
+    if(event.target instanceof Element&&event.target.closest('[data-action="stop-voice"]'))window.fixture.finishSpeech('Review this captured thought.');
+  },{once:true}));
+  await page.getByRole('button',{name:'Stop recording',exact:true}).click();
+  const review=page.getByRole('button',{name:'Save as note',exact:true});
+  await expect(review).toBeVisible();await expect(review).toBeFocused();
+  await page.evaluate(()=>window.fixture.refresh());await page.evaluate(()=>window.fixture.offerUpdate());
+  await expect(review).toBeFocused();await expect(page.locator('#command-text')).toHaveValue('Review this captured thought.');
+  await expect(page.locator('.capture-address')).toHaveText('Work');
+  await review.click();await expect(page.locator('.note-body')).toHaveText('Review this captured thought.');
+});
+
+test('dictation review focus survives completion before the same Stop keyup',async({page})=>{
+  await createWorkspace(page);await page.getByRole('button',{name:'Speak',exact:true}).click();
+  await page.getByRole('button',{name:'Stop recording',exact:true}).focus();await page.keyboard.down(' ');
+  await page.evaluate(()=>window.fixture.finishSpeech('Review after the Space press.'));
+  await expect(page.locator('#run-command')).toHaveCount(0);
+  await page.keyboard.up(' ');
+  const review=page.getByRole('button',{name:'Save as note',exact:true});await expect(review).toBeFocused();
+  await page.evaluate(()=>window.fixture.refresh());await page.evaluate(()=>window.fixture.offerUpdate());
+  await expect(review).toBeFocused();await expect(page.locator('#command-text')).toHaveValue('Review after the Space press.');
+});
+
+test('a later keyboard action takes precedence over pending dictation review focus',async({page})=>{
+  await createWorkspace(page);await page.getByRole('button',{name:'Speak',exact:true}).click();
+  await page.getByRole('button',{name:'Stop recording',exact:true}).focus();await page.keyboard.down(' ');
+  await page.evaluate(()=>window.fixture.finishSpeech('Keep this thought while navigating.'));
+  await expect(page.locator('#run-command')).toHaveCount(0);
+  await page.keyboard.press('Shift+Tab');await page.keyboard.up(' ');
+  const close=page.getByRole('button',{name:'Close dialog',exact:true});
+  await expect(page.getByRole('button',{name:'Save as note',exact:true})).toBeVisible();await expect(close).toBeFocused();
+  await page.evaluate(()=>window.fixture.refresh());await page.evaluate(()=>window.fixture.offerUpdate());
+  await expect(close).toBeFocused();await expect(page.locator('#command-text')).toHaveValue('Keep this thought while navigating.');
+});
+
+test('dismissed dictation review focus cannot return or revive discarded input',async({page})=>{
+  await createWorkspace(page);await page.getByRole('button',{name:'Speak',exact:true}).click();
+  await page.getByRole('button',{name:'Stop recording',exact:true}).focus();await page.keyboard.down(' ');
+  await page.evaluate(()=>window.fixture.finishSpeech('The dismissed capture.'));
+  await expect(page.locator('#run-command')).toHaveCount(0);
+  await page.keyboard.press('Escape');await page.keyboard.up(' ');await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button',{name:'Review capture',exact:true}).click();
+  const close=page.getByRole('button',{name:'Close dialog',exact:true});await expect(close).toBeFocused();
+  await page.evaluate(()=>window.fixture.refresh());await page.evaluate(()=>window.fixture.offerUpdate());
+  await expect(close).toBeFocused();await expect(page.locator('#command-text')).toHaveValue('The dismissed capture.');
+  await page.getByRole('button',{name:'New capture',exact:true}).click();await page.getByRole('button',{name:'Type instead',exact:true}).click();
+  await page.getByLabel('Your words',{exact:true}).fill('A replacement typed thought.');
+  await page.evaluate(()=>window.fixture.refresh());await page.evaluate(()=>window.fixture.offerUpdate(false));
+  await expect(page.getByLabel('Your words',{exact:true})).toHaveValue('A replacement typed thought.');await expect(page.getByLabel('Your words',{exact:true})).toBeFocused();
+  expect(await page.evaluate(()=>window.fixture.resources())).toHaveLength(0);
+});
+
 test('code document edits use a retained editor and Office opens through an honest external action',async({page})=>{
   await createWorkspace(page);await addMaterial(page);await page.getByRole('dialog').getByRole('button',{name:/^Code document /}).click();await page.getByLabel('Title',{exact:true}).fill('example.ts');await page.getByLabel('Language',{exact:true}).selectOption('typescript');await page.getByRole('textbox',{name:'Code content'}).fill('const example = 1;');await page.evaluate(()=>window.fixture.refresh());await expect(page.getByRole('textbox',{name:'Code content'})).toHaveText('const example = 1;');
   await page.getByRole('button',{name:'Save document',exact:true}).click();await expect(page.getByRole('heading',{name:'example.ts',exact:true})).toBeVisible();await page.getByRole('button',{name:'Edit',exact:true}).click();await page.getByRole('textbox',{name:'Code content'}).fill('const example = 2;');await page.getByRole('button',{name:'Save document',exact:true}).click();

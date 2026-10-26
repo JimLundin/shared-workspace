@@ -8,6 +8,28 @@ async function draft(page:Page){await add(page);await page.getByRole('dialog').g
 async function createWork(page:Page){await draft(page);await page.getByRole('checkbox',{name:'Tuesday transcript',exact:true}).check();await page.getByRole('button',{name:'Create work',exact:true}).click();await expect(page.locator('.meeting-work')).toBeVisible();}
 async function prepared(page:Page){await start(page);await transcript(page);await createWork(page);await page.getByRole('button',{name:'Prepare meeting material',exact:true}).click();await expect(page.locator('.meeting-work')).toContainText('Material ready for review');}
 async function work(page:Page){return page.evaluate(()=>window.fixture.resources().find(r=>r.heads.some(h=>'work' in h))!);}
+async function touchGeometry(page:Page){
+  // Passive renders replace these controls. Resolve and measure both in one browser turn.
+  return page.evaluate(()=>{
+    const bounds=(selector:string)=>{
+      const visible=[...document.querySelectorAll(selector)].flatMap(element=>{
+        if(!(element instanceof HTMLElement)||!element.isConnected||getComputedStyle(element).visibility!=='visible')return[];
+        const rect=element.getBoundingClientRect();
+        return element.getClientRects().length&&rect.width>0&&rect.height>0?[{x:rect.x,y:rect.y,width:rect.width,height:rect.height}]:[];
+      });
+      const [only]=visible;
+      if(visible.length!==1||!only)throw new Error(`Expected one visible connected touch control: ${selector}`);
+      return only;
+    };
+    return{n:bounds('#navigation-toggle'),d:bounds('.capture-dock')};
+  });
+}
+async function touchGeometryDuringRefresh(page:Page){
+  // Exercise the existing observation path while the journey samples its controls.
+  const timer=await page.evaluate(()=>window.setInterval(()=>{void window.fixture.refresh()},0));
+  try{return await touchGeometry(page)}
+  finally{await page.evaluate(timer=>window.clearInterval(timer),timer)}
+}
 
 test('explicit preparation pins sources, publishes reviewed outputs and keeps user corrections',async({page})=>{
   await start(page);await transcript(page);await createWork(page);expect(await page.evaluate(()=>window.fixture.meetingRequests())).toHaveLength(0);
@@ -116,8 +138,8 @@ test('desktop layout toggles, update and composition retain the same editor and 
 
 test('touch navigator and page controls stay separate and preferred hand mirrors them',async({browser,baseURL})=>{
   for(const size of [{width:390,height:844},{width:1024,height:900}]){const context=await browser.newContext({...(baseURL?{baseURL}:{}),viewport:size,hasTouch:true,isMobile:true});const page=await context.newPage();try{
-    await start(page);await transcript(page);const nav=page.locator('#navigation-toggle'),dock=page.locator('.capture-dock'),n=(await nav.boundingBox())!,d=(await dock.boundingBox())!;expect(n.y+n.height).toBeLessThan(d.y);expect(n.width).toBeGreaterThanOrEqual(44);if(size.width>590)expect(n.x+n.width).toBeLessThan(d.x);
-    await nav.click();await page.getByRole('dialog').getByRole('button',{name:'Settings',exact:true}).click();await page.getByLabel('Preferred hand').selectOption('left');await page.getByRole('button',{name:'Close dialog'}).click();expect((await dock.boundingBox())!.x).toBeLessThan(30);if(size.width>590)expect((await nav.boundingBox())!.x).toBeGreaterThan(900);else expect((await nav.boundingBox())!.x).toBeLessThan(30);
+    await start(page);await transcript(page);const nav=page.locator('#navigation-toggle'),{n,d}=await touchGeometryDuringRefresh(page);expect(n.y+n.height).toBeLessThan(d.y);expect(n.width).toBeGreaterThanOrEqual(44);if(size.width>590)expect(n.x+n.width).toBeLessThan(d.x);
+    await nav.click();await page.getByRole('dialog').getByRole('button',{name:'Settings',exact:true}).click();await page.getByLabel('Preferred hand').selectOption('left');await page.getByRole('button',{name:'Close dialog'}).click();const left=await touchGeometry(page);expect(left.d.x).toBeLessThan(30);if(size.width>590)expect(left.n.x).toBeGreaterThan(900);else expect(left.n.x).toBeLessThan(30);
     await page.screenshot({path:`/tmp/work-continuity-ui/touch-${size.width}.png`});
   }finally{await context.close();}}
 });

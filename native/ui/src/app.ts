@@ -60,12 +60,15 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
   const codeNode=document.createElement('div');codeNode.className='code-editor';
   let codeEditor:ReturnType<typeof mountCodeEditor>|null=null,codeIdentity:string|null=null;
   let captureRecovery=false,captureAsNote=false;
-  let captureEditor: {draftId:string;workspaceId:string;resourceId:string|null;type:string;field:'title'|'body'|'code';before:string;start:number;end:number}|null=null;
+  type EditorCapture=Readonly<{draftId:string;workspaceId:string;resourceId:string|null;type:string;field:'title'|'body'|'code';before:string;start:number;end:number}>;
+  let captureEditor:EditorCapture|null=null;
   let lastEditorField:'title'|'body'|'code'='body';
   let historyOwned = false, historyReturning = false;
   let afterPanelClose:(()=>void)|null=null;
   let pickerScope: readonly string[] | null = null;
   let capturedSubmission: CommandDraft | null = null;
+  type ReviewFocus=Readonly<{command:CommandDraft;editor:EditorCapture|null;meeting:MeetingCapture|null;activation:number|null}>;
+  let reviewFocus:ReviewFocus|null=null;
   const listScroll = new Map<string,number>();
   function focusResource(resourceId:string):void {
     const route=session.state.route,main=frame.querySelector('.main');
@@ -73,6 +76,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
     session.focus(resourceId);const current=frame.querySelector('.main');if(current)current.scrollTop=0;byId('reader-title')?.focus({preventScroll:true});
   }
   function openPanel(next: Panel, focusInput = true): void {
+    reviewFocus=null;
     if(historyReturning)afterPanelClose=null;
     if (!panel) {
       returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -86,6 +90,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
     first?.focus({ preventScroll: true });
   }
   function closePanel(fromBack = false): void {
+    reviewFocus=null;
     if (!panel) return;
     cancelControlPress();
     panel = null; void voice.cancel(); dialog.close();
@@ -107,7 +112,11 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
   type ControlPress=Readonly<{sequence:number;phase:'pressed'|'released'}> & (Readonly<{type:'pointer';pointerId:number}>|Readonly<{type:'key';key:' '|'Enter'}>);
   let controlPress:ControlPress|null=null,pressSequence=0,pressReleaseTimer:number|undefined,pressFlushTimer:number|undefined,userActionDepth=0;
   const protectedInput=():boolean=>{const active=document.activeElement;return composing||active instanceof HTMLInputElement||active instanceof HTMLTextAreaElement||active instanceof HTMLElement&&active.isContentEditable;};
-  function capturedUserAction<T>(action:()=>T):T {userActionDepth++;try{return action();}finally{userActionDepth--;}}
+  function capturedUserAction<T>(action:()=>T):T {
+    // Click/submit may finish the same press during which voice completed.
+    if(!controlPress||reviewFocus?.activation!==controlPress.sequence)reviewFocus=null;
+    userActionDepth++;try{return action();}finally{userActionDepth--;}
+  }
   function finishControlPress(sequence:number):void {
     if(controlPress?.sequence!==sequence)return;
     controlPress=null;window.clearTimeout(pressReleaseTimer);pressReleaseTimer=undefined;
@@ -123,6 +132,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
   function clearPressTimers():void {window.clearTimeout(pressReleaseTimer);window.clearTimeout(pressFlushTimer);pressReleaseTimer=undefined;pressFlushTimer=undefined;}
   const cancelControlPress=():void=>{if(controlPress)finishControlPress(controlPress.sequence);};
   const onControlPointerDown=(event:PointerEvent):void=>{
+    reviewFocus=null;
     if(!event.isPrimary||event.button!==0)return;
     const target=event.target instanceof Element?event.target.closest('button,summary,input,textarea,select,a,[role=button],[contenteditable]'):null;
     if(!target||!root.contains(target)){cancelControlPress();return;}
@@ -137,6 +147,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
   };
   const onControlPointerCancel=(event:PointerEvent):void=>{if(controlPress?.type==='pointer'&&controlPress.pointerId===event.pointerId)finishControlPress(controlPress.sequence);};
   const onActivationKeyDown=(event:KeyboardEvent):void=>{
+    reviewFocus=null;
     const key=event.key;if((key!==' '&&key!=='Enter')||event.isComposing||composing||event.keyCode===229||event.altKey||event.ctrlKey||event.metaKey)return;
     const target=event.target instanceof Element?event.target.closest('button,summary,input,a,[role=button]'):null;
     if(!target||!root.contains(target)||target instanceof HTMLElement&&target.isContentEditable)return;
@@ -160,7 +171,19 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
   };
   let inviteQr: { ticket: string; svg: string | null } | null = null;
   const byId = <T extends HTMLElement>(id: string): T | null => root.querySelector<T>('#'+id);
-  const voice = new VoiceSession({capability:()=>selectedVoice.capability(),start:(id,emit,locale)=>selectedVoice.start(id,emit,locale),stop:id=>selectedVoice.stop(id),cancel:id=>selectedVoice.cancel(id)}, (text, address) => { command = { text, address, source: 'voice' }; void retainInput().catch(retentionFailure); const field = byId<HTMLTextAreaElement>('command-text'); if (field) field.value = text; const label=root.querySelector('label[for=command-text]');if(label)label.textContent='Spoken transcript · editable'; if(!field)render();updateCommand(); }, () => {const finished=voice.state.type==='idle'&&lastVoicePhase!=='idle';lastVoicePhase=voice.state.type;render();if(finished&&command?.text&&panel==='capture')byId('run-command')?.focus({preventScroll:true})}, options.id);
+  const voice = new VoiceSession({capability:()=>selectedVoice.capability(),start:(id,emit,locale)=>selectedVoice.start(id,emit,locale),stop:id=>selectedVoice.stop(id),cancel:id=>selectedVoice.cancel(id)}, (text, address) => { command = { text, address, source: 'voice' }; void retainInput().catch(retentionFailure); const field = byId<HTMLTextAreaElement>('command-text'); if (field) field.value = text; const label=root.querySelector('label[for=command-text]');if(label)label.textContent='Spoken transcript · editable'; if(!field)render();updateCommand(); }, () => {
+    const finished=voice.state.type==='idle'&&lastVoicePhase!=='idle';lastVoicePhase=voice.state.type;
+    // Completion can arrive inside Stop's native activation, while passive
+    // rendering is fenced. Keep its captured identity until a real render.
+    if(!disposed&&finished&&command?.text&&panel==='capture')reviewFocus=Object.freeze({command,editor:captureEditor,meeting:captureMeeting,activation:controlPress?.sequence??null});
+    render();
+  }, options.id);
+  function focusReview():void {
+    const pending=reviewFocus;if(!pending)return;
+    if(panel!=='capture'||voice.state.type!=='idle'||command!==pending.command||captureEditor!==pending.editor||captureMeeting!==pending.meeting){reviewFocus=null;return;}
+    const review=byId<HTMLButtonElement>('run-command');if(!review||review.disabled)return;
+    reviewFocus=null;review.focus({preventScroll:true});
+  }
   const availableSnapshot = (): Snapshot | null => session.snapshot();
   const writing = (): boolean => session.state.mutation.type === 'sending' || session.state.mutation.type === 'uncertain';
   const captureBusy = (): boolean => ['starting','listening','stopping','transcribing'].includes(voice.state.type);
@@ -663,6 +686,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
     const main=frame.querySelector('.main');if(main)main.scrollTop=scroll;
     if(oldFocus){const replacement=focusId?byId(focusId):Array.from(root.querySelectorAll<HTMLElement>('button,summary,select')).find(el=>focusAction?el.dataset.action===focusAction&&el.dataset.args===focusArgs:el.tagName===oldFocus.tagName&&el.textContent===focusText&&el.closest('form')?.id===focusForm);replacement?.focus({preventScroll:true});if(selection&&(replacement instanceof HTMLInputElement||replacement instanceof HTMLTextAreaElement)&&selection.start!==null&&selection.end!==null){try{replacement.setSelectionRange(selection.start,selection.end)}catch{}}}
     applyLayout();
+    focusReview();
   }
   async function changeRoute(route:Route):Promise<void>{void voice.cancel();if(scanning){scanEpoch++;scanning=false;void options.scanner.cancel().catch(()=>{})}if(route.type==='devices'){openPanel('connections');return}if(route.type==='home'&&session.snapshot()?.workspaces.length){openPanel('picker');return}session.navigate(route);const main=root.querySelector('.main');if(main)main.scrollTop=0}
   async function resumeEditor():Promise<boolean>{
@@ -886,13 +910,13 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
   const onDisclosure=(event:Event):void=>{const detail=event.target;if(detail instanceof HTMLDetailsElement&&root.contains(detail)&&detail.dataset.disclosure){if(detail.open)disclosures.add(detail.dataset.disclosure);else disclosures.delete(detail.dataset.disclosure)}};
   const onFocusOut=():void=>{setTimeout(()=>{if(!disposed&&deferredRender&&!protectedInput())render()},0)};
   const onEditorFocus=(event:FocusEvent):void=>{const field=event.target;if(field instanceof HTMLElement){if(field.id==='note-title')lastEditorField='title';else if(field.id==='note-body')lastEditorField='body';else if(field.closest('.code-editor'))lastEditorField='code'}};
-  const onCompositionStart=():void=>{composing=true},onCompositionEnd=():void=>{composing=false;setTimeout(()=>{if(deferredRender&&!composing&&!disposed){deferredRender=false;render()}},0)};
+  const onCompositionStart=():void=>{reviewFocus=null;composing=true},onCompositionEnd=():void=>{composing=false;setTimeout(()=>{if(deferredRender&&!composing&&!disposed){deferredRender=false;render()}},0)};
   const onLayoutPointer=(event:PointerEvent):void=>{if(event.button===0&&shellInput()==='desktop'&&((event.target as Element).closest('[data-action=navigation]')&&root.clientWidth>1000||(event.target as Element).closest('[data-action=inspector]')&&root.clientWidth>740)&&document.activeElement?.matches('input,textarea,[contenteditable]'))event.preventDefault()};
   root.addEventListener('pointerdown',onLayoutPointer);
   window.addEventListener('pointerdown',onControlPointerDown,true);window.addEventListener('pointerup',onControlPointerUp,true);window.addEventListener('pointercancel',onControlPointerCancel,true);window.addEventListener('click',onControlClick,true);window.addEventListener('blur',cancelControlPress);window.addEventListener('keydown',onActivationKeyDown,true);window.addEventListener('keyup',onActivationKeyUp,true);
   window.addEventListener('resize',applyLayout);window.visualViewport?.addEventListener('resize',applyLayout);window.visualViewport?.addEventListener('scroll',applyLayout);touchInput.addEventListener('change',applyLayout);
   const clickHandler=(e:MouseEvent):void=>{void capturedUserAction(()=>onClick(e)).then(()=>retainInput()).catch(()=>{localMessage='The requested action did not complete.';render()})};
-  const inputHandler=(event:Event):void=>{onInput(event);void retainInput().catch(retentionFailure)};
+  const inputHandler=(event:Event):void=>{reviewFocus=null;onInput(event);void retainInput().catch(retentionFailure)};
   const submitHandler=(e:SubmitEvent):void=>{void capturedUserAction(()=>onSubmit(e)).then(()=>retainInput()).catch(()=>{localMessage='The requested action did not complete.';render()})};
   root.addEventListener('toggle',onDisclosure,true);root.addEventListener('click',clickHandler);root.addEventListener('input',inputHandler);root.addEventListener('submit',submitHandler);root.addEventListener('focusout',onFocusOut);root.addEventListener('focusin',onEditorFocus);root.addEventListener('compositionstart',onCompositionStart);root.addEventListener('compositionend',onCompositionEnd);
   const onCancel=(event:Event):void=>{event.preventDefault();closePanel()};
@@ -904,5 +928,5 @@ export function mountApp(root: HTMLElement, options: AppOptions): { session: Wor
   const connections=options.connections?new ConnectionSession(options.connections,()=>{if(protectedInput()){deferredRender=true;return}render()}):null;
   const appearance=observeAppearance(()=>{codeEditor?.setTheme(document.documentElement.dataset.theme==='dark'?'dark':'light');if(panel==='appearance'||panel==='settings')render()});
   render();void initializeInput();void options.voice.capability().then(value=>{capability=value;render()}).catch(()=>{});void options.scanner.available().then(value=>{scanAvailable=value;if(session.state.route.type==='devices')render()}).catch(()=>{});
-  return {session,voiceContext(){const route=session.state.route,workspaceId=command?.address.workspaceId??(route.type==='workspace'?route.id:null),state=workspaceId?connections?.current(workspaceId):null;if(!workspaceId||state?.status!=='ready')throw new Error('No configured workspace connection');return{workspaceId,connectionVersion:state.version}},hasUnsubmittedInput:()=>Boolean(!inputReady||journal?.failed||journal?.pending||meetingDraft||actionCorrection||importingTranscript||workController?.hasPendingInput()||session.state.mutation.type==='sending'||session.state.mutation.type==='uncertain'||voice.state.type!=='idle'||session.state.editor||command?.text||workspaceTitleDraft.trim()||keyDraft||connections&&connections.mutation.type!=='idle'),setUpdateAvailable(available=true){if(updateAvailable===available)return;updateAvailable=available;render()},dispose(){disposed=true;window.clearTimeout(pressReleaseTimer);window.clearTimeout(pressFlushTimer);controlPress=null;window.removeEventListener('pointerdown',onControlPointerDown,true);window.removeEventListener('pointerup',onControlPointerUp,true);window.removeEventListener('pointercancel',onControlPointerCancel,true);window.removeEventListener('click',onControlClick,true);window.removeEventListener('blur',cancelControlPress);window.removeEventListener('keydown',onActivationKeyDown,true);window.removeEventListener('keyup',onActivationKeyUp,true);unsubscribeWork?.();workController?.dispose();root.removeEventListener('pointerdown',onLayoutPointer);window.removeEventListener('resize',applyLayout);window.visualViewport?.removeEventListener('resize',applyLayout);window.visualViewport?.removeEventListener('scroll',applyLayout);touchInput.removeEventListener('change',applyLayout);root.removeEventListener('change',onFileChange);codeEditor?.dispose();connections?.dispose();appearance.dispose();dialog.close();dialog.removeEventListener('cancel',onCancel);dialog.removeEventListener('click',onBackdrop);window.removeEventListener('popstate',onBack);clearInterval(poll);unsubscribe();session.dispose();void voice.cancel();if(scanning){scanEpoch++;scanning=false;void options.scanner.cancel().catch(()=>{})};root.removeEventListener('toggle',onDisclosure,true);root.removeEventListener('click',clickHandler);root.removeEventListener('input',inputHandler);root.removeEventListener('submit',submitHandler);root.removeEventListener('focusout',onFocusOut);root.removeEventListener('focusin',onEditorFocus);root.removeEventListener('compositionstart',onCompositionStart);root.removeEventListener('compositionend',onCompositionEnd);document.removeEventListener('visibilitychange',visibility)}};
+  return {session,voiceContext(){const route=session.state.route,workspaceId=command?.address.workspaceId??(route.type==='workspace'?route.id:null),state=workspaceId?connections?.current(workspaceId):null;if(!workspaceId||state?.status!=='ready')throw new Error('No configured workspace connection');return{workspaceId,connectionVersion:state.version}},hasUnsubmittedInput:()=>Boolean(!inputReady||journal?.failed||journal?.pending||meetingDraft||actionCorrection||importingTranscript||workController?.hasPendingInput()||session.state.mutation.type==='sending'||session.state.mutation.type==='uncertain'||voice.state.type!=='idle'||session.state.editor||command?.text||workspaceTitleDraft.trim()||keyDraft||connections&&connections.mutation.type!=='idle'),setUpdateAvailable(available=true){if(updateAvailable===available)return;updateAvailable=available;render()},dispose(){disposed=true;reviewFocus=null;window.clearTimeout(pressReleaseTimer);window.clearTimeout(pressFlushTimer);controlPress=null;window.removeEventListener('pointerdown',onControlPointerDown,true);window.removeEventListener('pointerup',onControlPointerUp,true);window.removeEventListener('pointercancel',onControlPointerCancel,true);window.removeEventListener('click',onControlClick,true);window.removeEventListener('blur',cancelControlPress);window.removeEventListener('keydown',onActivationKeyDown,true);window.removeEventListener('keyup',onActivationKeyUp,true);unsubscribeWork?.();workController?.dispose();root.removeEventListener('pointerdown',onLayoutPointer);window.removeEventListener('resize',applyLayout);window.visualViewport?.removeEventListener('resize',applyLayout);window.visualViewport?.removeEventListener('scroll',applyLayout);touchInput.removeEventListener('change',applyLayout);root.removeEventListener('change',onFileChange);codeEditor?.dispose();connections?.dispose();appearance.dispose();dialog.close();dialog.removeEventListener('cancel',onCancel);dialog.removeEventListener('click',onBackdrop);window.removeEventListener('popstate',onBack);clearInterval(poll);unsubscribe();session.dispose();void voice.cancel();if(scanning){scanEpoch++;scanning=false;void options.scanner.cancel().catch(()=>{})};root.removeEventListener('toggle',onDisclosure,true);root.removeEventListener('click',clickHandler);root.removeEventListener('input',inputHandler);root.removeEventListener('submit',submitHandler);root.removeEventListener('focusout',onFocusOut);root.removeEventListener('focusin',onEditorFocus);root.removeEventListener('compositionstart',onCompositionStart);root.removeEventListener('compositionend',onCompositionEnd);document.removeEventListener('visibilitychange',visibility)}};
 }
